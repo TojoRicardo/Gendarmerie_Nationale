@@ -1,0 +1,7 @@
+{{ object.numero_affaire|default:"" }}
+{{ object.description|default:"" }}
+{{ object.description_detaillee|default:"" }}
+{{ object.lieu }}
+{% if object.type_infraction %}{{ object.type_infraction.libelle }}{% endif %}
+{% if object.fiche %}{{ object.fiche.nom }} {{ object.fiche.prenom }}{% endif %}
+

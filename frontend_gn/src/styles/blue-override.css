@@ -1,0 +1,127 @@
+/* Override de toutes les couleurs bleues par #2984D1 */
+
+/* Classes Tailwind blue-* */
+.bg-blue-500,
+.bg-blue-600,
+.bg-blue-700 {
+  background-color: #2984D1 !important;
+}
+
+.text-blue-500,
+.text-blue-600,
+.text-blue-700 {
+  color: #2984D1 !important;
+}
+
+.border-blue-500,
+.border-blue-600,
+.border-blue-700,
+.border-blue-200 {
+  border-color: #2984D1 !important;
+}
+
+.ring-blue-500,
+.ring-blue-600,
+.focus\:ring-blue-500,
+.focus\:ring-blue-600 {
+  --tw-ring-color: #2984D1 !important;
+}
+
+.focus\:border-blue-500,
+.focus\:border-blue-600 {
+  border-color: #2984D1 !important;
+}
+
+/* Gradients */
+.from-blue-500,
+.from-blue-600,
+.from-blue-700,
+.to-blue-500,
+.to-blue-600,
+.to-blue-700,
+.via-blue-700 {
+  background-color: #2984D1 !important;
+}
+
+.bg-gradient-to-br.from-blue-500,
+.bg-gradient-to-br.from-blue-600,
+.bg-gradient-to-br.to-blue-600,
+.bg-gradient-to-br.to-blue-700 {
+  background: linear-gradient(to bottom right, #2984D1, #2984D1) !important;
+}
+
+.bg-gradient-to-br.from-blue-600.via-blue-700.to-indigo-800 {
+  background: linear-gradient(to bottom right, #2984D1, #2984D1, #2984D1) !important;
+}
+
+/* Hover states */
+.hover\:bg-blue-700:hover,
+.hover\:bg-blue-600:hover {
+  background-color: #1f6ba8 !important;
+}
+
+.hover\:text-blue-500:hover,
+.hover\:text-blue-600:hover {
+  color: #2984D1 !important;
+}
+
+.hover\:border-blue-200:hover {
+  border-color: rgba(41, 132, 209, 0.4) !important;
+}
+
+/* Text colors */
+.text-blue-100 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.text-blue-700 {
+  color: #2984D1 !important;
+}
+
+.text-blue-900 {
+  color: #15527f !important;
+}
+
+/* Background colors */
+.bg-blue-50 {
+  background-color: #E6F2FF !important;
+}
+
+.bg-blue-100 {
+  background-color: #CCE5FF !important;
+}
+
+.hover\:file\:bg-blue-100:hover {
+  background-color: #CCE5FF !important;
+}
+
+.file\:bg-blue-50 {
+  background-color: #E6F2FF !important;
+}
+
+.file\:text-blue-700 {
+  color: #2984D1 !important;
+}
+
+/* Suppression de toutes les bordures encadrées sur les conteneurs */
+div.border-2,
+div.border-l-4,
+div.border-r-4,
+div.border-t-4,
+div.border-b-4,
+div.border-b-2,
+div.border-l-2,
+div.border-r-2,
+div.border-t-2,
+.card-primary,
+.info-box,
+[class*="card"][class*="border"],
+[class*="rounded"][class*="border-2"],
+[class*="rounded"][class*="border-l-4"] {
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+}
+

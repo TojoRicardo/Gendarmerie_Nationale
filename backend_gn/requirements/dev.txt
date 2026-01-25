@@ -1,0 +1,35 @@
+# ============================================
+# PACKAGES PYTHON - ENVIRONNEMENT DÉVELOPPEMENT
+# ============================================
+
+# Inclure les dépendances de base
+-r base.txt
+
+# === Documentation et API ===
+drf-spectacular==0.28.0
+drf-yasg==1.21.7
+
+# === Outils de développement ===
+django-debug-toolbar==4.2.0
+django-extensions==3.2.3
+ipython==8.18.1
+ipdb==0.13.13
+
+# === Tests ===
+pytest==7.4.3
+pytest-django==4.7.0
+pytest-cov==4.1.0
+factory-boy==3.3.0
+Faker==20.1.0
+
+# === Qualité du code ===
+flake8==6.1.0
+black==23.12.1
+pylint==3.0.3
+pylint-django==2.5.5
+mypy==1.7.1
+isort==5.13.2
+
+# === Gestion des migrations ===
+django-migration-linter==5.0.0
+

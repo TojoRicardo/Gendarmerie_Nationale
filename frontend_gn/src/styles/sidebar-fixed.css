@@ -1,0 +1,91 @@
+/* Sidebar - Style professionnel moderne avec thème sombre */
+
+/* Sidebar principale - Thème sombre */
+/* Les styles Tailwind du composant ont la priorité */
+aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  /* Le background est géré par les classes Tailwind dans le composant */
+  width: 200px;
+  overflow: hidden;
+}
+
+/* Navigation scrollable - Seule zone qui scroll */
+aside nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar discrète pour thème sombre */
+aside nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+aside nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+aside nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+aside nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Boutons du menu - Style thème sombre */
+/* Les styles sont principalement gérés par Tailwind dans le composant */
+aside nav button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Les styles actifs et hover sont gérés par Tailwind dans le composant */
+
+/* Focus */
+aside nav button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Header - Fixe en haut */
+aside > div:first-child {
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+/* Footer - Fixe en bas */
+aside > div:last-child {
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+/* Responsive - Desktop */
+@media (min-width: 1024px) {
+  aside {
+    position: relative;
+    height: 100%;
+  }
+}
+
+/* Responsive - Mobile */
+@media (max-width: 1023px) {
+  aside {
+    position: fixed;
+    z-index: 50;
+    height: 100vh;
+  }
+}
+
+/* Les styles des icônes et du texte sont gérés par Tailwind dans le composant */

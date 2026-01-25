@@ -1,0 +1,27 @@
+.email-content p {
+  margin: 0;
+}
+
+.email-content p + p {
+  margin-top: 0.75rem;
+}
+
+.email-content ul,
+.email-content ol {
+  margin: 0.75rem 0 0.75rem 1.25rem;
+  padding-left: 1rem;
+}
+
+.email-content a {
+  color: rgb(79 70 229);
+  text-decoration: underline;
+  text-decoration-color: rgba(79, 70, 229, 0.3);
+}
+
+.email-content blockquote {
+  border-left: 3px solid rgba(99, 102, 241, 0.35);
+  padding-left: 0.75rem;
+  color: rgb(71 85 105);
+  margin: 0.75rem 0;
+}
+

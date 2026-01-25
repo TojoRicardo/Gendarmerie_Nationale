@@ -1,0 +1,488 @@
+/* Animations spécifiques pour le sidebar */
+
+/* Animation d'entrée du sidebar avec basculement à droite */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-100%) rotateY(-15deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) rotateY(0deg);
+  }
+}
+
+/* Animation de basculement à droite */
+@keyframes tiltRight {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(5deg);
+  }
+}
+
+@keyframes tiltRightHover {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(8deg) translateX(5px);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Animation de sortie du sidebar */
+@keyframes slideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+/* Animation des éléments de menu avec délai et basculement */
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.95) rotateY(-10deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1) rotateY(0deg);
+  }
+}
+
+/* Animation de basculement pour les éléments de menu */
+@keyframes menuItemTilt {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(3deg) translateX(2px);
+  }
+}
+
+/* Animation de pulse pour les éléments actifs */
+@keyframes activePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 35, 130, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 35, 130, 0.1);
+  }
+}
+
+/* Animation de brillance */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Animation de rotation pour les icônes */
+@keyframes iconRotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+/* Animation de bounce pour les éléments hover */
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Animation de fade avec scale */
+@keyframes fadeScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Animation de slide up */
+@keyframes slideUpIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation de wiggle pour les éléments interactifs avec basculement */
+@keyframes wiggle {
+  0%, 7% {
+    transform: rotateZ(0) rotateY(0deg);
+  }
+  15% {
+    transform: rotateZ(-15deg) rotateY(5deg);
+  }
+  20% {
+    transform: rotateZ(10deg) rotateY(-3deg);
+  }
+  25% {
+    transform: rotateZ(-10deg) rotateY(8deg);
+  }
+  30% {
+    transform: rotateZ(6deg) rotateY(-2deg);
+  }
+  35% {
+    transform: rotateZ(-4deg) rotateY(3deg);
+  }
+  40%, 100% {
+    transform: rotateZ(0) rotateY(0deg);
+  }
+}
+
+/* Animation de basculement continu */
+@keyframes continuousTilt {
+  0%, 100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(2deg);
+  }
+}
+
+/* Animation de glow pour les éléments actifs */
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 35, 130, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 35, 130, 0.8), 0 0 30px rgba(0, 35, 130, 0.6);
+  }
+}
+
+/* Animation de ripple pour les clics */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Classes d'animation pour le sidebar */
+.sidebar-enter {
+  animation: slideInRight 0.5s ease-out;
+  transform-style: preserve-3d;
+}
+
+.sidebar-exit {
+  animation: slideOutLeft 0.3s ease-out;
+}
+
+/* Classes de basculement à droite */
+.sidebar-tilt-right {
+  animation: tiltRight 0.3s ease-out;
+}
+
+.sidebar-tilt-right-hover:hover {
+  animation: tiltRightHover 0.3s ease-out;
+  transform-style: preserve-3d;
+}
+
+.sidebar-menu-tilt {
+  animation: menuItemTilt 0.2s ease-out;
+}
+
+.sidebar-overlay-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sidebar-overlay-exit {
+  animation: fadeOut 0.2s ease-out;
+}
+
+/* Animation staggerée pour les éléments de menu */
+.sidebar-menu-item {
+  animation: staggerIn 0.4s ease-out;
+  animation-fill-mode: both;
+}
+
+/* Animation pour les icônes */
+.sidebar-icon-hover:hover {
+  animation: iconRotate 0.6s ease-in-out;
+}
+
+/* Animation pour les éléments actifs */
+.sidebar-item-active {
+  animation: activePulse 2s infinite;
+}
+
+/* Animation de brillance au hover */
+.sidebar-item-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.sidebar-item-shimmer:hover::before {
+  left: 100%;
+}
+
+/* Animation de bounce pour les interactions */
+.sidebar-bounce:hover {
+  animation: bounceIn 0.6s ease-out;
+}
+
+/* Animation de wiggle pour les éléments importants */
+.sidebar-wiggle:hover {
+  animation: wiggle 1s ease-in-out;
+}
+
+/* Animation de basculement continu */
+.sidebar-continuous-tilt {
+  animation: continuousTilt 3s ease-in-out infinite;
+}
+
+/* Animation de basculement au focus */
+.sidebar-focus-tilt:focus {
+  animation: tiltRight 0.3s ease-out;
+  transform-style: preserve-3d;
+}
+
+/* Animation de glow pour les éléments actifs */
+.sidebar-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Animation de ripple pour les clics */
+.sidebar-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.sidebar-ripple:active::after {
+  width: 300px;
+  height: 300px;
+}
+
+/* Animation de slide up pour les nouveaux éléments */
+.sidebar-slide-up {
+  animation: slideUpIn 0.5s ease-out;
+}
+
+/* Animation de fade scale pour les modales */
+.sidebar-fade-scale {
+  animation: fadeScaleIn 0.3s ease-out;
+}
+
+/* Effets de transition personnalisés */
+.sidebar-transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-transition-bounce {
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.sidebar-transition-elastic {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Effets de hover avancés avec basculement */
+.sidebar-hover-lift {
+  transition: all 0.3s ease;
+}
+
+.sidebar-hover-lift:hover {
+  transform: translateY(-2px) rotateY(5deg) translateX(3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transform-style: preserve-3d;
+}
+
+.sidebar-hover-glow:hover {
+  box-shadow: 0 0 20px rgba(0, 35, 130, 0.5);
+}
+
+.sidebar-hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* Animation de loading pour le sidebar */
+.sidebar-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 2s infinite;
+}
+
+/* Responsive animations */
+@media (max-width: 1024px) {
+  .sidebar-mobile-enter {
+    animation: slideInRight 0.3s ease-out;
+  }
+  
+  .sidebar-mobile-exit {
+    animation: slideOutLeft 0.3s ease-out;
+  }
+}
+
+/* Animations pour les états de focus */
+.sidebar-focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 35, 130, 0.5);
+  animation: activePulse 1s infinite;
+}
+
+/* Animation pour les notifications */
+.sidebar-notification {
+  animation: bounceIn 0.6s ease-out;
+}
+
+/* Animation pour les badges */
+.sidebar-badge {
+  animation: fadeScaleIn 0.3s ease-out;
+}
+
+/* Animation pour les tooltips */
+.sidebar-tooltip {
+  animation: slideUpIn 0.2s ease-out;
+}
+
+/* Effets de parallax subtils */
+.sidebar-parallax {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Animation de typing pour les textes */
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.sidebar-typing {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typing 2s steps(20, end);
+}
+
+/* Animation de pulse pour les indicateurs */
+.sidebar-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Animation de spin pour les éléments de chargement */
+.sidebar-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Utilitaires pour les délais d'animation */
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+
+/* Animation de révélation progressive */
+.sidebar-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUpIn 0.5s ease-out forwards;
+}
+
+/* Animation de masquage */
+.sidebar-hide {
+  animation: slideOutLeft 0.3s ease-out forwards;
+}
+
+/* Effets de glassmorphism pour le sidebar - conservés pour compatibilité */
+.sidebar-glass {
+  /* Désactivé pour conserver les couleurs originales */
+}
+
+/* Animation de gradient animé - désactivée pour conserver les couleurs originales */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.sidebar-gradient-animated {
+  /* Désactivé pour conserver les couleurs originales */
+}

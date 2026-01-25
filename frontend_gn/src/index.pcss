@@ -1,0 +1,811 @@
+/* stylelint-disable at-rule-no-unknown */
+/* stylelint-disable */
+/* @ts-nocheck */
+/* eslint-disable */
+
+/* Import Google Fonts - DOIT TOUJOURS ÊTRE EN PREMIER */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+
+/* Import des animations du tableau de bord - AVANT Tailwind */
+@import './styles/dashboard-animations.css';
+
+/* Import des animations de bienvenue - AVANT Tailwind */
+@import './styles/welcome-animations.css';
+
+/* Import du Design System - AVANT Tailwind */
+@import './styles/design-system.css';
+
+/* Ensuite les directives Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  html {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 text-gray-900;
+    font-size: 17px; /* Augmenté de 16px à 17px */
+    line-height: 1.6; /* Augmenté de 1.5 à 1.6 */
+    letter-spacing: -0.011em;
+  }
+
+  /* Responsive body text */
+  @media (max-width: 600px) {
+    body {
+      font-size: 15px; /* Augmenté de 14px à 15px */
+    }
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', sans-serif;
+    @apply font-semibold tracking-tight;
+  }
+
+  /* Tailles standardisées selon normes UI/UX - Ajustées */
+  h1 {
+    font-size: 32px; /* Augmenté de 28px à 32px */
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    font-size: 22px; /* Augmenté de 20px à 22px */
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 20px; /* Augmenté de 18px à 20px */
+    line-height: 1.4;
+    font-weight: 600;
+  }
+
+  /* Responsive */
+  @media (min-width: 1200px) {
+    h1 {
+      font-size: 36px; /* Augmenté de 32px à 36px */
+    }
+    h2 {
+      font-size: 24px; /* Augmenté de 22px à 24px */
+    }
+  }
+
+  @media (max-width: 600px) {
+    h1 {
+      font-size: 24px;
+    }
+    h2 {
+      font-size: 18px;
+    }
+  }
+}
+
+/* Composants professionnels réutilisables */
+@layer components {
+  /* Cartes professionnelles - Mode Clair - Standardisées */
+  .card-pro {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200;
+    padding: 16px;
+  }
+  
+  .card-pro-hover {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 cursor-pointer;
+    padding: 16px;
+  }
+  
+  .card-pro-hover:hover {
+    @apply shadow-md;
+    border-color: rgba(0, 35, 130, 0.2);
+  }
+
+  /* Cartes avec effet glow */
+  .card-glow {
+    @apply card-pro relative overflow-hidden;
+  }
+
+  .card-glow::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(0, 35, 130, 0.1) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .card-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* Stat cards avec effet glassmorphism - Mode Clair */
+  .stat-card {
+    @apply card-pro p-6 relative overflow-hidden;
+    background: white !important;
+  }
+
+  /* Badges modernes */
+  .badge-pro {
+    @apply px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase;
+  }
+
+  /* Boutons professionnels avec gradients */
+  .btn-pro {
+    @apply px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95;
+  }
+
+  .btn-primary-pro {
+    @apply btn-pro bg-gradient-to-r from-gendarme-blue to-gendarme-blue-dark text-white hover:from-gendarme-blue-light hover:to-gendarme-blue;
+  }
+  
+  .btn-primary-pro:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 35, 130, 0.5);
+  }
+
+  .btn-secondary-pro {
+    @apply btn-pro bg-white text-gendarme-dark border-2 border-gray-200 hover:bg-gendarme-gray hover:border-gendarme-blue hover:text-gendarme-blue;
+  }
+
+  .btn-success-pro {
+    @apply btn-pro bg-gradient-to-r from-gendarme-green to-gendarme-green-dark text-white hover:from-gendarme-green-light hover:to-gendarme-green;
+  }
+  
+  .btn-success-pro:hover {
+    box-shadow: 0 10px 25px -5px rgba(7, 126, 27, 0.5);
+  }
+
+  .btn-danger-pro {
+    @apply btn-pro bg-gradient-to-r from-gendarme-red to-gendarme-red-dark text-white hover:from-gendarme-red-light hover:to-gendarme-red;
+  }
+  
+  .btn-danger-pro:hover {
+    box-shadow: 0 10px 25px -5px rgba(255, 0, 0, 0.5);
+  }
+
+  .btn-warning-pro {
+    @apply btn-pro bg-gradient-to-r from-gendarme-gold to-gendarme-gold-dark text-gendarme-dark hover:from-gendarme-gold-light hover:to-gendarme-gold font-bold;
+  }
+  
+  .btn-warning-pro:hover {
+    box-shadow: 0 10px 25px -5px rgba(240, 199, 94, 0.5);
+  }
+
+  /* Inputs modernes */
+  .input-pro {
+    @apply px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-gendarme-blue transition-all duration-200 outline-none;
+  }
+  
+  .input-pro:focus {
+    box-shadow: 0 0 0 4px rgba(0, 35, 130, 0.1);
+  }
+
+  /* Gradients professionnels */
+  .gradient-blue {
+    @apply bg-gradient-to-br from-gendarme-blue via-gendarme-blue-light to-gendarme-blue-dark;
+  }
+
+  .gradient-green {
+    @apply bg-gradient-to-br from-gendarme-green via-gendarme-green-light to-gendarme-green-dark;
+  }
+
+  .gradient-purple {
+    @apply bg-gradient-to-br from-gendarme-gold via-gendarme-gold-light to-gendarme-gold-dark;
+  }
+
+  .gradient-orange {
+    @apply bg-gradient-to-br from-gendarme-gold via-gendarme-gold-light to-gendarme-gold-dark;
+  }
+
+  .gradient-red {
+    @apply bg-gradient-to-br from-gendarme-red via-gendarme-red-light to-gendarme-red-dark;
+  }
+
+  .gradient-indigo {
+    @apply bg-gradient-to-br from-gendarme-light via-gendarme-light-hover to-gendarme-blue;
+  }
+}
+
+/* Animations professionnelles */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.4s ease-out;
+}
+
+.animate-slideInUp {
+  animation: slideInUp 0.5s ease-out;
+}
+
+.animate-slideInDown {
+  animation: slideInDown 0.5s ease-out;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.4s ease-out;
+}
+
+.animate-bounceIn {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.animate-wiggle {
+  animation: wiggle 0.5s ease-in-out;
+}
+
+/* Effet glassmorphism moderne */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-effect-dark {
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Scrollbar professionnel */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gradient-to-b from-gray-400 to-gray-500 rounded-full hover:from-gray-500 hover:to-gray-600;
+}
+
+/* Scrollbar pour sidebar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded-full hover:bg-gray-500;
+}
+
+.scrollbar-thumb-gray-700::-webkit-scrollbar-thumb {
+  @apply bg-gray-700 rounded-full;
+}
+
+.scrollbar-track-gray-900::-webkit-scrollbar-track {
+  @apply bg-gray-900;
+}
+
+/* Ombres professionnelles avec profondeur */
+.shadow-pro {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-pro-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-pro-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-pro-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+
+.shadow-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.shadow-card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Bordures avec gradients colorés */
+.border-gradient-blue {
+  border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, #1F3C88, #152A5F) border-box;
+  border-radius: 1rem;
+}
+
+.border-gradient-green {
+  border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, #3A6B35, #2A5027) border-box;
+  border-radius: 1rem;
+}
+
+.border-gradient-purple {
+  border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, #D4AF37, #B89620) border-box;
+  border-radius: 1rem;
+}
+
+.border-gradient-orange {
+  border: 3px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, #D4AF37, #B89620) border-box;
+  border-radius: 1rem;
+}
+
+/* Transitions fluides et naturelles */
+.transition-pro {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-smooth {
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Focus states professionnels */
+button:focus-visible, 
+a:focus-visible, 
+input:focus-visible,
+select:focus-visible {
+  @apply outline-none ring-4 ring-gendarme-blue ring-opacity-50;
+}
+
+/* Sélection de texte personnalisée */
+::selection {
+  @apply bg-gendarme-blue text-white;
+}
+
+::-moz-selection {
+  @apply bg-gendarme-blue text-white;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Effet de shimmer pour les loaders */
+.shimmer {
+  background: linear-gradient(to right, #f6f7f8 0%, #edeef1 20%, #f6f7f8 40%, #f6f7f8 100%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* Hover effects professionnels */
+.hover-lift {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+}
+
+.hover-lift-lg {
+  @apply transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl;
+}
+
+.hover-scale {
+  @apply transition-transform duration-300 hover:scale-105;
+}
+
+.hover-scale-lg {
+  @apply transition-transform duration-300 hover:scale-110;
+}
+
+.hover-glow {
+  @apply transition-shadow duration-300;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(0, 35, 130, 0.4);
+}
+
+.hover-glow-blue:hover {
+  box-shadow: 0 0 25px rgba(0, 35, 130, 0.5);
+}
+
+.hover-glow-green:hover {
+  box-shadow: 0 0 25px rgba(7, 126, 27, 0.5);
+}
+
+.hover-glow-purple:hover {
+  box-shadow: 0 0 25px rgba(240, 199, 94, 0.5);
+}
+
+.hover-glow-orange:hover {
+  box-shadow: 0 0 25px rgba(240, 199, 94, 0.5);
+}
+
+/* Dividers élégants */
+.divider-gradient {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+}
+
+/* Patterns de fond subtils */
+.pattern-dots {
+  background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.pattern-grid {
+  background-image: linear-gradient(#e5e7eb 1px, transparent 1px),
+                    linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Loading spinner professionnel */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Badge avec pulse effect */
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Effet de gradient animé */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-animated {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Skeleton loader pour améliorer le loading */
+.skeleton {
+  @apply bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse rounded;
+  background-size: 200% 100%;
+}
+
+/* Effet de focus amélioré */
+.focus-ring-pro {
+  @apply focus:outline-none transition-shadow duration-200;
+}
+
+.focus-ring-pro:focus {
+  box-shadow: 0 0 0 4px rgba(0, 35, 130, 0.5);
+}
+
+/* Tag/Chip moderne */
+.chip-pro {
+  @apply inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors duration-200;
+}
+
+.chip-primary {
+  @apply chip-pro text-gendarme-blue;
+  background-color: rgba(0, 35, 130, 0.1);
+  border-color: rgba(0, 35, 130, 0.2);
+}
+
+.chip-primary:hover {
+  background-color: rgba(0, 35, 130, 0.2);
+}
+
+.chip-success {
+  @apply chip-pro text-gendarme-green-dark;
+  background-color: rgba(7, 126, 27, 0.1);
+  border-color: rgba(7, 126, 27, 0.2);
+}
+
+.chip-success:hover {
+  background-color: rgba(7, 126, 27, 0.2);
+}
+
+.chip-danger {
+  @apply chip-pro text-gendarme-red-dark;
+  background-color: rgba(255, 0, 0, 0.1);
+  border-color: rgba(255, 0, 0, 0.2);
+}
+
+.chip-danger:hover {
+  background-color: rgba(255, 0, 0, 0.2);
+}
+
+.chip-warning {
+  @apply chip-pro text-gendarme-gold-dark;
+  background-color: rgba(240, 199, 94, 0.1);
+  border-color: rgba(240, 199, 94, 0.2);
+}
+
+.chip-warning:hover {
+  background-color: rgba(240, 199, 94, 0.2);
+}
+
+/* Tooltip moderne */
+.tooltip-pro {
+  @apply absolute z-50 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-lg opacity-0 invisible transition-all duration-200 pointer-events-none;
+}
+
+.tooltip-pro.show {
+  @apply opacity-100 visible;
+}
+
+/* Alert moderne */
+.alert-pro {
+  @apply p-4 rounded-xl border-l-4 flex items-start space-x-3 animate-slideInRight;
+}
+
+.alert-info {
+  @apply alert-pro border-gendarme-blue;
+  background-color: rgba(0, 35, 130, 0.05);
+}
+
+.alert-success {
+  @apply alert-pro border-gendarme-green;
+  background-color: rgba(7, 126, 27, 0.05);
+}
+
+.alert-warning {
+  @apply alert-pro border-gendarme-gold;
+  background-color: rgba(240, 199, 94, 0.05);
+}
+
+.alert-danger {
+  @apply alert-pro border-gendarme-red;
+  background-color: rgba(255, 0, 0, 0.05);
+}
+
+/* Progress bar moderne */
+.progress-pro {
+  @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.progress-bar {
+  @apply h-full bg-gradient-to-r from-gendarme-blue to-gendarme-blue-dark rounded-full transition-all duration-500 ease-out;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+}
+
+.modal-content {
+  @apply bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto;
+}
+
+/* ===== Animations de chargement ===== */
+@keyframes loading-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(250%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-loading-bar {
+  animation: loading-bar 1.5s ease-in-out infinite;
+}
+
+/* Animation pour le skeleton loader */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-skeleton {
+  animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar pour listes de criminels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-gradient-to-b from-indigo-400 to-purple-500 rounded-full hover:from-indigo-500 hover:to-purple-600;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply shadow-lg;
+}

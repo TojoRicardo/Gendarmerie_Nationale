@@ -1,0 +1,6 @@
+{
+  "css.validate": false,
+  "css.customData": [".vscode/css_custom_data.json"],
+  "css.lint.unknownAtRules": "ignore"
+}
+

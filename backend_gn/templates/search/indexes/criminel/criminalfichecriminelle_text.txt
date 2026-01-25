@@ -1,0 +1,19 @@
+{{ object.nom }}
+{{ object.prenom }}
+{{ object.surnom }}
+{{ object.pseudonymes_connus }}
+{{ object.numero_fiche }}
+{{ object.cin }}
+{{ object.numero_passeport }}
+{{ object.nationalite }}
+{{ object.lieu_naissance }}
+{{ object.adresse }}
+{{ object.profession }}
+{{ object.marques_particulieres }}
+{% if object.statut_fiche %}{{ object.statut_fiche.libelle }}{% endif %}
+{% for infraction in object.infractions.all %}
+{{ infraction.type_infraction.libelle|default:"" }}
+{{ infraction.description|default:"" }}
+{{ infraction.lieu|default:"" }}
+{% endfor %}
+

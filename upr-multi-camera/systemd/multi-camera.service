@@ -1,0 +1,33 @@
+[Unit]
+Description=Service Multi-Caméras UPR - Reconnaissance Faciale Temps Réel
+After=network.target postgresql.service redis.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=gn_app
+Group=gn_app
+WorkingDirectory=/opt/gn_app/upr-multi-camera
+Environment="PATH=/opt/gn_app/upr-multi-camera/venv/bin"
+EnvironmentFile=/opt/gn_app/upr-multi-camera/.env
+
+# Commande
+ExecStart=/opt/gn_app/upr-multi-camera/venv/bin/python multi_camera_service/main.py
+
+# Redémarrage automatique
+Restart=always
+RestartSec=10
+
+# Limites
+LimitNOFILE=65536
+MemoryMax=2G
+CPUQuota=200%
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=multi-camera-service
+
+[Install]
+WantedBy=multi-user.target
+

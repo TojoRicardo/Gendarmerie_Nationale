@@ -1,0 +1,6 @@
+# Dépendances pour l'IA du Journal d'Audit
+# NOTE: Module LLaMA supprimé - fonctionnalité IA désactivée
+# Le système utilise maintenant un système de fallback simple sans dépendances IA
+
+# Aucune dépendance IA n'est requise.
+# Le système génère des descriptions simples sans IA.

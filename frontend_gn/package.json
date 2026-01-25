@@ -1,0 +1,77 @@
+{
+  "name": "frontend-gendarmerie-nationale",
+  "version": "1.0.0",
+  "description": "Système de Gestion Criminelle - Gendarmerie Nationale",
+  "type": "module",
+  "author": "Gendarmerie Nationale",
+  "license": "MIT",
+  "homepage": ".",
+  "keywords": [
+    "gendarmerie",
+    "criminelle",
+    "gestion",
+    "react",
+    "vite",
+    "tailwindcss"
+  ],
+  "scripts": {
+    "dev": "vite --host",
+    "dev:https": "npm run setup:https && vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext js,jsx --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css,md}\"",
+    "clean": "rm -rf dist node_modules/.vite",
+    "install:clean": "rm -rf node_modules package-lock.json && npm install",
+    "start": "npm run dev",
+    "setup:https": "node scripts/setup-https.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dompurify": "^3.1.7",
+    "framer-motion": "^11.5.5",
+    "jspdf": "^3.0.4",
+    "jwt-decode": "^4.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-quill": "^2.0.0",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.13.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.15.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "postcss": "^8.5.6",
+    "prettier": "^3.3.3",
+    "stylelint": "^16.25.0",
+    "stylelint-config-standard": "^39.0.1",
+    "stylelint-config-tailwindcss": "^1.0.0",
+    "tailwindcss": "^3.4.18",
+    "vite": "^6.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

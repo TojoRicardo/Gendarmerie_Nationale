@@ -1,0 +1,11 @@
+<svg width="800" height="512" viewBox="0 0 800 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left Section: White (1/3 width, full height) -->
+  <rect x="0" y="0" width="267" height="512" fill="white"/>
+  
+  <!-- Top Right Section: Red (2/3 width, top half) -->
+  <rect x="267" y="0" width="533" height="256" fill="#DC143C"/>
+  
+  <!-- Bottom Right Section: Green (2/3 width, bottom half) -->
+  <rect x="267" y="256" width="533" height="256" fill="#228B22"/>
+</svg>
+

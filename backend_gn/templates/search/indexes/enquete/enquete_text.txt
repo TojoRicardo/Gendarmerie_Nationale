@@ -1,0 +1,10 @@
+{{ object.numero_enquete }}
+{{ object.titre }}
+{{ object.description }}
+{{ object.lieu|default:"" }}
+{{ object.get_type_enquete_code_display }}
+{{ object.plaignant_nom|default:"" }}
+{{ object.denonciateur_nom|default:"" }}
+{{ object.constatateur_nom|default:"" }}
+{{ object.notes|default:"" }}
+

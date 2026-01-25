@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+    <title>Backup Codes</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            font-family: monospace;
+            font-size: 18px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Codes de secours (affichés une seule fois)</h2>
+    <div class="warning">
+        <strong>⚠️ Important :</strong> Ces codes ne seront affichés qu'une seule fois. 
+        Sauvegardez-les dans un endroit sûr. Vous pourrez les utiliser si vous perdez l'accès à votre application d'authentification.
+    </div>
+    <ul>
+        {% for code in codes %}
+            <li>{{ code }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
+

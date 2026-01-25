@@ -1,0 +1,21 @@
+[MESSAGES CONTROL]
+# Désactiver les avertissements d'import pour Django et autres packages
+disable=import-error,no-name-in-module,no-member
+
+[MASTER]
+# Extensions Django
+load-plugins=pylint_django
+django-settings-module=backend_gn.settings
+
+# Ignorer les erreurs dans venv
+ignore=venv,env,node_modules,.git
+
+[BASIC]
+# Bon nommage pour Django
+good-names=i,j,k,ex,Run,_,id,pk
+
+[DESIGN]
+# Limites raisonnables
+max-attributes=12
+max-args=8
+

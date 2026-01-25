@@ -1,0 +1,143 @@
+[
+  {
+    "model": "criminel.refstatutfiche",
+    "pk": 1,
+    "fields": {
+      "code": "en_cours",
+      "libelle": "En cours",
+      "description": "Fiche criminelle en cours d'investigation",
+      "actif": true,
+      "ordre": 1
+    }
+  },
+  {
+    "model": "criminel.refstatutfiche",
+    "pk": 2,
+    "fields": {
+      "code": "en_attente",
+      "libelle": "En attente",
+      "description": "Fiche criminelle en attente de traitement",
+      "actif": true,
+      "ordre": 2
+    }
+  },
+  {
+    "model": "criminel.refstatutfiche",
+    "pk": 3,
+    "fields": {
+      "code": "cloture",
+      "libelle": "Clôturée",
+      "description": "Fiche criminelle clôturée",
+      "actif": true,
+      "ordre": 3
+    }
+  },
+  {
+    "model": "criminel.refstatutfiche",
+    "pk": 4,
+    "fields": {
+      "code": "archive",
+      "libelle": "Archivée",
+      "description": "Fiche criminelle archivée",
+      "actif": true,
+      "ordre": 4
+    }
+  },
+  {
+    "model": "criminel.reftypeinfraction",
+    "pk": 1,
+    "fields": {
+      "code": "vol",
+      "libelle": "Vol",
+      "categorie": "Délit contre les biens",
+      "description": "Appropriation frauduleuse d'un bien d'autrui",
+      "actif": true,
+      "ordre": 1
+    }
+  },
+  {
+    "model": "criminel.reftypeinfraction",
+    "pk": 2,
+    "fields": {
+      "code": "agression",
+      "libelle": "Agression",
+      "categorie": "Violence",
+      "description": "Acte de violence physique contre une personne",
+      "actif": true,
+      "ordre": 2
+    }
+  },
+  {
+    "model": "criminel.reftypeinfraction",
+    "pk": 3,
+    "fields": {
+      "code": "fraude",
+      "libelle": "Fraude",
+      "categorie": "Délit économique",
+      "description": "Tromperie intentionnelle dans un but lucratif",
+      "actif": true,
+      "ordre": 3
+    }
+  },
+  {
+    "model": "criminel.reftypeinfraction",
+    "pk": 4,
+    "fields": {
+      "code": "trafic_stupefiants",
+      "libelle": "Trafic de stupéfiants",
+      "categorie": "Crime organisé",
+      "description": "Commerce illégal de substances interdites",
+      "actif": true,
+      "ordre": 4
+    }
+  },
+  {
+    "model": "criminel.reftypeinfraction",
+    "pk": 5,
+    "fields": {
+      "code": "homicide",
+      "libelle": "Homicide",
+      "categorie": "Crime contre la personne",
+      "description": "Meurtre ou assassinat d'une personne",
+      "actif": true,
+      "ordre": 5
+    }
+  },
+  {
+    "model": "criminel.refstatutaffaire",
+    "pk": 1,
+    "fields": {
+      "code": "en_cours",
+      "libelle": "En cours d'instruction",
+      "description": "L'affaire est actuellement en cours d'instruction",
+      "actif": true,
+      "ordre": 1,
+      "couleur": "#0066cc"
+    }
+  },
+  {
+    "model": "criminel.refstatutaffaire",
+    "pk": 2,
+    "fields": {
+      "code": "classee",
+      "libelle": "Classée sans suite",
+      "description": "L'affaire a été classée sans suite",
+      "actif": true,
+      "ordre": 2,
+      "couleur": "#6c757d"
+    }
+  },
+  {
+    "model": "criminel.refstatutaffaire",
+    "pk": 3,
+    "fields": {
+      "code": "jugee",
+      "libelle": "Jugée",
+      "description": "L'affaire a été jugée",
+      "actif": true,
+      "ordre": 3,
+      "couleur": "#28a745"
+    }
+  }
+]
+

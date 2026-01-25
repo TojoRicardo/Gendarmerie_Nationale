@@ -1,0 +1,59 @@
+# Framework Django
+Django==4.2.7
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.0
+django-cors-headers==4.3.1
+django-filter==23.5
+psycopg2-binary==2.9.9
+
+# Intelligence Artificielle - Reconnaissance Faciale
+torch>=2.0.0
+torchvision>=0.15.0
+facenet-pytorch>=2.5.3
+insightface==0.7.3
+onnx==1.16.1
+onnxruntime==1.16.3
+scikit-image==0.24.0
+
+# Traitement d'Images
+opencv-python-headless==4.10.0.84
+pillow==10.4.0
+# NumPy 2.x incompatible avec torch/insightface actuellement
+numpy==1.26.4
+albumentations==1.4.8
+
+# Analyse de Données
+pandas>=2.3.0
+scikit-learn>=1.7.0
+scipy>=1.16.0
+matplotlib==3.8.4
+seaborn>=0.13.0
+tqdm==4.66.2
+
+# Sécurité
+bcrypt==4.3.0
+cryptography>=46.0.0
+PyJWT==2.10.1
+
+# Celery (Tâches Asynchrones)
+celery==5.3.4
+django-celery-beat==2.8.1
+django-celery-results==2.6.0
+redis==5.0.1
+
+# Utilitaires
+python-decouple==3.8
+python-dotenv==1.1.1
+python-dateutil==2.8.2
+pytz==2023.3
+click==8.3.0
+colorama==0.4.6
+six==1.17.0
+requests==2.31.0
+
+# === Génération de Documents ===
+reportlab==4.0.7
+python-docx==1.2.0
+weasyprint==60.1
+openpyxl==3.1.2
+

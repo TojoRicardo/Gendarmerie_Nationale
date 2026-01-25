@@ -1,0 +1,24 @@
+{
+  "venvPath": "backend_gn/backend_gn",
+  "venv": "arcface_env",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportGeneralTypeIssues": false,
+  "reportUnknownMemberType": false,
+  "reportOptionalMemberAccess": false,
+  "extraPaths": [
+    "backend_gn/backend_gn",
+    "backend_gn/backend_gn/arcface_env/Lib/site-packages"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "backend_gn/backend_gn",
+      "pythonVersion": "3.11",
+      "pythonPlatform": "Windows",
+      "extraPaths": [
+        "backend_gn/backend_gn",
+        "backend_gn/backend_gn/arcface_env/Lib/site-packages"
+      ]
+    }
+  ]
+}

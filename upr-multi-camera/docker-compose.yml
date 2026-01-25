@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL
+  db:
+    image: postgres:15
+    container_name: gn_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-Gendarmerie_Nationale_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis pour Celery
+  redis:
+    image: redis:7-alpine
+    container_name: gn_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Django
+  backend:
+    build:
+      context: ../backend_gn
+      dockerfile: ../upr-multi-camera/docker/Dockerfile.backend
+    container_name: gn_backend
+    command: gunicorn backend_gn.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    volumes:
+      - ../backend_gn:/app
+      - media_files:/app/media
+      - static_files:/app/staticfiles
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - DB_NAME=${DB_NAME:-Gendarmerie_Nationale_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service Multi-Caméras
+  multi_camera_service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.multi_camera
+    container_name: gn_multi_camera
+    command: python multi_camera_service/main.py
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+      - /dev/video0:/dev/video0  # Accès caméra USB (ajuster selon besoin)
+      - /dev/video1:/dev/video1
+    environment:
+      - CAMERAS_USB_MAX=${CAMERAS_USB_MAX:-6}
+      - CAMERAS_IPS=${CAMERAS_IPS:-}
+      - UPR_API_URL=http://backend:8000/api
+      - UPR_API_KEY=${UPR_API_KEY:-change-me}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.55}
+      - WARN_THRESHOLD=${WARN_THRESHOLD:-0.45}
+      - USE_GPU=${USE_GPU:-false}
+      - INSIGHTFACE_MODEL=${INSIGHTFACE_MODEL:-buffalo_l}
+      - TARGET_FPS=${TARGET_FPS:-10}
+      - STORE_DETECTION_FRAMES=${STORE_DETECTION_FRAMES:-true}
+      - STORAGE_PATH=/app/storage/detections
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      - backend
+    network_mode: host  # Nécessaire pour accéder aux caméras USB/IP
+    restart: unless-stopped
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+
+  # Frontend React (optionnel en dev)
+  frontend:
+    build:
+      context: ../frontend_gn
+      dockerfile: ../upr-multi-camera/docker/Dockerfile.frontend
+    container_name: gn_frontend
+    volumes:
+      - ../frontend_gn:/app
+      - /app/node_modules
+    ports:
+      - "3002:3002"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  media_files:
+  static_files:
+
