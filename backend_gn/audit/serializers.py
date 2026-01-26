@@ -1,4 +1,4 @@
-﻿"""
+"""
 Serializers pour le Journal d'Audit Professionnel
 """
 
@@ -144,12 +144,15 @@ class AuditLogSerializer(serializers.ModelSerializer):
     # Nouveaux champs pour le format professionnel
     session_info = serializers.SerializerMethodField()
     session_display = serializers.SerializerMethodField()
-    reference = serializers.CharField(read_only=True)
-    operation_index = serializers.IntegerField(read_only=True)
-    start_time = serializers.DateTimeField(read_only=True)
-    end_time = serializers.DateTimeField(read_only=True)
-    description_before = serializers.CharField(read_only=True)
-    description_after = serializers.CharField(read_only=True)
+    reference = serializers.CharField(read_only=True, allow_null=True)
+    operation_index = serializers.IntegerField(read_only=True, allow_null=True)
+    start_time = serializers.DateTimeField(read_only=True, allow_null=True)
+    end_time = serializers.DateTimeField(read_only=True, allow_null=True)
+    description_before = serializers.CharField(read_only=True, allow_null=True)
+    description_after = serializers.CharField(read_only=True, allow_null=True)
+    narrative_text = serializers.CharField(read_only=True, allow_null=True)
+    # Texte narratif avec gestion d'erreur pour compatibilité
+    narrative_text = serializers.SerializerMethodField()
     
     class Meta:
         model = AuditLog
@@ -179,6 +182,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'changes_after',
             'description',
             'description_short',
+            'narrative_text',
             'description_before',
             'description_after',
             'timestamp',
@@ -190,7 +194,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'message_erreur',
             'json_format',
         ]
-        read_only_fields = ['timestamp', 'description', 'description_short', 'json_format', 'before', 'after', 'session_info', 'session_display', 'reference', 'operation_index', 'start_time', 'end_time', 'description_before', 'description_after']
+        read_only_fields = ['timestamp', 'description', 'description_short', 'narrative_text', 'json_format', 'before', 'after', 'session_info', 'session_display', 'reference', 'operation_index', 'start_time', 'end_time', 'description_before', 'description_after']
     
     def get_before(self, obj):
         """Récupère les données avant modification (compatible avec migration non appliquée)."""
@@ -266,6 +270,20 @@ class AuditLogSerializer(serializers.ModelSerializer):
             pass
         return None
     
+    def get_narrative_text(self, obj):
+        """Retourne le texte narratif avec gestion d'erreur pour compatibilité."""
+        try:
+            # Essayer d'accéder au champ directement
+            if hasattr(obj, 'narrative_text'):
+                return obj.narrative_text
+            # Si le champ n'existe pas encore, générer le texte narratif
+            if hasattr(obj, '_generate_narrative_text'):
+                return obj._generate_narrative_text()
+            return None
+        except Exception as e:
+            logger.debug(f"Erreur lors de la récupération du narrative_text: {e}")
+            return None
+    
     def get_json_format(self, obj):
         """Retourne le format JSON standardisé."""
         try:
@@ -297,9 +315,10 @@ class AuditLogSerializer(serializers.ModelSerializer):
             try:
                 data = super().to_representation(instance)
             except Exception as db_error:
-                # Si erreur liée à session_id, essayer sans session
-                if 'session_id' in str(db_error) or 'session' in str(db_error).lower():
-                    # Créer une représentation manuelle sans session
+                # Si erreur liée à session_id, narrative_text ou autre champ manquant, essayer sans
+                error_str = str(db_error).lower()
+                if 'session_id' in error_str or 'session' in error_str or 'narrative_text' in error_str:
+                    # Créer une représentation manuelle sans les champs problématiques
                     data = {
                         'id': instance.id,
                         'user': instance.user_id if hasattr(instance, 'user_id') else None,
@@ -311,6 +330,8 @@ class AuditLogSerializer(serializers.ModelSerializer):
                         'browser': instance.browser,
                         'os': instance.os,
                         'description': instance.description,
+                        'description_short': getattr(instance, 'description_short', None),
+                        'narrative_text': None,  # Sera généré côté frontend si nécessaire
                         'session': None,
                         'session_info': None,
                         'session_display': None,
@@ -332,6 +353,19 @@ class AuditLogSerializer(serializers.ModelSerializer):
             data['methode_http'] = data.get('method')
             data['date_action'] = data.get('timestamp')
             data['description_narrative'] = data.get('description')
+            
+            # Gérer narrative_text avec fallback si le champ n'existe pas encore
+            if 'narrative_text' not in data:
+                try:
+                    # Essayer de générer le narrative_text si le champ existe dans le modèle
+                    if hasattr(instance, 'narrative_text'):
+                        data['narrative_text'] = instance.narrative_text
+                    elif hasattr(instance, '_generate_narrative_text'):
+                        data['narrative_text'] = instance._generate_narrative_text()
+                    else:
+                        data['narrative_text'] = None
+                except Exception:
+                    data['narrative_text'] = None
             
             return data
         except Exception as e:

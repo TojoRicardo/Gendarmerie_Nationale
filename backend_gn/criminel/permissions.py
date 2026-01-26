@@ -14,6 +14,7 @@ class CanModifyFicheCriminelle(BasePermission):
     - Les administrateurs
     - Les Enquêteurs Principaux (toutes les fiches)
     - Les Enquêteurs (fiches assignées uniquement)
+    Note : Enquêteur Junior = consultation uniquement, pas de modification.
     """
     message = "Vous n'êtes pas autorisé à modifier cette fiche criminelle."
 
@@ -43,8 +44,8 @@ class CanModifyFicheCriminelle(BasePermission):
         if user_role == 'Enquêteur Principal':
             return has_permission(request.user, 'fiches.edit')
         
-        # Enquêteurs peuvent modifier uniquement les fiches assignées
-        if user_role in ['Enquêteur', 'Enquêteur Junior']:
+        # Enquêteurs peuvent modifier uniquement les fiches assignées (Junior = consultation seule)
+        if user_role == 'Enquêteur':
             if not has_permission(request.user, 'fiches.edit'):
                 return False
             
@@ -75,7 +76,8 @@ class CanDeleteFicheCriminelle(BasePermission):
     Autorise :
     - Les administrateurs (toutes les fiches)
     - Les Enquêteurs Principaux (toutes les fiches)
-    - Les Enquêteurs (leurs propres fiches uniquement)
+    - Les Enquêteurs (leurs propres fiches ou fiches assignées uniquement)
+    Note : Enquêteur Junior = consultation uniquement, pas d'archivage.
     """
     message = "Vous n'êtes pas autorisé à archiver cette fiche criminelle."
 
@@ -105,8 +107,8 @@ class CanDeleteFicheCriminelle(BasePermission):
         if user_role == 'Enquêteur Principal':
             return has_permission(request.user, 'fiches.delete')
         
-        # Enquêteurs peuvent archiver uniquement leurs propres fiches
-        if user_role in ['Enquêteur', 'Enquêteur Junior']:
+        # Enquêteurs peuvent archiver uniquement leurs propres fiches ou fiches assignées (Junior = non)
+        if user_role == 'Enquêteur':
             if not has_permission(request.user, 'fiches.delete'):
                 return False
             

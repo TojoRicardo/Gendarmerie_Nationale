@@ -94,19 +94,19 @@ export const usePermissions = () => {
   }, [utilisateur])
 
   /**
-   * Vérifie si l'utilisateur est Analyste Judiciaire
+   * Vérifie si l'utilisateur est Analyste (backend: "Analyste")
    * @returns {boolean}
    */
   const isAnalyste = useMemo(() => {
-    return hasRole('Analyste Judiciaire')
+    return hasRole('Analyste') || hasRole('Analyste Judiciaire')
   }, [utilisateur])
 
   /**
-   * Vérifie si l'utilisateur est Observateur Externe
+   * Vérifie si l'utilisateur est Observateur (backend: "Observateur")
    * @returns {boolean}
    */
   const isObservateur = useMemo(() => {
-    return hasRole('Observateur Externe')
+    return hasRole('Observateur') || hasRole('Observateur Externe')
   }, [utilisateur])
 
   /**
@@ -127,9 +127,9 @@ export const usePermissions = () => {
       return hasPermission('fiches.edit')
     }
     
-    // Les Enquêteurs et Enquêteurs Juniors peuvent modifier s'ils ont la permission
-    // (le backend vérifiera l'assignation)
-    if (utilisateur.role === 'Enquêteur' || utilisateur.role === 'Enquêteur Junior') {
+    // Les Enquêteurs peuvent modifier s'ils ont la permission (backend vérifie l'assignation)
+    // Enquêteur Junior = consultation uniquement, pas de modification
+    if (utilisateur.role === 'Enquêteur') {
       return hasPermission('fiches.edit')
     }
     
@@ -164,12 +164,12 @@ export const usePermissions = () => {
     const checkPermission = (perm) => hasAllRights || permissions.includes(perm)
     
     // Un utilisateur est en lecture seule s'il n'a aucune permission de modification
-    // Les Enquêteurs ne sont PAS en mode lecture seule
-    const isEnqueteur = ['Enquêteur Principal', 'Enquêteur', 'Enquêteur Junior'].includes(utilisateur?.role)
-    const isReadOnlyMode = !isEnqueteur && 
-                           !checkPermission('fiches.create') && 
-                           !checkPermission('fiches.edit') && 
-                           !checkPermission('fiches.delete') && 
+    // Enquêteur Principal et Enquêteur peuvent modifier ; Enquêteur Junior = consultation seule
+    const isEnqueteurWithEdit = ['Enquêteur Principal', 'Enquêteur'].includes(utilisateur?.role)
+    const isReadOnlyMode = !isEnqueteurWithEdit &&
+                           !checkPermission('fiches.create') &&
+                           !checkPermission('fiches.edit') &&
+                           !checkPermission('fiches.delete') &&
                            !checkPermission('biometrie.add') &&
                            !hasAdminRole
     

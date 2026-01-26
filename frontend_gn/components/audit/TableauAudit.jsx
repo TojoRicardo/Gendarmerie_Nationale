@@ -7,6 +7,7 @@ import {
 import Pagination from '../commun/Pagination';
 import SpinnerChargement from '../commun/SpinnerChargement';
 import AuditEntryCard from './AuditEntryCard';
+import SessionBlogCard from './SessionBlogCard';
 import AnalyseRapport from './AnalyseRapport';
 import { getAuditEntries, getAuditStatistics, searchAudit, clearAllAuditLogs } from '../../src/services/auditService';
 import { useToast } from '../../src/context/ToastContext';
@@ -67,7 +68,7 @@ const TableauAudit = ({ filtres = {} }) => {
       const params = {
         page: pageActuelle,
         page_size: elementsParPage,
-        group_by_session: false, // Ne pas grouper par défaut pour voir toutes les actions
+        group_by_session: true, // Grouper par session comme avant
       };
       
       // Ajouter seulement les filtres non vides
@@ -86,55 +87,65 @@ const TableauAudit = ({ filtres = {} }) => {
         data = await getAuditEntries(params);
       }
       
-      // Vérifier si les données sont des sessions groupées
-      const isGroupedBySession = data.results && data.results.length > 0 && data.results[0].session_id;
-      
       // Adapter les données au format attendu par le composant
       const journauxAdaptes = (data.results || data).map(entry => {
-        // Si c'est une session groupée, créer une entrée consolidée
-        if (isGroupedBySession && entry.session_id && entry.actions) {
-          // Créer une description consolidée de toutes les actions de la session
-          const actionsList = entry.actions || [];
+        // Si c'est une session groupée : vérifier si entry a session_id et actions
+        if (entry.session_id && entry.actions) {
+          // Les actions peuvent être un tableau ou déjà sérialisées
+          const actionsList = Array.isArray(entry.actions) ? entry.actions : (entry.actions || []);
           const actionsSummary = entry.actions_summary || {};
+          const actionsCount = entry.actions_count || (Array.isArray(actionsList) ? actionsList.length : 0);
+          
+          // Utiliser la première action pour les informations de base si disponible
+          const firstAction = Array.isArray(actionsList) && actionsList.length > 0 ? actionsList[0] : {};
+          
+          // Créer une description consolidée
           const actionsText = Object.entries(actionsSummary)
             .map(([action, count]) => `${count} ${action}`)
             .join(', ');
-          
-          // Utiliser la première action pour les informations de base
-          const firstAction = actionsList[0] || {};
-          
-          // Créer une description consolidée
           const sessionDescription = entry.description_short || 
-            `Session de ${entry.user_display || 'Utilisateur'} - ${entry.actions_count || 0} action(s) : ${actionsText}`;
+            `Session de ${entry.user_display || 'Utilisateur'} - ${actionsCount} action(s)${actionsText ? ` : ${actionsText}` : ''}`;
           
+          // Retourner l'entrée de session avec toutes les données nécessaires
           return {
             ...entry, // Conserver toutes les données originales de la session
-            id: entry.session_id || firstAction.id, // Utiliser session_id comme ID unique
+            id: entry.session_id || entry.id || firstAction.id, // Utiliser session_id comme ID unique
             is_session: true, // Flag pour indiquer que c'est une session
             session_id: entry.session_id,
-            date_action: entry.start_time || firstAction.timestamp,
-            utilisateur_display: entry.user_display || firstAction.user_display || 'Système',
+            date_action: entry.start_time || firstAction.timestamp || entry.timestamp,
+            utilisateur_display: entry.user_display || firstAction.user_display || firstAction.utilisateur_display || 'Système',
             action: 'SESSION', // Action spéciale pour les sessions
-            action_display: `Session (${entry.actions_count || 0} action(s))`,
+            action_display: `Session (${actionsCount} action(s))`,
             ressource: `Session ${entry.session_id}`,
             ressource_id: entry.session_id,
             description: sessionDescription,
             description_narrative: sessionDescription,
-            ip_adresse: entry.ip_address || firstAction.ip_address,
+            ip_adresse: entry.ip_address || firstAction.ip_address || firstAction.ip_adresse || null,
             user_agent: firstAction.user_agent || null,
             endpoint: null, // Pas d'endpoint unique pour une session
             methode_http: null,
             duree_ms: entry.duration_minutes ? entry.duration_minutes * 60 * 1000 : null,
             reussi: true, // Par défaut, une session est réussie
             message_erreur: null,
+            // Actions directement accessibles pour SessionBlogCard
+            actions: actionsList, // Toutes les actions de la session
+            actions_count: actionsCount,
+            actions_summary: actionsSummary,
+            start_time: entry.start_time,
+            end_time: entry.end_time,
+            duration_minutes: entry.duration_minutes,
+            user_info: entry.user_info || firstAction.user_info,
+            user_role: entry.user_role || firstAction.user_role,
+            browser: entry.browser || firstAction.browser,
+            os: entry.os || firstAction.os,
             details: {
               session_id: entry.session_id,
-              actions_count: entry.actions_count,
+              actions_count: actionsCount,
               actions_summary: actionsSummary,
               start_time: entry.start_time,
               end_time: entry.end_time,
               duration_minutes: entry.duration_minutes,
-              all_actions: actionsList, // Toutes les actions de la session
+              all_actions: actionsList, // Format alternatif pour compatibilité
             },
             ai_result: null,
           };
@@ -547,10 +558,26 @@ const TableauAudit = ({ filtres = {} }) => {
           </div>
         ) : (
           <>
-              <div className="space-y-3">
-                {journaux.map((journal) => (
-                  <AuditEntryCard key={journal.id} entry={journal} />
-                ))}
+              <div className="space-y-4">
+                {journaux.map((journal) => {
+                  // Si c'est une session groupée, utiliser SessionBlogCard avec design discret
+                  if (journal.is_session || journal.session_id) {
+                    return (
+                      <SessionBlogCard 
+                        key={journal.session_id || journal.id} 
+                        session={journal} 
+                      />
+                    );
+                  }
+                  // Sinon, utiliser AuditEntryCard pour les entrées individuelles (filtrer les navigations)
+                  const actionType = journal.action || '';
+                  if (actionType === 'NAVIGATION') {
+                    return null; // Ne pas afficher les navigations
+                  }
+                  return (
+                    <AuditEntryCard key={journal.id} entry={journal} />
+                  );
+                })}
               </div>
 
               {/* Pagination */}

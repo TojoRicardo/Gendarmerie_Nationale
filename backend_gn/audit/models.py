@@ -1,4 +1,4 @@
-﻿"""
+"""
 Modèles pour le Journal d'Audit Professionnel (Format INTERPOL/CIA/Gendarmerie)
 """
 
@@ -366,6 +366,15 @@ class AuditLog(models.Model):
         help_text='Description courte pour l\'affichage en liste'
     )
     
+    # Texte narratif explicite pour l'affichage simplifié
+    narrative_text = models.CharField(
+        max_length=1000,
+        blank=True,
+        null=True,
+        verbose_name='Texte narratif',
+        help_text='Texte narratif explicite de l\'action (format: "Le [date] à [heure], [utilisateur] a [action] depuis l\'IP [ip]")'
+    )
+    
     # Timestamp
     timestamp = models.DateTimeField(
         default=timezone.now,
@@ -413,7 +422,7 @@ class AuditLog(models.Model):
             # Permettre uniquement la mise à jour de certains champs techniques lors de la création
             # (par exemple, frontend_route et screen_name peuvent être ajoutés après création)
             update_fields = kwargs.get('update_fields', [])
-            allowed_update_fields = ['frontend_route', 'screen_name', 'description', 'description_short']
+            allowed_update_fields = ['frontend_route', 'screen_name', 'description', 'description_short', 'narrative_text']
             
             if update_fields:
                 # Vérifier que seuls les champs autorisés sont modifiés
@@ -763,9 +772,13 @@ class AuditLog(models.Model):
             # Assembler la description finale
             self.description = "\n".join(lines)
             
-            # Créer aussi une version courte pour l'affichage en liste
+            # Créer aussi une version courte pour l'affichage en liste avec action explicite
+            explicit_action = self._generate_explicit_action()
             date_short = dt.strftime("%d/%m/%Y à %H:%M:%S")
-            self.description_short = f"{action_fr} - {resource_display} par {user_display if self.user else 'Système'} le {date_short}"
+            self.description_short = f"{explicit_action} par {user_display if self.user else 'Système'} le {date_short}"
+            
+            # Créer un texte narratif court et explicite
+            self.narrative_text = self._generate_narrative_text()
             
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la description: {e}", exc_info=True)
@@ -775,6 +788,170 @@ class AuditLog(models.Model):
             date_str = timezone.now().strftime('%d/%m/%Y à %H:%M:%S')
             self.description = f"Date : {date_str}\nUtilisateur : {user_display}\nAction : {action_fr}\nRessource : {self.resource_type or 'Ressource'}"
             self.description_short = f"{action_fr} - {self.resource_type or 'Ressource'} par {user_display}"
+    
+    def _generate_explicit_action(self) -> str:
+        """
+        Génère une description explicite de l'action basée sur le type de ressource et l'action.
+        Exemple: "Modification" -> "modifié la fiche criminelle #123"
+        """
+        action_map = {
+            'LOGIN': 's\'est connecté au système',
+            'LOGOUT': 's\'est déconnecté du système',
+            'FAILED_LOGIN': 'a tenté de se connecter (échec)',
+            'VIEW': 'a consulté',
+            'CREATE': 'a créé',
+            'UPDATE': 'a modifié',
+            'DELETE': 'a supprimé',
+            'DOWNLOAD': 'a téléchargé',
+            'UPLOAD': 'a téléversé',
+            'SEARCH': 'a effectué une recherche',
+            'SUSPEND': 'a suspendu',
+            'RESTORE': 'a restauré',
+            'PERMISSION_CHANGE': 'a modifié les permissions de',
+            'ROLE_CHANGE': 'a changé le rôle de',
+            'PIN_VALIDATION': 'a validé le PIN pour',
+            'PIN_FAILED': 'a échoué à valider le PIN pour',
+            'ACCESS_DENIED': 's\'est vu refuser l\'accès à',
+            'NAVIGATION': 'a navigué vers',
+        }
+        
+        base_action = action_map.get(self.action, f"a effectué l'action {self.action.replace('_', ' ').lower()} sur")
+        
+        # Déterminer le type de ressource de manière explicite
+        resource_type_display = None
+        resource_id_display = None
+        
+        if self.content_type:
+            model_name = self.content_type.model
+            # Mapper les noms de modèles vers des descriptions explicites
+            model_map = {
+                'criminalfichecriminelle': 'la fiche criminelle',
+                'fichecriminelle': 'la fiche criminelle',
+                'dossiersuspect': 'le dossier suspect',
+                'enquete': 'l\'enquête',
+                'preuve': 'la preuve',
+                'rapportenquete': 'le rapport d\'enquête',
+                'utilisateur': 'le compte utilisateur',
+                'user': 'le compte utilisateur',
+                'biometriephoto': 'la photo biométrique',
+                'biometrieempreinte': 'l\'empreinte digitale',
+                'observation': 'l\'observation',
+                'avancement': 'l\'avancement d\'enquête',
+            }
+            resource_type_display = model_map.get(model_name.lower(), f"la ressource {model_name}")
+            resource_id_display = self.object_id
+        elif self.resource_type:
+            # Mapper les types de ressources vers des descriptions explicites
+            resource_map = {
+                'Fiche Criminelle': 'la fiche criminelle',
+                'Dossier Criminel': 'le dossier criminel',
+                'Enquête': 'l\'enquête',
+                'Preuve': 'la preuve',
+                'Rapport': 'le rapport',
+                'Utilisateur': 'le compte utilisateur',
+                'Photo Biométrique': 'la photo biométrique',
+                'Empreinte Digitale': 'l\'empreinte digitale',
+                'Système': 'le système',
+                'Navigation': 'la navigation',
+            }
+            resource_type_display = resource_map.get(self.resource_type, f"la ressource {self.resource_type.lower()}")
+            resource_id_display = self.resource_id
+        
+        # Construire la description explicite
+        if resource_type_display:
+            if resource_id_display:
+                explicit_action = f"{base_action} {resource_type_display} #{resource_id_display}"
+            else:
+                explicit_action = f"{base_action} {resource_type_display}"
+        else:
+            explicit_action = base_action
+        
+        # Pour UPDATE, ajouter des détails sur ce qui a été modifié avec valeurs avant/après
+        if self.action == 'UPDATE' and self.before and self.after:
+            changed_fields = []
+            before_data = self.before if isinstance(self.before, dict) else {}
+            after_data = self.after if isinstance(self.after, dict) else {}
+            
+            for key in set(list(before_data.keys()) + list(after_data.keys())):
+                before_value = before_data.get(key)
+                after_value = after_data.get(key)
+                
+                if before_value != after_value:
+                    # Mapper les noms de champs vers des descriptions explicites
+                    field_map = {
+                        'nom': 'le nom',
+                        'prenom': 'le prénom',
+                        'date_naissance': 'la date de naissance',
+                        'adresse': 'l\'adresse',
+                        'statut': 'le statut',
+                        'numero_fiche': 'le numéro de fiche',
+                        'description': 'la description',
+                        'commentaire': 'le commentaire',
+                        'email': 'l\'email',
+                        'telephone': 'le téléphone',
+                        'surnom': 'le surnom',
+                        'cin': 'le CIN',
+                        'lieu_naissance': 'le lieu de naissance',
+                    }
+                    field_display = field_map.get(key.lower(), f"le champ {key.replace('_', ' ')}")
+                    
+                    # Formater les valeurs pour l'affichage
+                    before_str = str(before_value) if before_value is not None else 'vide'
+                    after_str = str(after_value) if after_value is not None else 'vide'
+                    
+                    # Limiter la longueur des valeurs pour l'affichage
+                    if len(before_str) > 50:
+                        before_str = before_str[:50] + '...'
+                    if len(after_str) > 50:
+                        after_str = after_str[:50] + '...'
+                    
+                    # Créer la description avec valeurs avant/après
+                    changed_fields.append(f"{field_display}: {before_str} en {after_str}")
+            
+            if changed_fields:
+                if len(changed_fields) == 1:
+                    explicit_action += f" ({changed_fields[0]})"
+                elif len(changed_fields) <= 3:
+                    explicit_action += f" ({'; '.join(changed_fields)})"
+                else:
+                    # Pour plus de 3 champs, afficher les 3 premiers avec détails
+                    explicit_action += f" ({'; '.join(changed_fields[:3])}; et {len(changed_fields) - 3} autre(s) champ(s))"
+        
+        return explicit_action
+    
+    def _generate_narrative_text(self) -> str:
+        """
+        Génère un texte narratif court et explicite de l'action.
+        Format: "Le [date] à [heure], [utilisateur] a [action explicite] depuis l'adresse IP [ip]."
+        """
+        if self.timestamp:
+            dt = self.timestamp
+        else:
+            dt = timezone.now()
+        
+        date_str = dt.strftime("%d/%m/%Y")
+        time_str = dt.strftime("%H:%M:%S")
+        
+        # Nom de l'utilisateur
+        if self.user and self.user.is_authenticated:
+            full_name = f"{self.user.first_name} {self.user.last_name}".strip()
+            if full_name:
+                user_display = full_name
+            else:
+                user_display = self.user.username
+        else:
+            user_display = "le système"
+        
+        # Action explicite
+        explicit_action = self._generate_explicit_action()
+        
+        # IP
+        ip_display = self.ip_address or "adresse IP inconnue"
+        
+        # Construire le texte narratif (déjà en minuscules dans explicit_action)
+        narrative = f"Le {date_str} à {time_str}, {user_display} {explicit_action} depuis l'adresse IP {ip_display}."
+        
+        return narrative
     
     def _generate_motif(self, field_name: str, before_value: Any, after_value: Any) -> str:
         """Génère un motif automatique pour une modification."""

@@ -407,18 +407,25 @@ const AuditEntryCard = ({ entry }) => {
               </span>
             </div>
 
-            {/* Action avec badge */}
-            <div className="flex items-center space-x-2">
-              <span className={`${actionBadge.bg} ${actionBadge.text} ${actionBadge.border} border px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-sm`}>
-                <span>{entry.action_display || entry.action}</span>
-              </span>
-            </div>
-
-            {/* Ressource */}
-            <div className="flex-1 ml-4">
-              <p className="text-sm font-bold text-gray-900">{entry.resource_type || entry.ressource || 'Ressource'}</p>
-              {(entry.resource_id || entry.ressource_id) && (
-                <p className="text-xs text-gray-500">ID: {entry.resource_id || entry.ressource_id}</p>
+            {/* Action avec badge - Utiliser narrative_text si disponible pour plus de précision */}
+            <div className="flex items-center space-x-2 flex-1">
+              {entry.narrative_text ? (
+                <p className="text-sm text-gray-800 leading-relaxed">
+                  {entry.narrative_text}
+                </p>
+              ) : (
+                <>
+                  <span className={`${actionBadge.bg} ${actionBadge.text} ${actionBadge.border} border px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-sm`}>
+                    <span>{entry.action_display || entry.action}</span>
+                  </span>
+                  {/* Ressource */}
+                  <div className="ml-4">
+                    <p className="text-sm font-bold text-gray-900">{entry.resource_type || entry.ressource || 'Ressource'}</p>
+                    {(entry.resource_id || entry.ressource_id) && (
+                      <p className="text-xs text-gray-500">ID: {entry.resource_id || entry.ressource_id}</p>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
@@ -573,8 +580,14 @@ const AuditEntryCard = ({ entry }) => {
                 ) : (
                   /* Format normal pour les entrées individuelles */
                   <>
-                    {/* Priorité: description_narrative > description > formattedDescription */}
-                    {(entry.description_narrative || entry.description) ? (
+                    {/* Priorité: narrative_text > description_narrative > description > formattedDescription */}
+                    {entry.narrative_text ? (
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-3">
+                        <p className="text-sm text-gray-800 leading-relaxed">
+                          {entry.narrative_text}
+                        </p>
+                      </div>
+                    ) : (entry.description_narrative || entry.description) ? (
                       <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-3">
                         <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">
                           {entry.description_narrative || entry.description}

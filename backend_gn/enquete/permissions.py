@@ -134,6 +134,7 @@ class CanModifyEnquete(BasePermission):
     - Les administrateurs
     - Les Enquêteurs Principaux (toutes les enquêtes)
     - Les Enquêteurs (enquêtes assignées uniquement)
+    Note : Enquêteur Junior = consultation uniquement, pas de modification.
     """
     message = "Vous n'êtes pas autorisé à modifier cette enquête."
 
@@ -163,8 +164,8 @@ class CanModifyEnquete(BasePermission):
         if user_role == 'Enquêteur Principal':
             return has_permission(request.user, 'investigations.edit')
         
-        # Enquêteurs peuvent modifier uniquement les enquêtes assignées
-        if user_role in ['Enquêteur', 'Enquêteur Junior']:
+        # Enquêteurs peuvent modifier uniquement les enquêtes assignées (Junior = consultation seule)
+        if user_role == 'Enquêteur':
             if not has_permission(request.user, 'investigations.edit'):
                 return False
             
@@ -197,6 +198,7 @@ class CanModifyPreuve(BasePermission):
     - Les administrateurs
     - Les Enquêteurs Principaux (toutes les preuves)
     - Les Enquêteurs (preuves liées à leurs enquêtes assignées)
+    Note : Enquêteur Junior = consultation uniquement, pas de modification.
     """
     message = "Vous n'êtes pas autorisé à modifier cette preuve."
 
@@ -226,8 +228,8 @@ class CanModifyPreuve(BasePermission):
         if user_role == 'Enquêteur Principal':
             return has_permission(request.user, 'evidence.manage')
         
-        # Enquêteurs peuvent modifier uniquement les preuves liées à leurs enquêtes
-        if user_role in ['Enquêteur', 'Enquêteur Junior']:
+        # Enquêteurs peuvent modifier uniquement les preuves liées à leurs enquêtes (Junior = consultation seule)
+        if user_role == 'Enquêteur':
             if not has_permission(request.user, 'evidence.manage'):
                 return False
             

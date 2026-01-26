@@ -1,4 +1,4 @@
-﻿"""
+"""
 Vues pour le Journal d'Audit
 """
 
@@ -413,10 +413,10 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='sessions')
     def sessions(self, request):
         """
-        Retourne les logs d'audit groupés par session avec toutes les actions dans une seule entrée.
+        Retourne les logs d'audit groupés par session utilisateur réelle (UserSession).
+        Chaque session correspond à une connexion/déconnexion réelle de l'utilisateur.
         
         Query params:
-        - session_timeout: Timeout de session en minutes (défaut: 30)
         - date_debut: Filtrer par date de début
         - date_fin: Filtrer par date de fin
         - utilisateur: Filtrer par utilisateur
@@ -427,9 +427,9 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
         Liste des sessions avec toutes les actions groupées dans chaque session
         """
         try:
-            from .utils_merge import group_audit_logs_into_sessions
+            from .models import UserSession
             from .serializers import SessionAuditSerializer
-            from datetime import timedelta
+            from collections import defaultdict
             
             # Récupérer le queryset de base
             queryset = self.get_queryset()
@@ -446,18 +446,39 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
             if utilisateur_id:
                 queryset = queryset.filter(user_id=utilisateur_id)
             
-            # Paramètres de session
-            session_timeout = int(request.query_params.get('session_timeout', 30))
+            # Grouper par UserSession réelle (si disponible) ou par session_key
+            # Utiliser select_related pour optimiser les requêtes
+            try:
+                queryset = queryset.select_related('session', 'user')
+            except Exception:
+                # Si le champ session n'existe pas encore (migration non appliquée)
+                queryset = queryset.select_related('user')
             
-            # Récupérer tous les logs
             all_logs = list(queryset.order_by('timestamp'))
             
-            # Grouper par session
-            sessions_dict = group_audit_logs_into_sessions(all_logs, session_timeout_minutes=session_timeout)
+            # Grouper par session réelle (UserSession)
+            sessions_dict = defaultdict(list)
+            logs_sans_session = []
+            
+            for log in all_logs:
+                # Si le log a une session UserSession, l'utiliser
+                if hasattr(log, 'session') and log.session:
+                    session_key = log.session.session_key
+                    sessions_dict[session_key].append(log)
+                else:
+                    # Logs sans session : les grouper par user + IP + timestamp proche
+                    # (pour les anciens logs ou logs système)
+                    logs_sans_session.append(log)
+            
+            # Grouper les logs sans session par user + IP + fenêtre temporelle
+            if logs_sans_session:
+                from .utils_merge import group_audit_logs_into_sessions
+                sessions_dict_sans = group_audit_logs_into_sessions(logs_sans_session, session_timeout_minutes=30)
+                sessions_dict.update(sessions_dict_sans)
             
             # Construire les sessions avec toutes les informations
             sessions_list = []
-            for session_id, session_logs in sessions_dict.items():
+            for session_key, session_logs in sessions_dict.items():
                 if not session_logs:
                     continue
                 
@@ -467,21 +488,35 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 first_log = sorted_logs[0]
                 last_log = sorted_logs[-1]
                 
+                # Récupérer la UserSession si disponible
+                user_session = None
+                if hasattr(first_log, 'session') and first_log.session:
+                    user_session = first_log.session
+                
                 # Calculer la durée
                 duration = None
-                if first_log.timestamp and last_log.timestamp:
+                if user_session and user_session.start_time:
+                    if user_session.end_time:
+                        duration = int((user_session.end_time - user_session.start_time).total_seconds() / 60)
+                    elif last_log.timestamp:
+                        duration = int((last_log.timestamp - user_session.start_time).total_seconds() / 60)
+                elif first_log.timestamp and last_log.timestamp:
                     duration = int((last_log.timestamp - first_log.timestamp).total_seconds() / 60)
                 
+                # Utiliser les informations de UserSession si disponibles
+                start_time = user_session.start_time if user_session and user_session.start_time else first_log.timestamp
+                end_time = user_session.end_time if user_session and user_session.end_time else last_log.timestamp
+                
                 session_data = {
-                    'session_id': session_id,
+                    'session_id': session_key,
                     'user': first_log.user,
                     'user_id': first_log.user_id,
                     'user_role': first_log.user_role,
-                    'ip_address': first_log.ip_address,
+                    'ip_address': user_session.ip_address if user_session else first_log.ip_address,
                     'browser': first_log.browser,
                     'os': first_log.os,
-                    'start_time': first_log.timestamp,
-                    'end_time': last_log.timestamp,
+                    'start_time': start_time,
+                    'end_time': end_time,
                     'duration_minutes': duration,
                     'actions_count': len(sorted_logs),
                     'actions': sorted_logs,  # Toutes les actions de la session
@@ -508,7 +543,6 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 'next': f"?page={page + 1}" if end < len(sessions_list) else None,
                 'previous': f"?page={page - 1}" if page > 1 else None,
                 'results': serializer.data,
-                'session_timeout_minutes': session_timeout,
             })
             
         except Exception as e:
@@ -628,12 +662,44 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Vérifier si on demande le groupement par session
+        group_by_session = request.query_params.get('group_by_session', 'false').lower() == 'true'
+        
+        if group_by_session:
+            # Pour le groupement par session, filtrer d'abord puis grouper
+            # On va modifier temporairement le queryset pour appliquer le filtre de recherche
+            # puis utiliser la méthode sessions avec le filtre
+            original_get_queryset = self.get_queryset
+            
+            def filtered_get_queryset():
+                queryset = original_get_queryset()
+                return queryset.filter(
+                    Q(description__icontains=terme) |
+                    Q(resource_type__icontains=terme) |
+                    Q(user__username__icontains=terme) |
+                    Q(action__icontains=terme) |
+                    Q(ip_address__icontains=terme) |
+                    Q(narrative_text__icontains=terme)
+                )
+            
+            # Remplacer temporairement get_queryset
+            self.get_queryset = filtered_get_queryset
+            
+            try:
+                # Utiliser la méthode sessions qui gère déjà le groupement
+                return self.sessions(request)
+            finally:
+                # Restaurer la méthode originale
+                self.get_queryset = original_get_queryset
+        
+        # Recherche normale sans groupement
         queryset = self.get_queryset().filter(
             Q(description__icontains=terme) |
             Q(resource_type__icontains=terme) |
             Q(user__username__icontains=terme) |
             Q(action__icontains=terme) |
-            Q(ip_address__icontains=terme)
+            Q(ip_address__icontains=terme) |
+            Q(narrative_text__icontains=terme)
         )
         
         page = self.paginate_queryset(queryset)

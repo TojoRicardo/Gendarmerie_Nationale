@@ -99,47 +99,63 @@ export const ROLE_PERMISSIONS = {
     description: 'Responsable des enquêtes, création et gestion complète des dossiers criminels',
     color: 'blue',
     permissions: [
-      //  Tableau de bord
       PERMISSIONS.DASHBOARD_VIEW,
-      
-      //  Fichier criminel (création, modification, suppression)
       PERMISSIONS.FICHES_VIEW,
       PERMISSIONS.FICHES_CREATE,
       PERMISSIONS.FICHES_EDIT,
       PERMISSIONS.FICHES_DELETE,
-      
-      //  Biométrie (ajout de données faciales, empreintes)
       PERMISSIONS.BIOMETRIE_VIEW,
       PERMISSIONS.BIOMETRIE_ADD,
       PERMISSIONS.BIOMETRIE_EDIT,
-      
-      //  Rapport (génération et consultation)
       PERMISSIONS.REPORTS_VIEW,
       PERMISSIONS.REPORTS_CREATE,
       PERMISSIONS.REPORTS_EXPORT,
-      
-      //  Intelligence artificielle (reconnaissance faciale, prédiction)
       PERMISSIONS.IA_VIEW_RESULTS,
       PERMISSIONS.IA_USE_RECOGNITION,
       PERMISSIONS.IA_USE_PREDICTION,
-      
-      // Enquêtes
       PERMISSIONS.INVESTIGATIONS_CREATE,
       PERMISSIONS.INVESTIGATIONS_EDIT,
       PERMISSIONS.INVESTIGATIONS_CLOSE,
       PERMISSIONS.INVESTIGATIONS_VIEW,
-      
-      // Suspects
       PERMISSIONS.SUSPECTS_CREATE,
       PERMISSIONS.SUSPECTS_EDIT,
       PERMISSIONS.SUSPECTS_VIEW,
-      
-      // Preuves
       PERMISSIONS.EVIDENCE_MANAGE,
       PERMISSIONS.EVIDENCE_VIEW,
-      
-      // Analyses
       PERMISSIONS.ANALYTICS_VIEW,
+      PERMISSIONS.NOTIFICATIONS_VIEW,
+    ],
+  },
+
+  'Enquêteur': {
+    description: 'Enquêteur avec droits de base ; création et modification (fiches assignées)',
+    color: 'blue',
+    permissions: [
+      PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.FICHES_VIEW,
+      PERMISSIONS.FICHES_CREATE,
+      PERMISSIONS.FICHES_EDIT,
+      PERMISSIONS.BIOMETRIE_VIEW,
+      PERMISSIONS.BIOMETRIE_ADD,
+      PERMISSIONS.REPORTS_VIEW,
+      PERMISSIONS.REPORTS_CREATE,
+      PERMISSIONS.IA_VIEW_RESULTS,
+      PERMISSIONS.IA_USE_RECOGNITION,
+      PERMISSIONS.INVESTIGATIONS_VIEW,
+      PERMISSIONS.NOTIFICATIONS_VIEW,
+    ],
+  },
+
+  'Enquêteur Junior': {
+    description: 'Consultation uniquement ; pas de création ni modification',
+    color: 'slate',
+    permissions: [
+      PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.FICHES_VIEW,
+      PERMISSIONS.BIOMETRIE_VIEW,
+      PERMISSIONS.REPORTS_VIEW,
+      PERMISSIONS.IA_VIEW_RESULTS,
+      PERMISSIONS.INVESTIGATIONS_VIEW,
       PERMISSIONS.NOTIFICATIONS_VIEW,
     ],
   },
