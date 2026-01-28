@@ -1,4 +1,4 @@
-﻿import os
+import os
 import logging
 from datetime import datetime, date, timedelta
 from django.http import FileResponse, HttpResponse
@@ -41,6 +41,7 @@ class RapportViewSet(viewsets.ModelViewSet):
     pagination_class = RapportPagination
     lookup_field = 'id'
     lookup_url_kwarg = 'pk'
+    # Note: Les routes personnalisées avec UUID sont définies dans urls.py avant le router
     
     def get_queryset(self):
         queryset = super().get_queryset()

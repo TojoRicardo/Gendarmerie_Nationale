@@ -109,9 +109,9 @@ const reportService = {
    */
   telechargerRapport: async (rapportId) => {
     try {
-      // Utiliser la route personnalisée pour télécharger
+      // Utiliser la route personnalisée pour télécharger avec préfixe pour éviter les conflits
       // Note: baseURL contient déjà /api, donc on ne met pas /api/ au début
-      const response = await api.get(`/rapports/${rapportId}/telecharger/`, {
+      const response = await api.get(`/rapports/telecharger/${rapportId}/`, {
         params: { format: 'pdf' },
         responseType: 'blob',
       });

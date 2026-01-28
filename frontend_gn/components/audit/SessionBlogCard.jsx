@@ -8,7 +8,7 @@ import {
  * avec toutes ses activités listées à l'intérieur
  */
 const SessionBlogCard = ({ session }) => {
-  const [isExpanded, setIsExpanded] = useState(true); // Par défaut, la session est ouverte
+  const [isExpanded, setIsExpanded] = useState(false); // Par défaut, la session est repliée
   
   // Formater la date de début
   const formatDate = (date) => {

@@ -34,7 +34,19 @@ const VisionneuseRapport = ({ rapportId }) => {
 
   const telechargerRapport = async () => {
     try {
-      const response = await fetch(`/api/rapports/${rapportId}/telecharger`, {
+      // Vérifier que rapportId est bien défini et n'est pas une chaîne littérale
+      if (!rapportId || rapportId === '{uuid}' || rapportId === '{reportId}' || rapportId === '{rapportId}') {
+        console.error('❌ [VisionneuseRapport] Erreur: rapportId invalide:', rapportId);
+        alert('Erreur: ID de rapport invalide. Veuillez réessayer.');
+        return;
+      }
+      
+      console.log('🔵 [VisionneuseRapport] Téléchargement du rapport:', {
+        rapportId: rapportId,
+        url: `/api/rapports/telecharger/${rapportId}/`
+      });
+      
+      const response = await fetch(`/api/rapports/telecharger/${rapportId}/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

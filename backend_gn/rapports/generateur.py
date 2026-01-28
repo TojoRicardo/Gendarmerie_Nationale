@@ -171,11 +171,16 @@ class GenerateurRapport:
         if not date_debut or not date_fin:
             raise ValueError("Les dates de début et de fin sont requises")
         
+        # Préparer les filtres en incluant la province si elle est spécifiée
+        filtres = params.get('filtres', {}).copy() if params.get('filtres') else {}
+        if params.get('province'):
+            filtres['province'] = params['province']
+        
         collector = DataCollectorService(
             type_rapport='resume_mensuel',
             date_debut=date_debut,
             date_fin=date_fin,
-            filtres=params.get('filtres', {})
+            filtres=filtres
         )
         try:
             donnees = collector.collect_data()

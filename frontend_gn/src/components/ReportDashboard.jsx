@@ -102,13 +102,101 @@ const ReportDashboard = () => {
   const loadReports = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/rapports/');
-      const reportsData = response.data.results || response.data || [];
-      setReports(Array.isArray(reportsData) ? reportsData : []);
+      console.log('🔵 [ReportDashboard] Début du chargement des rapports...');
+      // Utiliser /rapports/reports/ car le router DRF génère les routes sous le préfixe 'reports'
+      console.log('🔵 [ReportDashboard] URL appelée:', '/rapports/reports/');
+      
+      const response = await api.get('/rapports/reports/');
+      
+      console.log('✅ [ReportDashboard] Réponse reçue du serveur:');
+      console.log('   - Status:', response.status);
+      console.log('   - Headers:', response.headers);
+      console.log('   - Content-Type:', response.headers['content-type']);
+      console.log('   - Data type:', typeof response.data);
+      console.log('   - Data:', response.data);
+      
+      // Vérifier que la réponse est bien en JSON
+      const contentType = response.headers['content-type'] || '';
+      if (!contentType.includes('application/json')) {
+        console.warn('⚠️ [ReportDashboard] Attention: Content-Type n\'est pas application/json:', contentType);
+      }
+      
+      // Extraire les données
+      let reportsData = [];
+      if (response.data) {
+        if (response.data.results) {
+          // Format paginé DRF
+          console.log('📄 [ReportDashboard] Format paginé détecté (results)');
+          reportsData = response.data.results;
+          console.log('   - Nombre de résultats:', reportsData.length);
+          console.log('   - Données complètes:', response.data);
+        } else if (Array.isArray(response.data)) {
+          // Format array direct
+          console.log('📄 [ReportDashboard] Format array direct détecté');
+          reportsData = response.data;
+          console.log('   - Nombre de rapports:', reportsData.length);
+        } else if (typeof response.data === 'object') {
+          // Format objet
+          console.log('📄 [ReportDashboard] Format objet détecté');
+          console.log('   - Clés disponibles:', Object.keys(response.data));
+          reportsData = [];
+        }
+      }
+      
+      console.log('📊 [ReportDashboard] Données des rapports extraites:');
+      console.log('   - Type:', Array.isArray(reportsData) ? 'Array' : typeof reportsData);
+      console.log('   - Nombre:', reportsData.length);
+      console.log('   - Contenu:', JSON.stringify(reportsData, null, 2));
+      
+      // Vérifier chaque rapport
+      if (Array.isArray(reportsData) && reportsData.length > 0) {
+        console.log('📋 [ReportDashboard] Détails des rapports:');
+        reportsData.forEach((report, index) => {
+          console.log(`   Rapport ${index + 1}:`, {
+            id: report.id,
+            type: report.type_rapport || report.type,
+            statut: report.statut,
+            date_creation: report.date_creation || report.date_generation,
+            fichier: report.fichier ? 'Oui' : 'Non',
+            url_fichier: report.url_fichier || 'N/A'
+          });
+        });
+      }
+      
+      const finalReports = Array.isArray(reportsData) ? reportsData : [];
+      console.log('✅ [ReportDashboard] Rapports finaux à afficher:', finalReports.length);
+      setReports(finalReports);
+      
     } catch (err) {
+      console.error('❌ [ReportDashboard] Erreur lors du chargement des rapports:');
+      console.error('   - Type d\'erreur:', err.name);
+      console.error('   - Message:', err.message);
+      console.error('   - Code:', err.code);
+      
+      if (err.response) {
+        console.error('   - Status:', err.response.status);
+        console.error('   - Headers:', err.response.headers);
+        console.error('   - Data:', err.response.data);
+        
+        // Essayer de parser la réponse même en cas d'erreur
+        if (err.response.data) {
+          try {
+            const errorData = typeof err.response.data === 'string' 
+              ? JSON.parse(err.response.data) 
+              : err.response.data;
+            console.error('   - Données d\'erreur parsées:', errorData);
+          } catch (parseErr) {
+            console.error('   - Impossible de parser les données d\'erreur:', parseErr);
+          }
+        }
+      } else if (err.request) {
+        console.error('   - Requête envoyée mais pas de réponse:', err.request);
+      }
+      
       setReports([]);
     } finally {
       setLoading(false);
+      console.log('🏁 [ReportDashboard] Chargement terminé');
     }
   };
 
@@ -164,10 +252,24 @@ const ReportDashboard = () => {
         
         if (statut === 'termine' && response.data.url_fichier && response.data.fichier) {
           try {
-            await handleDownload(rapportId, 'pdf');
+            // Utiliser directement l'URL du fichier si disponible (plus fiable que l'endpoint)
+            const fileUrl = response.data.url_fichier;
+            console.log('🔵 [ReportDashboard] Téléchargement direct depuis URL:', fileUrl);
+            const link = document.createElement('a');
+            link.href = fileUrl;
+            link.setAttribute('download', `rapport_${rapportId}.pdf`);
+            link.setAttribute('target', '_blank');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
           } catch (downloadErr) {
             console.error('Erreur lors du téléchargement automatique:', downloadErr);
-            // Ne pas afficher d'alerte ici car l'utilisateur peut télécharger manuellement plus tard
+            // Fallback: essayer l'endpoint de téléchargement
+            try {
+              await handleDownload(rapportId, 'pdf');
+            } catch (endpointErr) {
+              console.error('Erreur endpoint téléchargement:', endpointErr);
+            }
           }
         } else if (statut === 'termine' && !response.data.fichier) {
           console.warn(`Rapport ${rapportId} terminé mais sans fichier. Statut: ${statut}, Message erreur: ${response.data.message_erreur || 'Aucun'}`);
@@ -260,7 +362,35 @@ const ReportDashboard = () => {
 
   const handleDownload = async (reportId, format = 'pdf') => {
     try {
-      const response = await api.get(`/rapports/${reportId}/telecharger/`, {
+      // Vérifier que reportId est bien défini et n'est pas une chaîne littérale
+      if (!reportId || reportId === '{uuid}' || reportId === '{reportId}' || reportId === '{rapportId}') {
+        console.error('❌ [ReportDashboard] Erreur: reportId invalide:', reportId);
+        alert('Erreur: ID de rapport invalide. Veuillez réessayer.');
+        return;
+      }
+      
+      // Chercher le rapport dans la liste pour obtenir l'URL du fichier directement
+      const report = reports.find(r => r.id === reportId);
+      if (report && report.url_fichier) {
+        console.log('🔵 [ReportDashboard] Téléchargement direct depuis URL du rapport:', report.url_fichier);
+        const link = document.createElement('a');
+        link.href = report.url_fichier;
+        link.setAttribute('download', `rapport_${reportId}.${format}`);
+        link.setAttribute('target', '_blank');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+      
+      console.log('🔵 [ReportDashboard] Téléchargement via endpoint:', {
+        reportId: reportId,
+        format: format,
+        url: `/rapports/telecharger/${reportId}/`
+      });
+      
+      // Fallback: utiliser l'endpoint de téléchargement si l'URL directe n'est pas disponible
+      const response = await api.get(`/rapports/telecharger/${reportId}/`, {
         params: { format: format },
         responseType: 'blob'
       });

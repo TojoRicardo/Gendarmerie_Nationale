@@ -123,7 +123,7 @@ export const deleteReport = async (reportId) => {
  */
 export const downloadReportPDF = async (reportId) => {
   try {
-    const response = await get(`/rapports/${reportId}/telecharger/`, {
+    const response = await get(`/rapports/telecharger/${reportId}/`, {
       params: { format: 'pdf' },
       responseType: 'blob'
     })
