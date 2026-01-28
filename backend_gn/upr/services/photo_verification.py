@@ -220,7 +220,8 @@ def search_by_photo(
                 query_embedding = np.array(face_data.get("embedding"), dtype=np.float32)
                 landmarks = face_data.get("landmarks")
                 confidence = face_data.get("confidence")
-                logger.info("Extraction réussie via extract_face_data")
+                logger.info(f"✅ [search_by_photo] Extraction réussie via extract_face_data")
+                logger.info(f"🔵 [search_by_photo] Embedding extrait: dimension={len(query_embedding)}, confidence={confidence}")
             else:
                 error_msg = face_data.get("error", "Aucun visage détecté")
                 logger.warning(f"Échec extraction via extract_face_data: {error_msg}")
@@ -355,6 +356,18 @@ def search_by_photo(
         try:
             from biometrie.models import BiometriePhoto
             
+            # Compter toutes les photos biométriques (pour diagnostic)
+            total_photos = BiometriePhoto.objects.filter(est_active=True).count()
+            photos_with_embedding = BiometriePhoto.objects.filter(
+                est_active=True,
+                embedding_512__isnull=False
+            ).exclude(embedding_512=None).count()
+            
+            logger.info(f"🔵 [search_by_photo] Diagnostic BiometriePhoto:")
+            logger.info(f"   - Total photos actives: {total_photos}")
+            logger.info(f"   - Photos avec embedding_512: {photos_with_embedding}")
+            logger.info(f"   - Photos sans embedding: {total_photos - photos_with_embedding}")
+            
             criminal_photos = BiometriePhoto.objects.filter(
                 est_active=True,
                 embedding_512__isnull=False
@@ -364,7 +377,7 @@ def search_by_photo(
                 'criminel__date_naissance', 'criminel__lieu_naissance'
             )
             
-            logger.info(f"Recherche dans {criminal_photos.count()} photos biométriques actives avec embedding")
+            logger.info(f"🔵 [search_by_photo] Recherche dans {criminal_photos.count()} photos biométriques actives avec embedding")
             
             # Charger tous les embeddings en une seule fois
             photo_data = []
@@ -388,24 +401,39 @@ def search_by_photo(
             
             # Comparaison vectorielle batch pour toutes les photos
             if photo_data:
-                logger.info(f"Comparaison batch de {len(photo_data)} photos criminelles...")
+                logger.info(f"🔵 [search_by_photo] Comparaison batch de {len(photo_data)} photos criminelles...")
+                logger.info(f"🔵 [search_by_photo] Dimension embedding requête: {len(query_embedding)}")
+                
                 embeddings_array = np.array([item['embedding'] for item in photo_data], dtype=np.float32)
+                logger.info(f"🔵 [search_by_photo] Shape embeddings_array: {embeddings_array.shape}")
                 
                 # Normaliser tous les embeddings en une seule opération
                 norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True) + 1e-12
                 embeddings_norm = embeddings_array / norms
                 
+                # Normaliser l'embedding de requête
+                query_norm = query_embedding_norm
+                
                 # Calculer toutes les similarités en une seule opération vectorielle
-                similarities = np.dot(embeddings_norm, query_embedding_norm)
+                similarities = np.dot(embeddings_norm, query_norm)
+                logger.info(f"🔵 [search_by_photo] Similarités calculées: min={float(np.min(similarities)):.4f}, max={float(np.max(similarities)):.4f}, mean={float(np.mean(similarities)):.4f}")
+                logger.info(f"🔵 [search_by_photo] Seuil utilisé: {threshold}")
                 
                 # Dictionnaire pour garder la meilleure correspondance par fiche criminelle
                 best_matches_by_criminel = {}
                 
                 # Filtrer et créer les résultats
+                matches_found = 0
                 for i, item in enumerate(photo_data):
                     similarity_score = float(similarities[i])
                     
+                    # Log pour les meilleures correspondances même si sous le seuil
+                    if i < 5:  # Log les 5 premières pour diagnostic
+                        photo = item['photo']
+                        logger.debug(f"🔵 [search_by_photo] Photo #{photo.id} (Criminel #{photo.criminel.id}): similarity={similarity_score:.4f}, threshold={threshold}")
+                    
                     if similarity_score >= threshold:
+                        matches_found += 1
                         photo = item['photo']
                         criminel_id = photo.criminel.id
                         
@@ -447,7 +475,17 @@ def search_by_photo(
                 
                 # Ajouter toutes les meilleures correspondances
                 criminal_matches.extend(best_matches_by_criminel.values())
-                logger.info(f"Recherche BiometriePhoto terminée: {len(best_matches_by_criminel)} fiches trouvées")
+                logger.info(f"✅ [search_by_photo] Recherche BiometriePhoto terminée: {len(best_matches_by_criminel)} fiches trouvées (sur {matches_found} correspondances au total)")
+                
+                # Si aucune correspondance trouvée, logger les meilleures scores pour diagnostic
+                if len(best_matches_by_criminel) == 0 and photo_data:
+                    top_5_indices = np.argsort(similarities)[-5:][::-1]
+                    logger.warning(f"⚠️ [search_by_photo] Aucune correspondance trouvée avec seuil {threshold}")
+                    logger.warning(f"⚠️ [search_by_photo] Top 5 meilleures similarités:")
+                    for idx in top_5_indices:
+                        photo = photo_data[idx]['photo']
+                        score = float(similarities[idx])
+                        logger.warning(f"   - Photo #{photo.id} (Criminel #{photo.criminel.id}): {score:.4f}")
                     
         except ImportError:
             logger.warning("BiometriePhoto n'est pas disponible, recherche dans les criminels ignorée")
