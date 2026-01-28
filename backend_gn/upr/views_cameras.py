@@ -312,6 +312,8 @@ class CompareEmbeddingView(APIView):
                 face_embedding=[]
             ).exclude(
                 is_resolved=True
+            ).exclude(
+                is_archived=True
             )
             
             for upr in upr_list:

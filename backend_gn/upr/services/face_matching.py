@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service de comparaison automatique des embeddings faciaux.
 
 Compare un embedding UPR avec :
@@ -82,12 +82,13 @@ def find_matches_for_upr(upr: UnidentifiedPerson) -> Dict[str, Any]:
     logger.info(f"Début recherche de correspondances pour UPR {upr.code_upr}...")
     
     try:
-        # 1. Comparer avec les autres UPR
+        # 1. Comparer avec les autres UPR (exclure les résolus et archivés)
         logger.info("Comparaison avec les autres UPR...")
         other_uprs = UnidentifiedPerson.objects.filter(
             ~Q(id=upr.id),
             face_embedding__isnull=False,
-            is_resolved=False
+            is_resolved=False,
+            is_archived=False
         ).exclude(face_embedding=None)
         
         upr_count = 0

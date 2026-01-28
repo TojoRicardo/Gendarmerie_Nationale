@@ -1,4 +1,4 @@
-﻿"""
+"""
 Modèles Django pour le module UPR (Unidentified Person Registry).
 
 Ce module gère les individus non identifiés avec extraction biométrique automatique,
@@ -169,6 +169,30 @@ class UnidentifiedPerson(models.Model):
         help_text="Criminel identifié vers lequel cet UPR a été fusionné"
     )
     
+    # Statut d'archivage
+    is_archived = models.BooleanField(
+        default=False,
+        verbose_name="Archivé",
+        help_text="Indique si l'UPR est archivé (suppression douce)"
+    )
+    
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Date d'archivage",
+        help_text="Date à laquelle l'UPR a été archivé"
+    )
+    
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='upr_archived',
+        verbose_name="Archivé par",
+        help_text="Utilisateur ayant archivé cet UPR"
+    )
+    
     # Métadonnées
     date_enregistrement = models.DateTimeField(
         auto_now_add=True,
@@ -198,6 +222,7 @@ class UnidentifiedPerson(models.Model):
             models.Index(fields=['code_upr']),
             models.Index(fields=['-date_enregistrement']),
             models.Index(fields=['is_resolved']),
+            models.Index(fields=['is_archived']),
             models.Index(fields=['created_by', '-date_enregistrement']),
         ]
 

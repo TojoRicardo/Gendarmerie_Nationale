@@ -5,15 +5,13 @@ import api from './api'
 
 /**
  * Crée un nouvel UPR
- * @param {FormData} formData - FormData contenant photo_face (obligatoire) et notes (optionnel)
+ * @param {FormData} formData - FormData contenant profil_face (obligatoire), notes (optionnel), etc.
  * @returns {Promise} Réponse avec les données de l'UPR créé
  */
 export const createUPR = async (formData) => {
-  const response = await api.post('/upr/', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
+  // Ne pas définir Content-Type : avec FormData, Axios envoie automatiquement
+  // multipart/form-data avec le boundary correct
+  const response = await api.post('/upr/', formData)
   return response.data
 }
 
@@ -67,12 +65,22 @@ export const patchUPR = async (id, data) => {
 }
 
 /**
- * Supprime un UPR
+ * Archive un UPR (suppression douce)
  * @param {number} id - ID de l'UPR
  * @returns {Promise} Message de confirmation
  */
 export const deleteUPR = async (id) => {
   const response = await api.delete(`/upr/${id}/`)
+  return response.data
+}
+
+/**
+ * Restaure un UPR archivé
+ * @param {number} id - ID de l'UPR
+ * @returns {Promise} Données de l'UPR restauré
+ */
+export const restoreUPR = async (id) => {
+  const response = await api.post(`/upr/${id}/restore/`)
   return response.data
 }
 
@@ -104,6 +112,7 @@ export default {
   updateUPR,
   patchUPR,
   deleteUPR,
+  restoreUPR,
   searchUPRByPhoto
 }
 

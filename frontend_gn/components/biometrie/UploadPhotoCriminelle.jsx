@@ -272,8 +272,8 @@ const UploadPhotoCriminelle = ({
               </div>
             )}
 
-            {/* Animation Scanning Line - affichée pendant le scan */}
-            {isScanning && (
+            {/* Animation Scanning Line - affichée pendant le scan, mais s'arrête si un visage est détecté */}
+            {isScanning && visagesDetectes.length === 0 && (
               <>
                 <style>{`
                   @keyframes scanLineMove {

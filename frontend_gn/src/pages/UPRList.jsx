@@ -213,6 +213,12 @@ export default function UPRList() {
                     ✓ Embedding
                   </div>
                 )}
+                {/* Badge Archivé */}
+                {upr.is_archived && (
+                  <div className="absolute bottom-2 left-2 bg-gray-600 text-white px-2 py-1 rounded-md text-xs font-semibold">
+                    📦 Archivé
+                  </div>
+                )}
               </div>
 
               {/* Content */}

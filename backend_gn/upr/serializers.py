@@ -1,4 +1,4 @@
-﻿"""
+"""
 Serializers complets pour le module UPR avec nested objects.
 """
 
@@ -88,6 +88,9 @@ class UnidentifiedPersonSerializer(serializers.ModelSerializer):
             'discovered_date',
             'notes',
             'is_resolved',
+            'is_archived',
+            'archived_at',
+            'archived_by',
             'resolved_at',
             'resolved_to_criminel',
             'date_enregistrement',
@@ -106,6 +109,9 @@ class UnidentifiedPersonSerializer(serializers.ModelSerializer):
             'face_embedding',
             'face_encoding',
             'is_resolved',
+            'is_archived',
+            'archived_at',
+            'archived_by',
             'resolved_at',
             'resolved_to_criminel',
             'date_enregistrement',
@@ -191,6 +197,8 @@ class UnidentifiedPersonCreateSerializer(serializers.ModelSerializer):
             'discovered_date',
             'notes'
         ]
+        # Les champs d'archivage ne doivent pas être modifiables lors de la création
+        read_only_fields = ['is_archived', 'archived_at', 'archived_by']
     
     def create(self, validated_data):
         """Crée un UPR avec les fichiers uploadés."""
@@ -233,6 +241,9 @@ class UnidentifiedPersonListSerializer(serializers.ModelSerializer):
             'discovered_date',
             'date_enregistrement',
             'is_resolved',
+            'is_archived',
+            'archived_at',
+            'archived_by',
             'has_matches'
         ]
     

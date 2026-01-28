@@ -1,4 +1,4 @@
-﻿"""
+"""
 Views complètes pour le module UPR avec extraction automatique et matching.
 """
 
@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
+from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 
 from .models import UnidentifiedPerson, UPRMatchLog, CriminelMatchLog
@@ -68,11 +69,21 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         """Retourne la liste des UPR triés par date d'enregistrement."""
         queryset = UnidentifiedPerson.objects.all().order_by('-date_enregistrement')
         
+        # Exclure les UPR archivés par défaut (sauf si demandé explicitement)
+        include_archived = self.request.query_params.get('include_archived', 'false').lower() == 'true'
+        if not include_archived:
+            queryset = queryset.filter(is_archived=False)
+        
         # Filtrer par statut de résolution si demandé
         is_resolved = self.request.query_params.get('is_resolved', None)
         if is_resolved is not None:
             is_resolved_bool = is_resolved.lower() == 'true'
             queryset = queryset.filter(is_resolved=is_resolved_bool)
+        
+        # Filtrer uniquement les archivés si demandé
+        archived_only = self.request.query_params.get('archived_only', 'false').lower() == 'true'
+        if archived_only:
+            queryset = queryset.filter(is_archived=True)
         
         return queryset
     
@@ -294,16 +305,30 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
             )
     
     def retrieve(self, request, pk=None):
-        """Récupère les détails d'un UPR."""
+        """Récupère les détails d'un UPR (y compris les archivés)."""
+        # Permettre de récupérer les UPR archivés pour les voir en détail
         upr = get_object_or_404(UnidentifiedPerson, pk=pk)
         serializer = self.get_serializer(upr, context={'request': request})
         return Response(serializer.data)
     
     def list(self, request):
         """Liste tous les UPR."""
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True, context={'request': request})
+            return Response(serializer.data)
+        except (OperationalError, ProgrammingError) as e:
+            err_str = str(e).lower()
+            if 'is_archived' in err_str or 'archived_at' in err_str or 'archived_by' in err_str or 'no such column' in err_str or 'column' in err_str:
+                logger.warning("Liste UPR: colonnes d'archivage absentes (migration 0009 non appliquée): %s", e)
+                return Response(
+                    {
+                        'detail': "Migration UPR non appliquée. Exécutez dans le dossier backend_gn : python manage.py migrate upr",
+                        'code': 'migration_required'
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            raise
     
     def update(self, request, pk=None):
         """Met à jour un UPR (PUT complet)."""
@@ -380,34 +405,107 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
             )
     
     def destroy(self, request, pk=None):
-        """Supprime un UPR."""
+        """
+        Archive un UPR au lieu de le supprimer définitivement.
+        L'UPR est marqué comme archivé et n'apparaît plus dans les listes normales.
+        """
         upr = get_object_or_404(UnidentifiedPerson, pk=pk)
         code_upr = upr.code_upr
         
+        # Vérifier si l'UPR n'est pas déjà archivé
+        if upr.is_archived:
+            return Response(
+                {'message': f'UPR {code_upr} est déjà archivé'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         try:
-            upr.delete()
-            logger.info(f"UPR {code_upr} supprimé par utilisateur {request.user.id}")
+            from django.utils import timezone
+            
+            # Archiver l'UPR (soft delete)
+            upr.is_archived = True
+            upr.archived_at = timezone.now()
+            upr.archived_by = request.user
+            upr.save(update_fields=['is_archived', 'archived_at', 'archived_by'])
+            
+            logger.info(f"UPR {code_upr} archivé par utilisateur {request.user.id}")
             
             # Audit logging
             log_action_detailed(
                 request=request,
                 user=request.user,
-                action='DELETE',
+                action='ARCHIVE',
                 resource_type='UPR',
                 resource_id=pk,
                 endpoint=request.path,
                 method=request.method,
-                reussi=True
+                reussi=True,
+                message_erreur=f'UPR {code_upr} archivé'
             )
             
             return Response(
-                {'message': f'UPR {code_upr} supprimé avec succès'},
-                status=status.HTTP_204_NO_CONTENT
+                {
+                    'message': f'UPR {code_upr} archivé avec succès',
+                    'archived': True,
+                    'archived_at': upr.archived_at.isoformat() if upr.archived_at else None
+                },
+                status=status.HTTP_200_OK
             )
         except Exception as e:
-            logger.error(f"Erreur lors de la suppression de l'UPR: {e}", exc_info=True)
+            logger.error(f"Erreur lors de l'archivage de l'UPR: {e}", exc_info=True)
             return Response(
-                {'error': f'Erreur lors de la suppression: {str(e)}'},
+                {'error': f'Erreur lors de l\'archivage: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['post'], url_path='restore')
+    def restore(self, request, pk=None):
+        """
+        Restaure un UPR archivé.
+        
+        POST /upr/<id>/restore/
+        """
+        upr = get_object_or_404(UnidentifiedPerson, pk=pk)
+        
+        if not upr.is_archived:
+            return Response(
+                {'message': f'UPR {upr.code_upr} n\'est pas archivé'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            upr.is_archived = False
+            upr.archived_at = None
+            upr.archived_by = None
+            upr.save(update_fields=['is_archived', 'archived_at', 'archived_by'])
+            
+            logger.info(f"UPR {upr.code_upr} restauré par utilisateur {request.user.id}")
+            
+            # Audit logging
+            log_action_detailed(
+                request=request,
+                user=request.user,
+                action='RESTORE',
+                resource_type='UPR',
+                resource_id=pk,
+                endpoint=request.path,
+                method=request.method,
+                reussi=True,
+                message_erreur=f'UPR {upr.code_upr} restauré'
+            )
+            
+            serializer = self.get_serializer(upr, context={'request': request})
+            return Response(
+                {
+                    'message': f'UPR {upr.code_upr} restauré avec succès',
+                    'upr': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de la restauration de l'UPR: {e}", exc_info=True)
+            return Response(
+                {'error': f'Erreur lors de la restauration: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -513,14 +611,21 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from datetime import timedelta
         
-        # Statistiques de base
-        total_upr = UnidentifiedPerson.objects.count()
-        resolved_upr = UnidentifiedPerson.objects.filter(is_resolved=True).count()
+        # Statistiques de base (exclure les archivés)
+        total_upr = UnidentifiedPerson.objects.filter(is_archived=False).count()
+        resolved_upr = UnidentifiedPerson.objects.filter(is_resolved=True, is_archived=False).count()
         unresolved_upr = total_upr - resolved_upr
+        archived_upr = UnidentifiedPerson.objects.filter(is_archived=True).count()
         
-        # UPR avec données biométriques
-        upr_with_embedding = UnidentifiedPerson.objects.filter(face_embedding__isnull=False).exclude(face_embedding=None).count()
-        upr_with_fingerprint = UnidentifiedPerson.objects.filter(empreinte_digitale__isnull=False).exclude(empreinte_digitale=None).count()
+        # UPR avec données biométriques (exclure les archivés)
+        upr_with_embedding = UnidentifiedPerson.objects.filter(
+            face_embedding__isnull=False,
+            is_archived=False
+        ).exclude(face_embedding=None).count()
+        upr_with_fingerprint = UnidentifiedPerson.objects.filter(
+            empreinte_digitale__isnull=False,
+            is_archived=False
+        ).exclude(empreinte_digitale=None).count()
         
         # Correspondances
         total_upr_matches = UPRMatchLog.objects.count()
@@ -532,7 +637,8 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         for i in range(30):
             date = timezone.now() - timedelta(days=29-i)
             count = UnidentifiedPerson.objects.filter(
-                date_enregistrement__date=date.date()
+                date_enregistrement__date=date.date(),
+                is_archived=False
             ).count()
             evolution_data.append({
                 'date': date.strftime('%Y-%m-%d'),
@@ -544,6 +650,7 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         status_distribution = [
             {'name': 'Résolus', 'value': resolved_upr, 'color': '#10B981'},
             {'name': 'Non résolus', 'value': unresolved_upr, 'color': '#F59E0B'},
+            {'name': 'Archivés', 'value': archived_upr, 'color': '#6B7280'},
         ]
         
         # Correspondances par type

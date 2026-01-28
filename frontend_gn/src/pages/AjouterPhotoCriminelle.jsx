@@ -68,9 +68,10 @@ const AjouterPhotoCriminelle = () => {
 
   /**
    * Détecter tous les visages dans l'image
+   * Retourne le nombre de visages détectés
    */
   const detecterTousLesVisages = async (file) => {
-    if (!file) return;
+    if (!file) return 0;
 
     setDetectionEnCours(true);
     // Réinitialiser pour une nouvelle détection
@@ -132,7 +133,7 @@ const AjouterPhotoCriminelle = () => {
               setVisagesDetectes(visagesIA);
               setVisageSelectionne(visagesIA[0]);
               setDetectionEnCours(false);
-              return;
+              return visagesIA.length;
             }
           }
         } catch (iaError) {
@@ -143,6 +144,8 @@ const AjouterPhotoCriminelle = () => {
         if (visages.length > 0) {
           setVisagesDetectes(visages);
           setVisageSelectionne(visages[0]);
+          setDetectionEnCours(false);
+          return visages.length;
         } else {
           // Fallback: utiliser landmarks106
           const landmarksResponse = await fetch(getAPIUrl('/biometrie/landmarks106/'), {
@@ -164,6 +167,8 @@ const AjouterPhotoCriminelle = () => {
             };
             setVisagesDetectes([visage]);
             setVisageSelectionne(visage);
+            setDetectionEnCours(false);
+            return 1;
           }
         }
       } else {
@@ -187,12 +192,17 @@ const AjouterPhotoCriminelle = () => {
           };
           setVisagesDetectes([visage]);
           setVisageSelectionne(visage);
+          setDetectionEnCours(false);
+          return 1;
         }
       }
+      
+      setDetectionEnCours(false);
+      return 0;
     } catch (error) {
       console.error('Erreur détection visages:', error);
-    } finally {
       setDetectionEnCours(false);
+      return 0;
     }
   };
 
@@ -240,34 +250,56 @@ const AjouterPhotoCriminelle = () => {
     setScanResults(null);
     setPersonFound(false);
     setFoundPersonData(null);
+    setFicheDetails(null);
 
     try {
       // Étape 1: Détecter tous les visages dans l'image
-      await detecterTousLesVisages(photoFace.file);
+      // Réinitialiser d'abord les visages détectés
+      setVisagesDetectes([]);
+      setVisageSelectionne(null);
+      
+      // Détecter les visages et obtenir le nombre de visages détectés directement
+      const nombreVisagesDetectes = await detecterTousLesVisages(photoFace.file);
 
-      // Attendre un peu pour que la détection se termine
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Attendre un peu pour que l'état React soit mis à jour pour l'affichage visuel
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Étape 2: Si des visages sont détectés, utiliser le premier (ou celui sélectionné)
-      // Sinon, scanner quand même toute l'image
-      if (visagesDetectes.length === 0) {
-        notification.showWarning({
-          title: 'Aucun visage détecté',
-          message: 'Aucun visage détecté dans l\'image. Le scan se fera sur toute l\'image.'
-        });
-      }
-
-      // Utiliser la fonction existante searchUPRByPhoto
+      // Étape 2: Utiliser la fonction existante searchUPRByPhoto
+      // Cette fonction gère elle-même la détection de visage côté backend
       const results = await searchUPRByPhoto(photoFace.file, 0.35, 5);
 
       // Normaliser la structure des résultats (l'API peut retourner différentes structures)
+      // Même si l'API retourne une erreur, on normalise les résultats pour permettre l'affichage
       const normalizedResults = {
         upr_matches: results.upr_matches || results.upr_results || results.matches?.filter(m => m.type === 'UPR') || [],
         criminel_matches: results.criminel_matches || results.criminel_results || results.matches?.filter(m => m.type === 'CRIMINEL' || m.type === 'Criminel') || [],
-        total_matches: results.total_matches || (results.upr_matches?.length || 0) + (results.criminel_matches?.length || 0)
+        total_matches: results.total_matches || (results.upr_matches?.length || 0) + (results.criminel_matches?.length || 0),
+        error: results.error || null
       };
 
+      // TOUJOURS définir scanResults, même s'il y a une erreur ou aucune correspondance
+      // Cela permet d'afficher les résultats et les options d'enregistrement
       setScanResults(normalizedResults);
+
+      // Vérifier si l'API a retourné une erreur de détection de visage
+      if (results.error && results.error.includes('Aucun visage détecté')) {
+        // Si l'API n'a pas détecté de visage, vérifier si notre détection frontend en a trouvé
+        if (nombreVisagesDetectes > 0) {
+          notification.showWarning({
+            title: 'Avertissement',
+            message: 'Un visage a été détecté visuellement mais l\'analyse backend a échoué. Les résultats sont affichés ci-dessous.'
+          });
+        } else {
+          notification.showWarning({
+            title: 'Aucun visage détecté',
+            message: 'Aucun visage détecté dans l\'image. Le scan s\'est effectué sur toute l\'image. Les résultats sont affichés ci-dessous.'
+          });
+        }
+      } else if (nombreVisagesDetectes === 0 && !results.error) {
+        // Si aucun visage détecté côté frontend mais pas d'erreur côté backend
+        // (le backend a peut-être réussi à extraire un embedding quand même)
+        // Pas besoin de notification, les résultats parlent d'eux-mêmes
+      }
 
       // Vérifier s'il y a des correspondances (même partielles)
       const allUPRMatches = normalizedResults.upr_matches || [];
@@ -318,14 +350,13 @@ const AjouterPhotoCriminelle = () => {
       } else {
         // Aucune correspondance trouvée du tout
         setPersonFound(false);
-        // Vérifier si un visage a été détecté
-        const visageDetecte = visagesDetectes.length > 0;
-        if (visageDetecte) {
-          // Afficher DIRECTEMENT le formulaire de fiche criminelle si un visage est détecté
-          setAfficherFormulaireFiche(true);
+        
+        // Utiliser le nombre de visages détectés directement (pas besoin d'attendre l'état React)
+        if (nombreVisagesDetectes > 0) {
+          // Ne pas afficher automatiquement le formulaire - l'utilisateur doit cliquer sur le bouton
           notification.showSuccess({
             title: '✅ Visage détecté - Aucune correspondance',
-            message: 'Un visage a été détecté dans l\'image, mais aucune personne correspondante n\'a été trouvée dans la base de données. Le formulaire de création de fiche criminelle est disponible ci-dessous.',
+            message: 'Un visage a été détecté dans l\'image, mais aucune personne correspondante n\'a été trouvée dans la base de données. Cliquez sur "Créer une fiche criminelle" pour enregistrer cette nouvelle personne.',
           });
         } else {
           notification.showSuccess({
@@ -510,8 +541,17 @@ const AjouterPhotoCriminelle = () => {
     try {
       const formData = new FormData();
       
-      // Capture 1 : Photo de face (obligatoire)
-      formData.append('photo_face', photoFace.file);
+      // Capture 1 : Photo de face (obligatoire) - le backend attend "profil_face"
+      const faceFile = Array.isArray(photoFace.file) ? photoFace.file[0] : photoFace.file;
+      if (!(faceFile instanceof File)) {
+        notification.showError({
+          title: 'Photo invalide',
+          message: 'Le fichier photo n\'est pas valide. Veuillez sélectionner une image (JPG/PNG).'
+        });
+        setUploadEnCours(false);
+        return;
+      }
+      formData.append('profil_face', faceFile);
       
       // Capture 2 : Empreinte digitale (optionnelle)
       if (empreinteDigitale && empreinteDigitale.file) {
@@ -916,15 +956,7 @@ const AjouterPhotoCriminelle = () => {
                             
                             {/* Boutons pour enregistrer avec les captures 1 et 2 */}
                             {visagesDetectes.length > 0 && photoFace && (
-                              <div className="mt-4 space-y-3">
-                                <div className="mb-3 text-xs text-green-700 bg-green-100 p-3 rounded-lg">
-                                  <strong>État des captures :</strong>
-                                  <ul className="list-disc list-inside mt-1 space-y-1">
-                                    <li>Capture 1 (Photo de face) : ✅ Prête</li>
-                                    <li>Capture 2 (Empreinte digitale) : {empreinteDigitale ? '✅ Prête (optionnelle)' : '⚠️ Non fournie (optionnelle)'}</li>
-                                  </ul>
-                                </div>
-                                
+                              <div className="mt-4">
                                 <div className="flex gap-3">
                                   <Button
                                     type="button"

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Calendar, FileText, UserSearch, Eye, Loader2, CheckCircle2, XCircle, TrendingDown, Fingerprint, Clock, User, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, FileText, UserSearch, Eye, Loader2, CheckCircle2, XCircle, TrendingDown, Fingerprint, Clock, User, Edit, Trash2, Archive, RotateCcw } from "lucide-react";
 import api from "../services/api";
 import Button from "../components/commun/Button";
 import { useNotification } from "../context/NotificationContext";
+import { restoreUPR } from "../services/uprService";
 
 export default function UPRDetail() {
   const { id } = useParams();
@@ -18,6 +19,18 @@ export default function UPRDetail() {
   useEffect(() => {
     loadData();
   }, [id]);
+
+  const fetchUPR = async () => {
+    try {
+      const uprRes = await api.get(`/upr/${id}/`);
+      if (uprRes.data) {
+        setUpr(uprRes.data);
+      }
+    } catch (err) {
+      console.error("Erreur lors du chargement de l'UPR:", err);
+      setError(err.response?.data?.error || "Erreur lors du chargement de l'UPR");
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -261,14 +274,14 @@ export default function UPRDetail() {
     return url;
   };
 
-  const handleDelete = async () => {
+  const handleArchive = async () => {
     if (!upr) return;
     
     // Demander confirmation
     const confirmed = await notification.showConfirm({
-      title: "Confirmer la suppression",
-      message: `Êtes-vous sûr de vouloir supprimer l'UPR "${upr.code_upr}" ?\n\nCette action est irréversible et supprimera également toutes les photos et empreintes associées.`,
-      confirmText: "Supprimer",
+      title: "Confirmer l'archivage",
+      message: `Êtes-vous sûr de vouloir archiver l'UPR "${upr.code_upr}" ?\n\nL'UPR sera archivé et ne sera plus visible dans la liste principale, mais pourra être restauré ultérieurement.`,
+      confirmText: "Archiver",
       cancelText: "Annuler"
     });
     
@@ -279,8 +292,8 @@ export default function UPRDetail() {
       await api.delete(`/upr/${id}/`);
       
       notification.showSuccess({
-        title: "UPR supprimé",
-        message: `L'UPR "${upr.code_upr}" a été supprimé avec succès.`
+        title: "UPR archivé",
+        message: `L'UPR "${upr.code_upr}" a été archivé avec succès.`
       });
       
       // Rediriger vers la liste après un court délai
@@ -288,8 +301,44 @@ export default function UPRDetail() {
         navigate('/upr');
       }, 1000);
     } catch (err) {
-      console.error("Erreur lors de la suppression:", err);
-      const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message || "Erreur lors de la suppression de l'UPR";
+      console.error("Erreur lors de l'archivage:", err);
+      const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message || "Erreur lors de l'archivage de l'UPR";
+      notification.showError({
+        title: "Erreur",
+        message: errorMsg
+      });
+      setDeleting(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!upr) return;
+    
+    // Demander confirmation
+    const confirmed = await notification.showConfirm({
+      title: "Confirmer la restauration",
+      message: `Êtes-vous sûr de vouloir restaurer l'UPR "${upr.code_upr}" ?\n\nL'UPR sera restauré et redeviendra visible dans la liste principale.`,
+      confirmText: "Restaurer",
+      cancelText: "Annuler"
+    });
+    
+    if (!confirmed) return;
+    
+    setDeleting(true);
+    try {
+      await restoreUPR(id);
+      
+      notification.showSuccess({
+        title: "UPR restauré",
+        message: `L'UPR "${upr.code_upr}" a été restauré avec succès.`
+      });
+      
+      // Recharger les données de l'UPR
+      await fetchUPR();
+      setDeleting(false);
+    } catch (err) {
+      console.error("Erreur lors de la restauration:", err);
+      const errorMsg = err.response?.data?.error || err.response?.data?.detail || err.message || "Erreur lors de la restauration de l'UPR";
       notification.showError({
         title: "Erreur",
         message: errorMsg
@@ -322,6 +371,11 @@ export default function UPRDetail() {
                       Résolu
                     </span>
                   )}
+                  {upr.is_archived && (
+                    <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold border border-gray-200">
+                      Archivé
+                    </span>
+                  )}
                 </div>
                 <p className="text-gray-600 font-medium">{upr.nom_temporaire || "Individu non identifié"}</p>
               </div>
@@ -345,15 +399,27 @@ export default function UPRDetail() {
                   106 Landmarks
                 </span>
               )}
-              <Button
-                onClick={handleDelete}
-                variant="danger"
-                disabled={deleting || loading}
-                icon={deleting ? Loader2 : Trash2}
-                className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                {deleting ? 'Suppression...' : 'Supprimer'}
-              </Button>
+              {upr.is_archived ? (
+                <Button
+                  onClick={handleRestore}
+                  variant="secondary"
+                  disabled={deleting || loading}
+                  icon={deleting ? Loader2 : RotateCcw}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  {deleting ? 'Restauration...' : 'Restaurer'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleArchive}
+                  variant="danger"
+                  disabled={deleting || loading}
+                  icon={deleting ? Loader2 : Archive}
+                  className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  {deleting ? 'Archivage...' : 'Archiver'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

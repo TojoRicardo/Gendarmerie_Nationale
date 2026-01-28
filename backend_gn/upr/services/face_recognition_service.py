@@ -168,6 +168,8 @@ def compare_with_existing_faces(
             face_encoding=[]
         ).exclude(
             is_resolved=True  # Ne pas comparer avec les UPR résolus
+        ).exclude(
+            is_archived=True  # Ne pas comparer avec les UPR archivés
         )
         
         best_match = None
