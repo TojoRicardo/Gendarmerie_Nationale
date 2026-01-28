@@ -10,24 +10,15 @@
  * - Sécurité renforcée
  */
 
-"use client"
-
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, AlertCircle, User, ArrowRight, Loader2, Mail } from 'lucide-react'
-
-// Mock hooks and functions for demo - replace with your actual imports
-const useNavigate = () => (path, options) => console.log('Navigate to:', path)
-const useAuth = () => ({ 
-  connexion: async () => ({ success: true, utilisateur: { role: 'admin' } }), 
-  providerReady: true, 
-  mettreAJourUtilisateurDirect: () => {} 
-})
-const getRoleRedirect = (role) => ({ route: '/dashboard', message: 'Bienvenue!' })
-const authServiceLogin = async (credentials) => ({ success: true, user: { role: 'admin' }, token: 'token' })
-const saveAuthToken = (token) => {}
-const saveUserData = (data) => {}
-const saveRefreshToken = (token) => {}
-const PinVerification = ({ tempToken, onSuccess, onCancel }) => null
+import { useAuth } from '../context/AuthContext'
+import { getRoleRedirect } from '../utils/roleRedirection'
+import { login as authServiceLogin } from './authService'
+import PinVerification from '../components/pin/PinVerification'
+import { saveAuthToken, saveUserData, saveRefreshToken } from '../utils/sessionStorage'
+import { gsap } from 'gsap'
 
 const Login = () => {
   // États du formulaire
@@ -51,9 +42,112 @@ const Login = () => {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   
+  // État pour le slideshow de textes
+  const [currentSlide, setCurrentSlide] = useState(0)
+  
+  // Textes pour le slideshow
+  const slideshowTexts = [
+    "Sécurisez vos opérations,\nsimplifiez votre gestion.",
+    "Gérez efficacement vos données\navec confiance et précision.",
+    "Une solution moderne\npour une gestion optimale.",
+    "Protégez vos informations\navec les meilleures technologies.",
+    "Accédez rapidement à vos données\nen toute sécurité.",
+    "Optimisez vos processus métier\navec notre système intelligent.",
+    "Suivez vos activités en temps réel\navec des rapports détaillés.",
+    "Collaboration efficace entre équipes\npour une meilleure productivité."
+  ]
+
+  // Refs pour les animations GSAP
+  const cardRef = useRef(null)
+  const slideshowRef = useRef(null)
 
   const navigate = useNavigate()
   const { connexion, providerReady, mettreAJourUtilisateurDirect } = useAuth()
+
+  /**
+   * Animations GSAP simples et professionnelles
+   * Animation désactivée pour la carte principale pour garantir la visibilité
+   */
+  useEffect(() => {
+    // S'assurer que la carte est toujours visible
+    if (cardRef.current) {
+      cardRef.current.style.opacity = '1'
+      cardRef.current.style.visibility = 'visible'
+      cardRef.current.style.display = 'flex'
+    }
+  }, [])
+
+  /**
+   * Animation simple des messages d'erreur
+   */
+  useEffect(() => {
+    if (error) {
+      const errorElement = document.querySelector('.error-message')
+      if (errorElement) {
+        gsap.from(errorElement, {
+          opacity: 0,
+          y: -10,
+          duration: 0.3,
+          ease: "power2.out"
+        })
+      }
+    }
+  }, [error])
+
+  /**
+   * Slideshow de textes optimisé avec GSAP
+   */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slideshowTexts.length)
+    }, 3500) // Change toutes les 3.5 secondes pour un rythme plus dynamique
+
+    return () => clearInterval(interval)
+  }, [slideshowTexts.length])
+
+  useEffect(() => {
+    if (!slideshowRef.current) return
+
+    const textElements = slideshowRef.current.querySelectorAll('.slide-text')
+    const container = slideshowRef.current.parentElement
+    const indicators = container?.querySelectorAll('.slide-indicator')
+    
+    if (!textElements.length) return
+
+    // Masquer tous les textes sauf celui actuel
+    textElements.forEach((el, index) => {
+      if (index !== currentSlide) {
+        gsap.set(el, { opacity: 0, display: 'none', y: 0 })
+      }
+    })
+
+    // Animation optimisée d'entrée pour le texte actuel
+    const currentElement = textElements[currentSlide]
+    if (currentElement) {
+      gsap.set(currentElement, { display: 'block' })
+      gsap.fromTo(currentElement,
+        { opacity: 0, y: 15 },
+        { 
+          opacity: 1, 
+          y: 0, 
+          duration: 0.4, 
+          ease: "power2.out" 
+        }
+      )
+    }
+
+    // Animation optimisée des indicateurs
+    if (indicators && indicators.length > 0) {
+      indicators.forEach((indicator, index) => {
+        gsap.to(indicator, {
+          width: index === currentSlide ? '32px' : '8px',
+          backgroundColor: index === currentSlide ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.4)',
+          duration: 0.25,
+          ease: "power2.out"
+        })
+      })
+    }
+  }, [currentSlide, slideshowTexts.length])
 
   /**
    * Validation en temps réel
@@ -230,6 +324,25 @@ const Login = () => {
       // Récupérer les données utilisateur
       const userData = result?.utilisateur || JSON.parse(localStorage.getItem('user_data') || '{}')
       
+      // Sauvegarder les tokens et données utilisateur
+      if (result?.token) {
+        saveAuthToken(result.token)
+      }
+      if (userData) {
+        saveUserData(userData)
+      }
+      if (result?.refresh_token) {
+        saveRefreshToken(result.refresh_token)
+      }
+      
+      // Mettre à jour immédiatement le contexte AuthContext
+      if (userData) {
+        mettreAJourUtilisateurDirect(userData)
+      }
+      
+      // Marquer que l'utilisateur vient de se connecter
+      sessionStorage.setItem('justLoggedIn', 'true')
+      
       // Redirection intelligente selon le rôle
       const roleConfig = getRoleRedirect(userData?.role)
       
@@ -274,7 +387,7 @@ return (
 
       {/* Carte principale à deux colonnes */}
       <div className="relative z-10 w-full max-w-4xl mx-auto animate-fade-in">
-        <div className="bg-sky-100 rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row">
+        <div ref={cardRef} className="bg-sky-100 rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row" style={{ opacity: 1, visibility: 'visible', display: 'flex' }}>
           
           {/* Colonne gauche - Formulaire */}
           <div className="w-full lg:w-1/2 p-5 md:p-6 relative">
@@ -305,7 +418,7 @@ return (
               <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 {/* Message d'erreur global */}
                 {error && (
-                  <div className={`p-4 rounded-xl border bg-white shadow-lg animate-slide-down ${
+                  <div className={`error-message p-4 rounded-xl border bg-white shadow-lg animate-slide-down ${
                     error.toLowerCase().includes('suspendu') 
                       ? 'border-orange-300 text-orange-900' 
                       : 'border-red-300 text-red-900'
@@ -509,18 +622,38 @@ return (
               </svg>
             </div>
 
-            {/* Texte accrocheur */}
-            <div className="relative z-10 text-center mt-6">
-              <h2 className="text-2xl md:text-3xl font-bold text-white italic leading-tight">
-                Sécurisez vos opérations, simplifiez<br/>votre gestion.
-              </h2>
+            {/* Slideshow de textes */}
+            <div ref={slideshowRef} className="relative z-10 text-center mt-6 min-h-[50px] flex items-center justify-center px-12 md:px-20 lg:px-24 xl:px-32">
+              {slideshowTexts.map((text, index) => (
+                <span
+                  key={index}
+                  className="slide-text absolute text-sm md:text-base font-semibold text-white italic leading-normal drop-shadow-md inline-block max-w-4xl"
+                  style={{
+                    display: index === currentSlide ? 'inline-block' : 'none'
+                  }}
+                >
+                  {text.split('\n').map((line, i) => (
+                    <React.Fragment key={i}>
+                      {line}
+                      {i < text.split('\n').length - 1 && ' '}
+                    </React.Fragment>
+                  ))}
+                </span>
+              ))}
             </div>
 
             {/* Indicateurs de pagination */}
             <div className="relative z-10 flex gap-2 mt-6">
-              <div className="w-8 h-2 rounded-full bg-white/40"></div>
-              <div className="w-8 h-2 rounded-full bg-white"></div>
-              <div className="w-8 h-2 rounded-full bg-white/40"></div>
+              {slideshowTexts.map((_, index) => (
+                <div
+                  key={index}
+                  className="slide-indicator h-2 rounded-full"
+                  style={{
+                    width: index === currentSlide ? '32px' : '8px',
+                    backgroundColor: index === currentSlide ? 'rgba(255, 255, 255, 1)' : 'rgba(255, 255, 255, 0.4)'
+                  }}
+                />
+              ))}
             </div>
           </div>
         </div>
