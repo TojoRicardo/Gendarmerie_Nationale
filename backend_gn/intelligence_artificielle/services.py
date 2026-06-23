@@ -19,7 +19,6 @@ from .ia_service import (
 )
 from .models import (
     IAReconnaissanceFaciale,
-    IAFaceEmbedding,
     IAPrediction,
     IAPattern,
     IACorrelation,
@@ -239,7 +238,7 @@ def detecter_correlation(type_analyse='global', periode_jours=365, criminel_id=N
             for type_corr, items in correlations_data.items():
                 for item in items[:3]:  # Top 3 de chaque type
                     if isinstance(item, dict) and 'degre_correlation' in item:
-                        pattern = IAPattern.objects.create(
+                        IAPattern.objects.create(
                             nom_pattern=f"Pattern {type_corr}",
                             type_pattern=type_corr if type_corr != 'modus' else 'modus_operandi',
                             frequence=item.get('nb_criminels', 0),
@@ -260,7 +259,6 @@ def detecter_correlation(type_analyse='global', periode_jours=365, criminel_id=N
 
 def comparer_deux_visages(image1, image2):
     """Compare directement deux images de visages"""
-    from biometrie.services import ReconnaissanceFacialeService
     
     face_service = _get_face_service()
     if face_service is None:
@@ -307,7 +305,6 @@ def comparer_deux_visages(image1, image2):
 
 def extraire_caracteristiques_faciales(image_path):
     """Extrait les caractéristiques d'un visage (encodage ArcFace)"""
-    from biometrie.services import ReconnaissanceFacialeService
     
     face_service = _get_face_service()
     if face_service is None:

@@ -280,6 +280,8 @@ class BiometrieEmpreinte(models.Model):
         ('majeur_gauche', 'Majeur gauche'),
         ('annulaire_gauche', 'Annulaire gauche'),
         ('auriculaire_gauche', 'Auriculaire gauche'),
+        ('simultanee_droite', 'Empreintes simultanées main droite'),
+        ('simultanee_gauche', 'Empreintes simultanées main gauche'),
     ]
     
     TYPE_EMPREINTE_CHOICES = [

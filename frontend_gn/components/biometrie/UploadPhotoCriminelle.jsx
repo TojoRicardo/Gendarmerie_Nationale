@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Camera, Fingerprint, Upload, X, AlertCircle } from 'lucide-react';
+import { useState, useRef, Fragment } from 'react';
+import { Camera, Upload, X, AlertCircle } from 'lucide-react';
 
 /**
  * Composant UploadPhotoCriminelle
@@ -28,7 +28,6 @@ const UploadPhotoCriminelle = ({
   onVisageSelect = null,
   imageRef = null
 }) => {
-  const [fichier, setFichier] = useState(null);
   const [preview, setPreview] = useState(null);
   const [erreur, setErreur] = useState('');
   const fileInputRef = useRef(null);
@@ -55,8 +54,6 @@ const UploadPhotoCriminelle = ({
       return;
     }
 
-    setFichier(file);
-
     // Créer la prévisualisation IMMÉDIATEMENT pour afficher l'image tout de suite
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -75,7 +72,6 @@ const UploadPhotoCriminelle = ({
    * Suppression de la photo
    */
   const handleRemove = () => {
-    setFichier(null);
     setPreview(null);
     setErreur('');
     if (fileInputRef.current) {
@@ -165,7 +161,7 @@ const UploadPhotoCriminelle = ({
               alt={titre}
               className="w-full h-64 object-contain bg-gray-50"
               style={{ display: 'block' }}
-              onLoad={(e) => {
+              onLoad={() => {
                 // L'image est chargée, les rectangles s'afficheront automatiquement
                 // Force un re-render si nécessaire
                 if (visagesDetectes.length > 0) {
@@ -217,7 +213,7 @@ const UploadPhotoCriminelle = ({
                   const isSelected = visageSelectionne?.id === visage.id;
 
                   return (
-                    <React.Fragment key={visage.id}>
+                    <Fragment key={visage.id}>
                       {/* Rectangle de sélection */}
                       <div
                         className={`absolute border-2 pointer-events-auto cursor-pointer transition-all ${
@@ -266,7 +262,7 @@ const UploadPhotoCriminelle = ({
                           {(visage.confidence * 100).toFixed(0)}%
                         </div>
                       )}
-                    </React.Fragment>
+                    </Fragment>
                   );
                 })}
               </div>

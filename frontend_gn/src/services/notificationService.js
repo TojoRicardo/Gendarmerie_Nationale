@@ -17,7 +17,7 @@ const notificationService = {
     } catch (error) {
       // Ignorer silencieusement les erreurs réseau si le serveur n'est pas disponible
       if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED' || !error.response) {
-        console.debug('⚠️ Serveur non disponible, notifications non chargées');
+        console.debug('[ATTENTION] Serveur non disponible, notifications non chargées');
         return []; // Retourner un tableau vide au lieu de lancer une erreur
       }
       // Logger uniquement les autres erreurs
@@ -39,7 +39,7 @@ const notificationService = {
     } catch (error) {
       // Ignorer silencieusement les erreurs réseau si le serveur n'est pas disponible
       if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED' || !error.response) {
-        console.debug('⚠️ Serveur non disponible, notifications non lues non chargées');
+        console.debug('[ATTENTION] Serveur non disponible, notifications non lues non chargées');
         return []; // Retourner un tableau vide au lieu de lancer une erreur
       }
       // Logger uniquement les autres erreurs
@@ -61,7 +61,7 @@ const notificationService = {
     } catch (error) {
       // Ignorer silencieusement les erreurs réseau - retourner 0 par défaut
       if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED' || !error.response) {
-        console.debug('⚠️ Serveur non disponible, comptage des notifications impossible');
+        console.debug('[ATTENTION] Serveur non disponible, comptage des notifications impossible');
         return 0;
       }
       // Logger uniquement les autres erreurs
@@ -82,6 +82,11 @@ const notificationService = {
       const response = await patch(`/notifications/${id}/marquer_lue/`, {});
       return response.data;
     } catch (error) {
+      // Fallback POST si PATCH refusé
+      if (error.response?.status === 405) {
+        const response = await post(`/notifications/${id}/marquer_lue/`, {});
+        return response.data;
+      }
       console.error('Erreur lors du marquage de la notification:', error);
       throw error;
     }

@@ -6,7 +6,7 @@ SCRFD est intégré dans InsightFace buffalo_l.
 
 import logging
 import threading
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import Optional, Dict, Any, Union
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 import io

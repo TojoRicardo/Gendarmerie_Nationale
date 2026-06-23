@@ -69,7 +69,7 @@
   background: linear-gradient(135deg, 
     var(--gray-50) 0%, 
     var(--primary-50) 25%, 
-    #FFFFFF 50%, 
+    #FFF 50%, 
     var(--primary-50) 75%, 
     var(--gray-50) 100%
   );
@@ -79,13 +79,13 @@
 .card-primary {
   background: white;
   border: 1px solid var(--primary-100);
-  box-shadow: 0 4px 6px rgba(11, 120, 244, 0.05);
+  box-shadow: 0 4px 6px rgb(11 120 244 / 5%);
   transition: all 0.3s ease;
 }
 
 .card-primary:hover {
   border-color: var(--primary-300);
-  box-shadow: 0 12px 24px rgba(11, 120, 244, 0.15);
+  box-shadow: 0 12px 24px rgb(11 120 244 / 15%);
   transform: translateY(-4px);
 }
 
@@ -96,20 +96,20 @@
   font-weight: 700;
   padding: 0.875rem 1.5rem;
   border-radius: 0.75rem;
-  box-shadow: 0 4px 12px rgba(11, 120, 244, 0.3);
+  box-shadow: 0 4px 12px rgb(11 120 244 / 30%);
   transition: all 0.3s ease;
   border: none;
 }
 
 .btn-primary:hover {
   background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
-  box-shadow: 0 8px 20px rgba(11, 120, 244, 0.4);
+  box-shadow: 0 8px 20px rgb(11 120 244 / 40%);
   transform: translateY(-2px);
 }
 
 .btn-primary:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(11, 120, 244, 0.3);
+  box-shadow: 0 2px 8px rgb(11 120 244 / 30%);
 }
 
 /* Badge primaire */
@@ -122,34 +122,35 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  box-shadow: 0 2px 8px rgba(11, 120, 244, 0.2);
+  box-shadow: 0 2px 8px rgb(11 120 244 / 20%);
 }
 
 /* Info box avec bordure bleue */
 .info-box {
-  background: linear-gradient(135deg, var(--primary-50) 0%, #FFFFFF 100%);
+  background: linear-gradient(135deg, var(--primary-50) 0%, #FFF 100%);
   border-left: 4px solid var(--primary);
   padding: 1rem;
   border-radius: 0.75rem;
-  box-shadow: 0 2px 8px rgba(11, 120, 244, 0.1);
+  box-shadow: 0 2px 8px rgb(11 120 244 / 10%);
 }
 
 /* Effet glow bleu */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(11, 120, 244, 0.4);
+  box-shadow: 0 0 20px rgb(11 120 244 / 40%);
 }
 
 .glow-primary-strong {
-  box-shadow: 0 0 30px rgba(11, 120, 244, 0.6);
+  box-shadow: 0 0 30px rgb(11 120 244 / 60%);
 }
 
 /* Animation de pulse bleu */
 @keyframes pulsePrimary {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(11, 120, 244, 0.7);
+    box-shadow: 0 0 0 0 rgb(11 120 244 / 70%);
   }
+
   50% {
-    box-shadow: 0 0 0 10px rgba(11, 120, 244, 0);
+    box-shadow: 0 0 0 10px rgb(11 120 244 / 0%);
   }
 }
 
@@ -160,15 +161,14 @@
 /* Overlay gradient */
 .overlay-primary {
   background: linear-gradient(135deg, 
-    rgba(11, 120, 244, 0.9) 0%, 
-    rgba(7, 74, 154, 0.95) 100%
+    rgb(11 120 244 / 90%) 0%, 
+    rgb(7 74 154 / 95%) 100%
   );
 }
 
 /* Texte avec gradient */
 .text-gradient-primary {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   font-weight: 900;

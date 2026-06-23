@@ -258,28 +258,10 @@ export const getFilteredMenuItems = (permissions) => {
     // Vérifier si l'utilisateur a une des permissions alternatives
     let hasAlternative = false
     if (item.alternativePermissions && Array.isArray(item.alternativePermissions)) {
-      hasAlternative = item.alternativePermissions.some(perm => {
-        const found = permissions.includes(perm)
-        // Debug spécifique pour le journal d'audit
-        if (item.id === 'audit') {
-          console.log('[MenuItems] Audit - Vérification permission alternative:', perm, 'trouvée:', found)
-        }
-        return found
-      })
+      hasAlternative = item.alternativePermissions.some(perm => permissions.includes(perm))
     }
     
-    const isVisible = hasMainPermission || hasAlternative
-    
-    // Debug pour le journal d'audit
-    if (item.id === 'audit') {
-      console.log('[MenuItems] Journal d\'audit - Permission principale:', item.permission, 'trouvée:', hasMainPermission)
-      console.log('[MenuItems] Journal d\'audit - Permissions alternatives:', item.alternativePermissions)
-      console.log('[MenuItems] Journal d\'audit - Alternative trouvée:', hasAlternative)
-      console.log('[MenuItems] Journal d\'audit - Visible:', isVisible)
-      console.log('[MenuItems] Journal d\'audit - Permissions utilisateur:', permissions)
-    }
-    
-    return isVisible
+    return hasMainPermission || hasAlternative
   })
 }
 

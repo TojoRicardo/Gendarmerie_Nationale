@@ -1,5 +1,4 @@
-import React from 'react';
-import { AlertTriangle, Info, CheckCircle, AlertCircle } from 'lucide-react';
+import { AlertTriangle, AlertCircle } from 'lucide-react';
 
 /**
  * Modal de confirmation premium
@@ -17,97 +16,6 @@ const ModalConfirmation = ({
   showCancel = true
 }) => {
   if (!isOpen) return null;
-
-  // Couleurs selon le type - Utilise #185CD6 comme couleur principale
-  const getColors = () => {
-    switch (type) {
-      case 'create':
-        return {
-          gradient: 'from-[#C0F6E3] via-[#A8F0D5] to-[#8EEAC7]',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(135deg, #10B981, #059669)' },
-          buttonHover: { background: 'linear-gradient(135deg, #059669, #047857)' },
-          iconBg: 'bg-white/80',
-          iconColor: 'text-emerald-700',
-          border: 'border-[#C0F6E3]',
-          titleColor: 'text-emerald-900',
-          messageColor: 'text-emerald-800'
-        };
-      case 'success':
-        return {
-          gradient: 'from-[#185CD6] via-[#1348A8] to-[#0F3A8A]',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(to right, #185CD6, #1348A8)' },
-          buttonHover: { background: 'linear-gradient(to right, #1348A8, #0F3A8A)' },
-          iconBg: 'bg-[#185CD6]/10',
-          iconColor: 'text-[#185CD6]',
-          border: 'border-[#185CD6]'
-        };
-      case 'error':
-        return {
-          gradient: 'from-red-500 via-rose-500 to-pink-500',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(to right, #dc2626, #e11d48)' },
-          buttonHover: { background: 'linear-gradient(to right, #b91c1c, #be123c)' },
-          iconBg: 'bg-red-100',
-          iconColor: 'text-red-600',
-          border: 'border-red-500'
-        };
-      case 'warning':
-        return {
-          gradient: 'from-orange-500 via-amber-500 to-yellow-500',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(to right, #ea580c, #f59e0b)' },
-          buttonHover: { background: 'linear-gradient(to right, #c2410c, #d97706)' },
-          iconBg: 'bg-orange-100',
-          iconColor: 'text-orange-600',
-          border: 'border-orange-500'
-        };
-      case 'info':
-        return {
-          gradient: 'from-[#185CD6] via-[#1348A8] to-[#0F3A8A]',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(to right, #185CD6, #1348A8)' },
-          buttonHover: { background: 'linear-gradient(to right, #1348A8, #0F3A8A)' },
-          iconBg: 'bg-[#185CD6]/10',
-          iconColor: 'text-[#185CD6]',
-          border: 'border-[#185CD6]'
-        };
-      default:
-        return {
-          gradient: 'from-[#185CD6] via-[#1348A8] to-[#0F3A8A]',
-          button: 'hover:shadow-xl transition-all',
-          buttonStyle: { background: 'linear-gradient(to right, #185CD6, #1348A8)' },
-          buttonHover: { background: 'linear-gradient(to right, #1348A8, #0F3A8A)' },
-          iconBg: 'bg-[#185CD6]/10',
-          iconColor: 'text-[#185CD6]',
-          border: 'border-[#185CD6]'
-        };
-    }
-  };
-
-  const colors = getColors();
-
-  // Icônes selon le type
-  const getIcon = () => {
-    const iconClass = colors.iconColor;
-    const iconSize = type === 'create' ? 52 : 48;
-    
-    switch (type) {
-      case 'create':
-        return <CheckCircle className={`${iconClass} animate-pulse`} size={iconSize} strokeWidth={2.5} />;
-      case 'success':
-        return <CheckCircle className={iconClass} size={iconSize} />;
-      case 'error':
-        return <AlertCircle className={iconClass} size={iconSize} />;
-      case 'warning':
-        return <AlertTriangle className={iconClass} size={iconSize} />;
-      case 'info':
-        return <Info className={iconClass} size={iconSize} />;
-      default:
-        return <AlertTriangle className={iconClass} size={iconSize} />;
-    }
-  };
 
   const handleConfirm = () => {
     if (onConfirm) onConfirm();

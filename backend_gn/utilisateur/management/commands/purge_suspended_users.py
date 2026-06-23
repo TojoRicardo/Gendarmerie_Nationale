@@ -4,7 +4,6 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import connections, transaction
-from django.db.utils import Error as DjangoDBError
 from django.utils import timezone
 
 from utilisateur.models import ADMIN_ROLE_CODES, normalize_role_value

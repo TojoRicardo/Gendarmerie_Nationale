@@ -2,11 +2,10 @@
  * Composant pour la liste des enquêtes
  * Avec recherche, filtres et pagination
  */
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search,
-  Filter,
   Plus,
   Eye,
   Edit,
@@ -54,11 +53,7 @@ const EnqueteList = () => {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
 
-  useEffect(() => {
-    loadEnquetes()
-  }, [page, filtres, searchQuery])
-
-  const loadEnquetes = async () => {
+  const loadEnquetes = useCallback(async () => {
     setLoading(true)
     try {
       const params = {
@@ -80,7 +75,11 @@ const EnqueteList = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, filtres, searchQuery, showError])
+
+  useEffect(() => {
+    loadEnquetes()
+  }, [loadEnquetes])
 
   const handleDelete = async (enqueteId) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette enquête ?')) {
@@ -244,14 +243,14 @@ const EnqueteList = () => {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => navigate(`/enquetes/${enquete.id}`)}
+                        onClick={() => navigate('/enquete')}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded"
                         title="Voir détails"
                       >
                         <Eye className="h-5 w-5" />
                       </button>
                       <button
-                        onClick={() => navigate(`/enquetes/${enquete.id}/edit`)}
+                        onClick={() => navigate('/enquetes/create')}
                         className="p-2 text-gray-600 hover:bg-gray-50 rounded"
                         title="Modifier"
                       >

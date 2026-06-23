@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Fingerprint, Upload, Check, AlertCircle, CheckCircle2, Hand } from 'lucide-react';
-import Bouton from '../commun/Bouton';
 
 const TeleverseurEmpreinte = ({ onUpload, suspectId }) => {
   const [empreintes, setEmpreintes] = useState({
@@ -102,6 +101,7 @@ const TeleverseurEmpreinte = ({ onUpload, suspectId }) => {
 
     try {
       const formData = new FormData();
+      formData.append('criminel', suspectId);
       formData.append('suspectId', suspectId);
 
       empreintesValides.forEach(emp => {
@@ -156,10 +156,9 @@ const TeleverseurEmpreinte = ({ onUpload, suspectId }) => {
   const nombreEmpreintesDroite = doigtsOrdre.filter(doigt => empreintes.droite[doigt].fichier).length;
   const nombreEmpreintesGauche = doigtsOrdre.filter(doigt => empreintes.gauche[doigt].fichier).length;
   
-  // Compter les empreintes de pouces simultanées
-  const nombreEmpreintesPouces = (empreintes.pouces.gauche.fichier ? 1 : 0) + (empreintes.pouces.droit.fichier ? 1 : 0);
+  // Compter les empreintes de pouces simultanées (inclus dans nombreEmpreintesSelectionnees)
 
-  const renderDoigt = (main, doigt, index) => {
+  const renderDoigt = (main, doigt, _index) => {
     const empreinte = empreintes[main][doigt];
     const refKey = `${main}_${doigt}`;
     

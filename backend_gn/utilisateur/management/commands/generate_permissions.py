@@ -71,7 +71,7 @@ class Command(BaseCommand):
         
         total = PermissionSGIC.objects.count()
         self.stdout.write(self.style.SUCCESS(
-            f'\n✅ Terminé! {created_count} permissions créées, {updated_count} mises à jour. '
+            f'\n[OK] Terminé! {created_count} permissions créées, {updated_count} mises à jour. '
             f'Total: {total} permissions dans la base de données.'
         ))
 

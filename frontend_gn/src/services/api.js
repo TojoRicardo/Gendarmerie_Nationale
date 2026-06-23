@@ -4,11 +4,10 @@
  */
 
 import axios from 'axios'
-import ENV from '../config/environment'
 import API_CONFIG from '../config/api'
-import { getAuthToken, clearAuthData, saveAuthToken } from '../utils/sessionStorage'
+import { getAuthToken, clearAuthData, getRefreshToken } from '../utils/sessionStorage'
 import { refreshAuthToken } from './tokenRefresh'
-import { isNetworkError, getErrorMessage } from '../utils/errorHandler'
+import { getErrorMessage } from '../utils/errorHandler'
 
 const OFFLINE_EVENT = 'api:offline'
 const OFFLINE_COOLDOWN = 15000
@@ -105,9 +104,13 @@ api.interceptors.response.use(
       config?.url?.includes('/upr/') || // Endpoint UPR - peut être non disponible si serveur non démarré
       config?.url?.includes('/audit/') || // Endpoint audit - peut être non disponible si serveur non démarré
       config?.url?.includes('/rapports/') || // Endpoint rapports - peut être non disponible si serveur non démarré
-      config?.url?.includes('/criminel/fiches-criminelles/geographic-stats/') || // Stats géographiques
-      config?.url?.includes('/criminel/fiches-criminelles/monthly-stats/') || // Stats mensuelles
-      config?.url?.includes('/criminel/fiches-criminelles/evolution-stats/') // Stats d'évolution
+      config?.url?.includes('/criminel/fiches-criminelles/geographic-stats/') ||
+      config?.url?.includes('/criminel/fiches-criminelles/monthly-stats/') ||
+      config?.url?.includes('/criminel/fiches-criminelles/evolution-stats/') ||
+      config?.url?.includes('/criminel/fiches-criminelles/crime-type-stats/') ||
+      config?.url?.includes('/criminel/fiches-criminelles/hourly-stats/') ||
+      config?.url?.includes('/criminel/fiches-criminelles/stats/') ||
+      config?.url?.includes('/utilisateur/utilisateurs/performance-stats/')
     
     // Si c'est une erreur réseau sur un endpoint non critique, ignorer silencieusement
     if (isNetworkError && isNonCriticalEndpoint) {
@@ -154,7 +157,7 @@ api.interceptors.response.use(
         console.error('Erreur suppression:', response.data || error.message)
       }
       switch (response.status) {
-        case 401:
+        case 401: {
           // Non autorisé - Tenter de rafraîchir le token
           // SAUF pour les endpoints de login, register et refresh token
           const isAuthEndpoint = config.url?.includes('/auth/token/refresh/') || 
@@ -188,7 +191,6 @@ api.interceptors.response.use(
             config._retry = true // Marquer qu'on a tenté de rafraîchir
             
             // Vérifier si un refresh token existe avant d'essayer de rafraîchir
-            const { getRefreshToken } = await import('../utils/storage')
             const refreshToken = getRefreshToken()
             
             if (!refreshToken) {
@@ -223,6 +225,7 @@ api.interceptors.response.use(
             }
             return Promise.reject(refreshError)
           }
+        }
 
         case 403:
         case 404:
@@ -258,7 +261,7 @@ api.interceptors.response.use(
       
       // Émettre l'événement seulement si pas déjà marqué (pour éviter les notifications répétitives)
       if (!serverUnavailable) {
-      emitOfflineEvent({ url: config?.url, method: config?.method, message: defaultNetworkMessage })
+      emitOfflineEvent({ url: config?.url, method: config?.method, message: errorInfo.message })
       }
 
       // Marquer le serveur comme indisponible pour éviter les requêtes répétées

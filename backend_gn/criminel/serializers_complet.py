@@ -4,7 +4,7 @@ Inclut TOUTES les informations organisées par sections
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import CriminalFicheCriminelle, CriminalInfraction
+from .models import CriminalFicheCriminelle
 from .serializers import CriminalInfractionListSerializer
 
 # Import des serializers biométriques
@@ -128,7 +128,7 @@ class CriminalFicheCriminelleCompleteSerializer(serializers.ModelSerializer):
                 'description': h.description,
                 'date_action': h.date_action,
             } for h in historique]
-        except:
+        except Exception:
             return []
     
     def get_resume_biometrie_ia(self, obj):
@@ -206,7 +206,7 @@ class CriminalFicheCriminelleCompleteSerializer(serializers.ModelSerializer):
                 'reussi': log.reussi if hasattr(log, 'reussi') else True,
                 'message_erreur': log.message_erreur if hasattr(log, 'message_erreur') else None,
             } for log in audit_logs]
-        except Exception as e:
+        except Exception:
             # Si le module audit n'est pas disponible, retourner une liste vide
             return []
     

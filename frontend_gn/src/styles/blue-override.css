@@ -66,12 +66,12 @@
 }
 
 .hover\:border-blue-200:hover {
-  border-color: rgba(41, 132, 209, 0.4) !important;
+  border-color: rgb(41 132 209 / 40%) !important;
 }
 
 /* Text colors */
 .text-blue-100 {
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: rgb(255 255 255 / 90%) !important;
 }
 
 .text-blue-700 {

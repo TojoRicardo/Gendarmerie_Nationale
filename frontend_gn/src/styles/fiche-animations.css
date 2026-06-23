@@ -8,6 +8,7 @@
     opacity: 0;
     transform: translateX(-50px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -20,6 +21,7 @@
     opacity: 0;
     transform: translateX(50px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -32,6 +34,7 @@
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -44,6 +47,7 @@
     opacity: 0;
     transform: scale(0.9);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -55,6 +59,7 @@
   0%, 100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.8;
   }
@@ -65,6 +70,7 @@
   0% {
     background-position: -1000px 0;
   }
+
   100% {
     background-position: 1000px 0;
   }
@@ -73,10 +79,11 @@
 /* Animation de glow (lueur) */
 @keyframes glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 20px rgb(59 130 246 / 30%);
   }
+
   50% {
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 30px rgb(59 130 246 / 60%);
   }
 }
 
@@ -85,6 +92,7 @@
   0%, 100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-5px);
   }
@@ -115,7 +123,7 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
+    rgb(255 255 255 / 40%) 50%,
     transparent 100%
   );
   background-size: 1000px 100%;
@@ -156,7 +164,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.3),
+    rgb(255 255 255 / 30%),
     transparent
   );
   transition: left 0.5s;
@@ -168,10 +176,10 @@
 
 /* Effet de glassmorphism */
 .glass-effect {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(255 255 255 / 10%);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  border: 1px solid rgb(255 255 255 / 20%);
+  box-shadow: 0 8px 32px 0 rgb(31 38 135 / 15%);
 }
 
 /* Gradient animé */
@@ -184,9 +192,11 @@
   0% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0% 50%;
   }
@@ -200,14 +210,13 @@
 .hover-lift-advanced:hover {
   transform: translateY(-8px) scale(1.02);
   box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.1),
-    0 10px 20px rgba(0, 0, 0, 0.05);
+    0 20px 40px rgb(0 0 0 / 10%),
+    0 10px 20px rgb(0 0 0 / 5%);
 }
 
 /* Text gradient */
 .text-gradient {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
@@ -222,10 +231,7 @@
 .border-gradient-animate::before {
   content: '';
   position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
+  inset: -2px;
   background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #4facfe);
   background-size: 300% 300%;
   border-radius: inherit;
@@ -262,21 +268,18 @@
 
 .infraction-badge-enhanced:hover {
   transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 16px rgba(251, 146, 60, 0.3);
+  box-shadow: 0 8px 16px rgb(251 146 60 / 30%);
 }
 
 .infraction-badge-enhanced::after {
   content: '';
   position: absolute;
-  top: -50%;
-  right: -50%;
-  bottom: -50%;
-  left: -50%;
+  inset: -50%;
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    rgba(255, 255, 255, 0) 100%
+    rgb(255 255 255 / 0%) 0%,
+    rgb(255 255 255 / 30%) 50%,
+    rgb(255 255 255 / 0%) 100%
   );
   transform: rotateZ(45deg) translate(-100%, -100%);
   transition: transform 0.6s;
@@ -296,6 +299,7 @@
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.8;
     transform: scale(1.05);
@@ -306,40 +310,41 @@
 .pattern-dots {
   background-image: radial-gradient(
     circle,
-    rgba(0, 0, 0, 0.05) 1px,
+    rgb(0 0 0 / 5%) 1px,
     transparent 1px
   );
   background-size: 20px 20px;
 }
 
 .pattern-grid {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-image: linear-gradient(rgb(0 0 0 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(0 0 0 / 5%) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
 /* Glow effects for statuts */
 .glow-success {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 20px rgb(16 185 129 / 40%);
 }
 
 .glow-warning {
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 20px rgb(245 158 11 / 40%);
 }
 
 .glow-danger {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 20px rgb(239 68 68 / 40%);
 }
 
 .glow-info {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 20px rgb(59 130 246 / 40%);
 }
 
 /* Floating animation */
 @keyframes floating {
   0%, 100% {
-    transform: translateY(0px);
+    transform: translateY(0);
   }
+
   50% {
     transform: translateY(-10px);
   }

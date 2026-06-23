@@ -110,7 +110,7 @@ class Command(BaseCommand):
                         )
                         self.stdout.write(
                             self.style.WARNING(
-                                f'     Suggestion: Attribuer manuellement un des rôles valides'
+                                '     Suggestion: Attribuer manuellement un des rôles valides'
                             )
                         )
                 

@@ -22,7 +22,7 @@ def add_cors_headers_to_file_response(response, request):
                 from urllib.parse import urlparse
                 parsed = urlparse(referer)
                 origin = f"{parsed.scheme}://{parsed.netloc}"
-            except:
+            except Exception:
                 pass
     
     if origin and ('localhost' in origin.lower() or '127.0.0.1' in origin.lower()):

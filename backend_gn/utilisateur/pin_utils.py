@@ -5,7 +5,7 @@ Utilitaires pour la gestion du PIN à 6 chiffres
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password, check_password
 from datetime import timedelta
-from .models import UserProfile, PinAuditLog, UtilisateurModel
+from .models import UserProfile, PinAuditLog
 
 # Constantes pour la gestion du PIN
 MAX_PIN_ATTEMPTS = 3

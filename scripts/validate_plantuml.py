@@ -4,7 +4,6 @@ Script pour valider la syntaxe des diagrammes PlantUML
 """
 
 import re
-import os
 import sys
 from pathlib import Path
 
@@ -50,7 +49,7 @@ def validate_plantuml_syntax(code):
         r'-->', r'->', r'..>', r'--', r'..',
         r'\*--', r'o--', r'<\|--', r'--\|>'
     ]
-    has_relations = any(re.search(pattern, code) for pattern in relation_patterns)
+    any(re.search(pattern, code) for pattern in relation_patterns)
     
     return {
         'valid': len(errors) == 0,
@@ -82,7 +81,7 @@ def check_all_diagrams():
     total_warnings = 0
     
     for puml_file in puml_files:
-        print(f"\n📄 {puml_file.name}")
+        print(f"\n{puml_file.name}")
         print("-" * 80)
         
         try:
@@ -92,22 +91,22 @@ def check_all_diagrams():
             result = validate_plantuml_syntax(code)
             
             if result['valid']:
-                print("✅ Syntaxe valide")
+                print("[OK] Syntaxe valide")
             else:
                 all_valid = False
-                print("❌ ERREURS DE SYNTAXE:")
+                print("[ERREUR] ERREURS DE SYNTAXE:")
                 for error in result['errors']:
                     print(f"   - {error}")
                     total_errors += 1
             
             if result['warnings']:
-                print("⚠️  AVERTISSEMENTS:")
+                print("[ATTENTION] AVERTISSEMENTS:")
                 for warning in result['warnings']:
                     print(f"   - {warning}")
                     total_warnings += 1
             
         except Exception as e:
-            print(f"❌ ERREUR lors de la lecture: {e}")
+            print(f"[ERREUR] ERREUR lors de la lecture: {e}")
             all_valid = False
             total_errors += 1
     
@@ -119,9 +118,9 @@ def check_all_diagrams():
     print(f"Avertissements: {total_warnings}")
     
     if all_valid:
-        print("\n✅ TOUS LES DIAGRAMMES SONT VALIDES!")
+        print("\n[OK] TOUS LES DIAGRAMMES SONT VALIDES!")
     else:
-        print("\n❌ CERTAINS DIAGRAMMES ONT DES ERREURS")
+        print("\n[ERREUR] CERTAINS DIAGRAMMES ONT DES ERREURS")
     
     return all_valid
 

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Biometrie, BiometriePhoto, BiometrieEmpreinte, BiometrieScanResultat, BiometrieHistorique
+from .models import Biometrie, BiometriePhoto, BiometrieEmpreinte, BiometriePaume, BiometrieScanResultat, BiometrieHistorique
 
 
 class BiometriePhotoSerializer(serializers.ModelSerializer):
@@ -124,6 +124,32 @@ class BiometrieEmpreinteCreateSerializer(serializers.ModelSerializer):
             'notes',
             'est_active'
         ]
+
+    def validate_doigt(self, value):
+        valid = {c[0] for c in BiometrieEmpreinte.DOIGT_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(f"Doigt invalide: {value}")
+        return value
+
+
+class BiometriePaumeSerializer(serializers.ModelSerializer):
+    criminel_nom = serializers.CharField(source='criminel.nom', read_only=True)
+    criminel_prenom = serializers.CharField(source='criminel.prenom', read_only=True)
+
+    class Meta:
+        model = BiometriePaume
+        fields = [
+            'id', 'criminel', 'criminel_nom', 'criminel_prenom',
+            'image', 'paume', 'qualite', 'notes', 'est_active',
+            'date_enregistrement', 'taille_fichier',
+        ]
+        read_only_fields = ['date_enregistrement', 'taille_fichier']
+
+
+class BiometriePaumeCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BiometriePaume
+        fields = ['criminel', 'paume', 'image', 'qualite', 'notes', 'est_active']
 
 
 class BiometrieScanResultatSerializer(serializers.ModelSerializer):

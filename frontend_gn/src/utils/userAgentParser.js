@@ -139,7 +139,7 @@ export const parseUserAgent = (userAgent) => {
   // Linux
   else if (ua.includes('linux')) {
     if (ua.includes('ubuntu')) {
-      const ubuntuMatch = ua.match(/ubuntu[\/\s](\d+\.\d+)/);
+      const ubuntuMatch = ua.match(/ubuntu[/\s](\d+\.\d+)/);
       if (ubuntuMatch) {
         result.systeme = `Linux Ubuntu ${ubuntuMatch[1]}`;
         result.systeme_version = ubuntuMatch[1];

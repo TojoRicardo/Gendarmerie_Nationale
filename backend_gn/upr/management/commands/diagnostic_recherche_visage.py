@@ -3,7 +3,7 @@ Commande de diagnostic pour identifier pourquoi les fiches criminelles ne sont p
 lors de la recherche par visage dans UPR.
 """
 from django.core.management.base import BaseCommand
-from django.db.models import Q, Count
+from django.db.models import Q
 from biometrie.models import BiometriePhoto
 from intelligence_artificielle.models import IAFaceEmbedding
 from criminel.models import CriminalFicheCriminelle
@@ -20,7 +20,7 @@ class Command(BaseCommand):
         
         # 1. Vérifier le nombre total de fiches criminelles
         total_fiches = CriminalFicheCriminelle.objects.count()
-        self.stdout.write(f'📊 Total de fiches criminelles: {total_fiches}')
+        self.stdout.write(f' Total de fiches criminelles: {total_fiches}')
         
         # 2. Vérifier les BiometriePhoto avec embeddings
         photos_avec_embedding = BiometriePhoto.objects.filter(
@@ -34,9 +34,9 @@ class Command(BaseCommand):
             Q(embedding_512__isnull=True) | Q(embedding_512=None)
         )
         
-        self.stdout.write(f'\n📸 BiometriePhoto:')
-        self.stdout.write(f'   ✅ Photos actives AVEC embedding_512: {photos_avec_embedding.count()}')
-        self.stdout.write(f'   ❌ Photos actives SANS embedding_512: {photos_actives_sans_embedding.count()}')
+        self.stdout.write('\n BiometriePhoto:')
+        self.stdout.write(f'   [OK] Photos actives AVEC embedding_512: {photos_avec_embedding.count()}')
+        self.stdout.write(f'   [ERREUR] Photos actives SANS embedding_512: {photos_actives_sans_embedding.count()}')
         
         # 3. Vérifier les IAFaceEmbedding
         ia_embeddings_actifs = IAFaceEmbedding.objects.filter(
@@ -44,8 +44,8 @@ class Command(BaseCommand):
             embedding_vector__isnull=False
         ).exclude(embedding_vector=None)
         
-        self.stdout.write(f'\n🤖 IAFaceEmbedding:')
-        self.stdout.write(f'   ✅ Embeddings IA actifs: {ia_embeddings_actifs.count()}')
+        self.stdout.write('\n IAFaceEmbedding:')
+        self.stdout.write(f'   [OK] Embeddings IA actifs: {ia_embeddings_actifs.count()}')
         
         # 4. Vérifier les fiches criminelles avec au moins une photo/embedding
         fiches_avec_photo = CriminalFicheCriminelle.objects.filter(
@@ -65,28 +65,28 @@ class Command(BaseCommand):
         
         fiches_sans_embedding = total_fiches - fiches_avec_au_moins_un.count()
         
-        self.stdout.write(f'\n📋 Fiches criminelles:')
-        self.stdout.write(f'   ✅ Avec BiometriePhoto + embedding: {fiches_avec_photo.count()}')
-        self.stdout.write(f'   ✅ Avec IAFaceEmbedding: {fiches_avec_ia.count()}')
-        self.stdout.write(f'   ✅ Avec au moins un embedding: {fiches_avec_au_moins_un.count()}')
-        self.stdout.write(f'   ❌ SANS embedding: {fiches_sans_embedding}')
+        self.stdout.write('\n Fiches criminelles:')
+        self.stdout.write(f'   [OK] Avec BiometriePhoto + embedding: {fiches_avec_photo.count()}')
+        self.stdout.write(f'   [OK] Avec IAFaceEmbedding: {fiches_avec_ia.count()}')
+        self.stdout.write(f'   [OK] Avec au moins un embedding: {fiches_avec_au_moins_un.count()}')
+        self.stdout.write(f'   [ERREUR] SANS embedding: {fiches_sans_embedding}')
         
         # 5. Vérifier la qualité des embeddings
         if photos_avec_embedding.exists():
             sample = photos_avec_embedding.first()
             if sample.embedding_512:
                 embedding_len = len(sample.embedding_512) if isinstance(sample.embedding_512, list) else 0
-                self.stdout.write(f'\n🔍 Qualité des embeddings:')
-                self.stdout.write(f'   Dimension attendue: 512')
+                self.stdout.write('\n Qualité des embeddings:')
+                self.stdout.write('   Dimension attendue: 512')
                 self.stdout.write(f'   Dimension trouvée (exemple): {embedding_len}')
                 
                 if embedding_len != 512:
                     self.stdout.write(self.style.ERROR(
-                        f'   ⚠️  PROBLÈME: Dimension incorrecte!'
+                        '   [ATTENTION]  PROBLÈME: Dimension incorrecte!'
                     ))
         
         # 6. Recommandations
-        self.stdout.write(f'\n💡 RECOMMANDATIONS:\n')
+        self.stdout.write('\n RECOMMANDATIONS:\n')
         
         if photos_actives_sans_embedding.count() > 0:
             self.stdout.write(self.style.WARNING(
@@ -103,14 +103,14 @@ class Command(BaseCommand):
         
         if photos_avec_embedding.count() == 0 and ia_embeddings_actifs.count() == 0:
             self.stdout.write(self.style.ERROR(
-                '   3. ⚠️  AUCUN embedding trouvé dans la base de données!'
+                '   3. [ATTENTION]  AUCUN embedding trouvé dans la base de données!'
             ))
             self.stdout.write('      → C\'est pourquoi aucune fiche n\'est trouvée.')
             self.stdout.write('      → Il faut générer les embeddings pour les photos existantes.')
         
         # 7. Vérifier le seuil de similarité
-        self.stdout.write(f'\n⚙️  CONFIGURATION:')
-        self.stdout.write(f'   Seuil de similarité utilisé: 0.35 (35%)')
-        self.stdout.write(f'   → Les correspondances avec un score >= 0.35 seront retournées')
+        self.stdout.write('\n  CONFIGURATION:')
+        self.stdout.write('   Seuil de similarité utilisé: 0.35 (35%)')
+        self.stdout.write('   → Les correspondances avec un score >= 0.35 seront retournées')
         
         self.stdout.write(self.style.SUCCESS('\n=== FIN DU DIAGNOSTIC ===\n'))

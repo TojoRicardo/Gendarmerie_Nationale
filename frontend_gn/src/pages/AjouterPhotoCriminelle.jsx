@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Fingerprint, Loader2, CheckCircle2, AlertCircle, X, Scan, Eye, User, FileText, Save } from 'lucide-react';
+import { Fingerprint, Loader2, CheckCircle2, AlertCircle, X, Scan, Eye, User, FileText, Save, ArrowLeft } from 'lucide-react';
 import UploadPhotoCriminelle from '../../components/biometrie/UploadPhotoCriminelle';
 import Button from '../components/commun/Button';
 import Input from '../components/commun/Input';
@@ -39,7 +39,6 @@ const AjouterPhotoCriminelle = () => {
 
   // États pour l'upload
   const [uploadEnCours, setUploadEnCours] = useState(false);
-  const [message, setMessage] = useState({ type: '', texte: '' });
   
   // États pour le formulaire de fiche criminelle
   const [afficherFormulaireFiche, setAfficherFormulaireFiche] = useState(false);
@@ -136,7 +135,7 @@ const AjouterPhotoCriminelle = () => {
               return visagesIA.length;
             }
           }
-        } catch (iaError) {
+        } catch (_iaError) {
           console.log('API IA non disponible, utilisation de l\'API analyse standard');
         }
 
@@ -237,6 +236,51 @@ const AjouterPhotoCriminelle = () => {
    * Scanner la photo dans la base de données
    * Détecte d'abord les visages, puis scanne dans la base de données
    */
+  const SEUIL_UPR_TROUVE = 0.75;
+  const SEUIL_CRIMINEL_TROUVE = 0.9;
+
+  const estCorrespondanceStricte = (match) => {
+    if (!match) return false;
+    if (match.is_strict_match || match.is_duplicate) return true;
+    const score = match.similarity_score ?? match.score ?? 0;
+    const type = match.type || (match.code_upr ? 'UPR' : 'CRIMINEL');
+    if (type === 'UPR') return score >= SEUIL_UPR_TROUVE;
+    return score >= SEUIL_CRIMINEL_TROUVE;
+  };
+
+  const appliquerPersonneTrouvee = async (bestMatch) => {
+    const match = {
+      ...bestMatch,
+      type: bestMatch.type || (bestMatch.code_upr ? 'UPR' : 'CRIMINEL'),
+    };
+    setPersonFound(true);
+    setFoundPersonData(match);
+    setLoadingFiche(true);
+    try {
+      if (match.type === 'UPR' && match.id) {
+        const uprDetails = await getUPR(match.id);
+        setFicheDetails({ type: 'UPR', data: uprDetails });
+      } else if (match.id) {
+        const criminelDetails = await getCriminalFileById(match.id);
+        setFicheDetails({ type: 'CRIMINEL', data: criminelDetails });
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails de la fiche:', error);
+    } finally {
+      setLoadingFiche(false);
+    }
+
+    const label =
+      match.type === 'UPR'
+        ? `UPR: ${match.code_upr || match.nom_temporaire || match.id}`
+        : `Criminel: ${match.nom || match.numero_fiche || match.id}`;
+
+    notification.showWarning({
+      title: 'Personne déjà enregistrée',
+      message: `Cette personne existe déjà dans la base de données (${label}).`,
+    });
+  };
+
   const handleScanPhoto = async () => {
     if (!photoFace || !photoFace.file) {
       notification.showError({
@@ -271,10 +315,19 @@ const AjouterPhotoCriminelle = () => {
       // Normaliser la structure des résultats (l'API peut retourner différentes structures)
       // Même si l'API retourne une erreur, on normalise les résultats pour permettre l'affichage
       const normalizedResults = {
-        upr_matches: results.upr_matches || results.upr_results || results.matches?.filter(m => m.type === 'UPR') || [],
-        criminel_matches: results.criminel_matches || results.criminel_results || results.matches?.filter(m => m.type === 'CRIMINEL' || m.type === 'Criminel') || [],
-        total_matches: results.total_matches || (results.upr_matches?.length || 0) + (results.criminel_matches?.length || 0),
-        error: results.error || null
+        upr_matches: (results.upr_matches || results.upr_results || results.matches?.filter(m => m.type === 'UPR') || []).map((m) => ({
+          ...m,
+          type: m.type || 'UPR',
+        })),
+        criminel_matches: (results.criminel_matches || results.criminal_matches || results.criminel_results || results.matches?.filter(m => m.type === 'CRIMINEL' || m.type === 'Criminel') || []).map((m) => ({
+          ...m,
+          type: m.type || 'CRIMINEL',
+        })),
+        total_matches: results.total_matches ?? ((results.upr_matches?.length || 0) + (results.criminel_matches?.length || results.criminal_matches?.length || 0)),
+        person_found: results.person_found ?? false,
+        best_match: results.best_match ?? null,
+        warnings: results.warnings || [],
+        error: results.error || null,
       };
 
       // TOUJOURS définir scanResults, même s'il y a une erreur ou aucune correspondance
@@ -306,62 +359,52 @@ const AjouterPhotoCriminelle = () => {
       const allCriminelMatches = normalizedResults.criminel_matches || [];
       const hasAnyMatches = allUPRMatches.length > 0 || allCriminelMatches.length > 0;
 
-      // Vérifier s'il y a des correspondances strictes (score >= 0.9)
-      const strictUPRMatches = allUPRMatches.filter(
-        (m) => m.similarity_score >= 0.9
-      );
-      const strictCriminelMatches = allCriminelMatches.filter(
-        (m) => m.similarity_score >= 0.9
-      );
+      const strictUPRMatches = allUPRMatches.filter(estCorrespondanceStricte);
+      const strictCriminelMatches = allCriminelMatches.filter(estCorrespondanceStricte);
 
-      if (strictUPRMatches.length > 0 || strictCriminelMatches.length > 0) {
-        // Personne trouvée avec correspondance stricte
-        const bestMatch = strictUPRMatches[0] || strictCriminelMatches[0];
-        setPersonFound(true);
-        setFoundPersonData(bestMatch);
+      let bestMatch = null;
+      if (normalizedResults.person_found && normalizedResults.best_match) {
+        bestMatch = normalizedResults.best_match;
+      } else if (strictUPRMatches.length > 0 || strictCriminelMatches.length > 0) {
+        const tousStricts = [...strictUPRMatches, ...strictCriminelMatches].sort(
+          (a, b) => (b.similarity_score ?? 0) - (a.similarity_score ?? 0)
+        );
+        bestMatch = tousStricts[0];
+      }
 
-        // Charger IMMÉDIATEMENT les détails complets de la fiche pour affichage direct
-        setLoadingFiche(true);
-        try {
-          if (bestMatch.type === 'UPR' && bestMatch.id) {
-            const uprDetails = await getUPR(bestMatch.id);
-            setFicheDetails({ type: 'UPR', data: uprDetails });
-          } else if (bestMatch.id) {
-            const criminelDetails = await getCriminalFileById(bestMatch.id);
-            setFicheDetails({ type: 'CRIMINEL', data: criminelDetails });
-          }
-        } catch (error) {
-          console.error('Erreur lors du chargement des détails de la fiche:', error);
-        } finally {
-          setLoadingFiche(false);
-        }
-
-        notification.showWarning({
-          title: '⚠️ Personne déjà enregistrée',
-          message: `Cette personne existe déjà dans la base de données. ${bestMatch.type === 'UPR' ? `UPR: ${bestMatch.code_upr || bestMatch.nom_temporaire}` : `Criminel: ${bestMatch.nom || bestMatch.numero_fiche}`}`,
-        });
+      if (bestMatch) {
+        await appliquerPersonneTrouvee(bestMatch);
       } else if (hasAnyMatches) {
-        // Des correspondances partielles existent mais pas de correspondance stricte
         setPersonFound(false);
         notification.showInfo({
-          title: 'ℹ️ Correspondances partielles trouvées',
-          message: `${allUPRMatches.length + allCriminelMatches.length} correspondance(s) partielle(s) trouvée(s). Consultez les résultats ci-dessous.`,
+          title: 'Correspondances partielles trouvées',
+          message: `${allUPRMatches.length + allCriminelMatches.length} correspondance(s) partielle(s). Consultez les résultats ci-dessous.`,
+        });
+      } else if (results.error && results.error.includes('Aucun visage')) {
+        setPersonFound(false);
+        notification.showError({
+          title: 'Visage non détecté',
+          message: `${results.error} Essayez une photo de face plus nette, bien éclairée, en format JPG ou PNG.`,
+          showCancel: false,
+          confirmText: 'OK',
         });
       } else {
-        // Aucune correspondance trouvée du tout
         setPersonFound(false);
-        
-        // Utiliser le nombre de visages détectés directement (pas besoin d'attendre l'état React)
-        if (nombreVisagesDetectes > 0) {
-          // Ne pas afficher automatiquement le formulaire - l'utilisateur doit cliquer sur le bouton
+        const warnText = (normalizedResults.warnings || []).join(' ');
+        if (warnText) {
+          notification.showWarning({
+            title: 'Aucune correspondance trouvée',
+            message: `Aucune personne correspondante en base avec cette photo. ${warnText}`,
+          });
+        } else if (nombreVisagesDetectes > 0) {
           notification.showSuccess({
-            title: '✅ Visage détecté - Aucune correspondance',
-            message: 'Un visage a été détecté dans l\'image, mais aucune personne correspondante n\'a été trouvée dans la base de données. Cliquez sur "Créer une fiche criminelle" pour enregistrer cette nouvelle personne.',
+            title: 'Visage détecté - Aucune correspondance',
+            message: 'Aucune personne correspondante en base. Vous pouvez enregistrer cette nouvelle personne.',
           });
         } else {
           notification.showSuccess({
-            title: '✅ Aucune correspondance trouvée',
-            message: 'Aucune personne correspondante trouvée dans la base de données. Vous pouvez procéder à l\'enregistrement.',
+            title: 'Aucune correspondance trouvée',
+            message: 'Aucune personne correspondante en base. Vous pouvez procéder à l\'enregistrement.',
           });
         }
       }
@@ -398,7 +441,83 @@ const AjouterPhotoCriminelle = () => {
     if (foundPersonData.type === 'UPR') {
       navigate(`/upr/${foundPersonData.id}`);
     } else {
-      navigate(`/criminels/${foundPersonData.id}`);
+      navigate(`/fiches-criminelles/voir/${foundPersonData.id}`);
+    }
+  };
+
+  /** Analyse terminée sans correspondance stricte — afficher les boutons d'enregistrement */
+  const peutEnregistrerNouvellePersonne = Boolean(
+    scanResults && !personFound && photoFace?.file
+  );
+
+  const renderBoutonsEnregistrement = () => {
+    if (!peutEnregistrerNouvellePersonne) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row gap-3 mt-4">
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => setAfficherFormulaireFiche(true)}
+          disabled={uploadEnCours}
+          icon={FileText}
+          className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
+        >
+          Créer une fiche criminelle
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleEnregistrerUPR}
+          disabled={uploadEnCours}
+          icon={uploadEnCours ? Loader2 : Save}
+          className="bg-green-600 hover:bg-green-700 text-white flex-1"
+        >
+          {uploadEnCours ? 'Enregistrement...' : 'Enregistrer'}
+        </Button>
+      </div>
+    );
+  };
+
+  /**
+   * Analyse empreinte : si une photo est présente, lancer le scan facial ;
+   * sinon indiquer qu'aucune correspondance n'a été trouvée (recherche auto indisponible).
+   */
+  const handleScanEmpreinte = async () => {
+    if (!empreinteDigitale?.file) {
+      notification.showError({
+        title: 'Empreinte requise',
+        message: 'Veuillez d\'abord sélectionner une empreinte digitale.',
+      });
+      return;
+    }
+
+    if (photoFace?.file) {
+      await handleScanPhoto();
+      return;
+    }
+
+    setIsScanning(true);
+    setScanResults(null);
+    setPersonFound(false);
+    setFoundPersonData(null);
+    setFicheDetails(null);
+
+    try {
+      setScanResults({
+        upr_matches: [],
+        criminel_matches: [],
+        total_matches: 0,
+        source: 'empreinte',
+      });
+      setPersonFound(false);
+      notification.showInfo({
+        title: 'Aucune correspondance trouvée',
+        message:
+          'La recherche automatique par empreinte n\'est pas disponible. Ajoutez une photo de face pour l\'analyse faciale, ou enregistrez l\'individu avec l\'empreinte fournie.',
+      });
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -415,16 +534,16 @@ const AjouterPhotoCriminelle = () => {
       return;
     }
 
-    // Vérifier qu'un visage a été détecté
-    if (visagesDetectes.length === 0) {
+    // Après analyse sans correspondance stricte, autoriser l'enregistrement même si
+    // la détection frontend n'a pas trouvé de visage (le backend peut avoir scanné).
+    const analyseSansCorrespondance = scanResults && !personFound;
+    if (visagesDetectes.length === 0 && !analyseSansCorrespondance) {
       notification.showError({
         title: 'Visage non détecté',
-        message: 'Aucun visage détecté dans la photo. Veuillez utiliser une photo avec un visage clairement visible.'
+        message: 'Aucun visage détecté dans la photo. Lancez d\'abord l\'analyse ou utilisez une photo avec un visage clairement visible.'
       });
       return;
     }
-
-    // Validation des champs obligatoires
     if (!formDataFiche.nom || !formDataFiche.prenom) {
       notification.showError({
         title: 'Champs obligatoires manquants',
@@ -434,7 +553,6 @@ const AjouterPhotoCriminelle = () => {
     }
 
     setUploadEnCours(true);
-    setMessage({ type: '', texte: '' });
 
     try {
       // Préparer les données de la fiche
@@ -479,18 +597,18 @@ const AjouterPhotoCriminelle = () => {
       }
 
       notification.showSuccess({
-        title: '✅ Fiche criminelle enregistrée avec succès',
+        title: '[OK] Fiche criminelle enregistrée avec succès',
         message: `La fiche criminelle a été créée avec succès. ${result.numero_fiche ? `N° Fiche: ${result.numero_fiche}` : ''}`
       });
 
       // Rediriger vers la fiche créée
       if (result.id) {
         setTimeout(() => {
-          navigate(`/criminels/${result.id}`);
+          navigate(`/fiches-criminelles/voir/${result.id}`);
         }, 1500);
       } else {
         setTimeout(() => {
-          navigate('/criminels');
+          navigate('/fiches-criminelles');
         }, 1500);
       }
     } catch (error) {
@@ -506,8 +624,6 @@ const AjouterPhotoCriminelle = () => {
         title: 'Erreur d\'enregistrement',
         message: errorMessage
       });
-      
-      setMessage({ type: 'error', texte: errorMessage });
     } finally {
       setUploadEnCours(false);
     }
@@ -526,17 +642,16 @@ const AjouterPhotoCriminelle = () => {
       return;
     }
 
-    // Vérifier qu'un visage a été détecté
-    if (visagesDetectes.length === 0) {
+    const analyseSansCorrespondance = scanResults && !personFound;
+    if (visagesDetectes.length === 0 && !analyseSansCorrespondance) {
       notification.showError({
         title: 'Visage non détecté',
-        message: 'Aucun visage détecté dans la photo. Veuillez utiliser une photo avec un visage clairement visible.'
+        message: 'Aucun visage détecté dans la photo. Lancez d\'abord l\'analyse ou utilisez une photo avec un visage clairement visible.'
       });
       return;
     }
 
     setUploadEnCours(true);
-    setMessage({ type: '', texte: '' });
 
     try {
       const formData = new FormData();
@@ -565,7 +680,7 @@ const AjouterPhotoCriminelle = () => {
       const result = await createUPR(formData);
 
       notification.showSuccess({
-        title: '✅ UPR enregistré avec succès',
+        title: '[OK] UPR enregistré avec succès',
         message: `L'UPR a été créé avec succès. ${result.code_upr ? `Code UPR: ${result.code_upr}` : ''}`
       });
 
@@ -593,8 +708,6 @@ const AjouterPhotoCriminelle = () => {
         title: 'Erreur d\'enregistrement',
         message: errorMessage
       });
-      
-      setMessage({ type: 'error', texte: errorMessage });
     } finally {
       setUploadEnCours(false);
     }
@@ -603,6 +716,14 @@ const AjouterPhotoCriminelle = () => {
   return (
     <div className="min-h-screen bg-blue-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
+        <button
+          onClick={() => navigate('/upr')}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition hover:text-gray-900 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Retour
+        </button>
+
         {/* Deux cartes côte à côte */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Carte gauche - Photo de face */}
@@ -657,7 +778,7 @@ const AjouterPhotoCriminelle = () => {
           </div>
         )}
 
-        {/* Bouton Scanner - affiché seulement si photo uploadée */}
+        {/* Bouton Scanner photo */}
         {photoFace && !personFound && (
           <div className="flex justify-center mb-6">
             <Button
@@ -667,7 +788,22 @@ const AjouterPhotoCriminelle = () => {
               variant="secondary"
               className="bg-green-500 hover:bg-green-600 text-white"
             >
-              {isScanning || detectionEnCours ? 'Scan en cours...' : 'Scanner la photo'}
+              {isScanning || detectionEnCours ? 'Analyse en cours...' : 'Analyser la photo'}
+            </Button>
+          </div>
+        )}
+
+        {/* Bouton Scanner empreinte (seule ou avec photo) */}
+        {empreinteDigitale && !personFound && (
+          <div className="flex justify-center mb-6">
+            <Button
+              onClick={handleScanEmpreinte}
+              disabled={isScanning || detectionEnCours}
+              icon={isScanning || detectionEnCours ? Loader2 : Fingerprint}
+              variant="secondary"
+              className="bg-indigo-500 hover:bg-indigo-600 text-white"
+            >
+              {isScanning || detectionEnCours ? 'Analyse en cours...' : 'Analyser l\'empreinte'}
             </Button>
           </div>
         )}
@@ -684,7 +820,7 @@ const AjouterPhotoCriminelle = () => {
                       <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <h3 className="font-bold text-amber-900 mb-2">
-                          ⚠️ Personne déjà enregistrée dans la base de données
+                          [ATTENTION] Personne déjà enregistrée dans la base de données
                         </h3>
                         {foundPersonData && (
                           <div className="mb-3">
@@ -919,19 +1055,20 @@ const AjouterPhotoCriminelle = () => {
                               {(scanResults.upr_matches?.length || 0) + (scanResults.criminel_matches?.length || 0)} correspondance(s) trouvée(s) 
                               {(() => {
                                 const strictMatches = [
-                                  ...(scanResults.upr_matches || []).filter(m => m.similarity_score >= 0.9),
-                                  ...(scanResults.criminel_matches || []).filter(m => m.similarity_score >= 0.9)
+                                  ...(scanResults.upr_matches || []).filter(estCorrespondanceStricte),
+                                  ...(scanResults.criminel_matches || []).filter(estCorrespondanceStricte),
                                 ];
                                 if (strictMatches.length === 0) {
-                                  return ' avec un score de similarité inférieur au seuil strict (90%).';
+                                  return ' avec un score de similarité inférieur au seuil de correspondance (75 % UPR / 90 % fiche criminelle).';
                                 }
                                 return '.';
                               })()}
                               {' '}Consultez les résultats ci-dessous pour plus de détails.
                             </p>
-                            <p className="text-xs text-blue-700">
+                            <p className="text-xs text-blue-700 mb-3">
                               Vous pouvez quand même procéder à l'enregistrement si aucune de ces correspondances ne correspond à la personne recherchée.
                             </p>
+                            {renderBoutonsEnregistrement()}
                           </div>
                         </div>
                       </div>
@@ -948,39 +1085,17 @@ const AjouterPhotoCriminelle = () => {
                                 ? 'Visage détecté - Aucune correspondance trouvée'
                                 : 'Aucune correspondance trouvée'}
                             </h3>
-                            <p className="text-sm text-green-800 mb-4">
+                            <p className="text-sm text-green-800 mb-2">
                               {visagesDetectes.length > 0 
-                                ? 'Un visage a été détecté dans l\'image, mais aucune personne correspondante n\'a été trouvée dans la base de données. Vous pouvez procéder à l\'enregistrement de cette nouvelle personne.'
-                                : 'Aucune personne correspondante trouvée dans la base de données. Vous pouvez procéder à l\'enregistrement.'}
+                                ? 'Un visage a été détecté dans l\'image, mais aucune personne correspondante n\'a été trouvée dans la base de données.'
+                                : 'Aucune personne correspondante trouvée dans la base de données.'}
+                              {' '}Cette personne n'est pas encore enregistrée — vous pouvez la créer maintenant.
                             </p>
-                            
-                            {/* Boutons pour enregistrer avec les captures 1 et 2 */}
-                            {visagesDetectes.length > 0 && photoFace && (
-                              <div className="mt-4">
-                                <div className="flex gap-3">
-                                  <Button
-                                    type="button"
-                                    variant="primary"
-                                    onClick={() => setAfficherFormulaireFiche(true)}
-                                    disabled={uploadEnCours}
-                                    icon={FileText}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
-                                  >
-                                    Créer une fiche criminelle
-                                  </Button>
-                                  
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={handleEnregistrerUPR}
-                                    disabled={uploadEnCours}
-                                    icon={uploadEnCours ? Loader2 : FileText}
-                                    className="bg-green-600 hover:bg-green-700 text-white flex-1"
-                                  >
-                                    {uploadEnCours ? 'Enregistrement...' : 'Enregistrer comme UPR'}
-                                  </Button>
-                                </div>
-                              </div>
+                            {renderBoutonsEnregistrement()}
+                            {!photoFace?.file && empreinteDigitale?.file && (
+                              <p className="text-xs text-amber-700 mt-3">
+                                Ajoutez une photo de face pour pouvoir enregistrer l'individu (UPR ou fiche criminelle).
+                              </p>
                             )}
                           </div>
                         </div>
@@ -1059,7 +1174,7 @@ const AjouterPhotoCriminelle = () => {
                       <div
                         key={`upr-${match.id || index}`}
                         className={`p-4 rounded-lg border-2 ${
-                          match.similarity_score >= 0.9
+                          estCorrespondanceStricte(match)
                             ? 'bg-amber-50 border-amber-300'
                             : 'bg-blue-50 border-blue-200'
                         }`}
@@ -1091,9 +1206,9 @@ const AjouterPhotoCriminelle = () => {
                               <span className="px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded">
                                 UPR
                               </span>
-                              {match.similarity_score >= 0.9 && (
+                              {estCorrespondanceStricte(match) && (
                                 <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">
-                                  Correspondance stricte
+                                  {match.is_duplicate ? 'Visage identique' : 'Personne trouvée'}
                                 </span>
                               )}
                               <span className="text-xs text-gray-600">
@@ -1193,7 +1308,7 @@ const AjouterPhotoCriminelle = () => {
                       <div
                         key={`criminel-${match.id || index}`}
                         className={`p-4 rounded-lg border-2 ${
-                          match.similarity_score >= 0.9
+                          estCorrespondanceStricte(match)
                             ? 'bg-amber-50 border-amber-300'
                             : 'bg-blue-50 border-blue-200'
                         }`}
@@ -1225,9 +1340,9 @@ const AjouterPhotoCriminelle = () => {
                               <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">
                                 CRIMINEL
                               </span>
-                              {match.similarity_score >= 0.9 && (
+                              {estCorrespondanceStricte(match) && (
                                 <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">
-                                  Correspondance stricte
+                                  Personne trouvée
                                 </span>
                               )}
                               <span className="text-xs text-gray-600">
@@ -1269,7 +1384,7 @@ const AjouterPhotoCriminelle = () => {
                               <Button
                                 type="button"
                                 variant="secondary"
-                                onClick={() => navigate(`/criminels/${match.id}`)}
+                                onClick={() => navigate(`/fiches-criminelles/voir/${match.id}`)}
                                 icon={Eye}
                                 className="mt-3 bg-red-500 hover:bg-red-600 text-white text-xs py-1.5 px-3"
                               >
@@ -1288,7 +1403,7 @@ const AjouterPhotoCriminelle = () => {
         )}
 
         {/* Formulaire de création de fiche criminelle */}
-        {afficherFormulaireFiche && visagesDetectes.length > 0 && photoFace && (
+        {afficherFormulaireFiche && photoFace && (
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">

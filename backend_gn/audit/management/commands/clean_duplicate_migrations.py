@@ -1,4 +1,4 @@
-﻿"""
+"""
 Commande Django pour nettoyer les doublons de migrations dans django_migrations
 """
 
@@ -57,7 +57,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.WARNING(
-                    f'\n⚠️  {len(duplicates)} migration(s) avec doublons trouvée(s):\n'
+                    f'\n[ATTENTION]  {len(duplicates)} migration(s) avec doublons trouvée(s):\n'
                 )
             )
 
@@ -71,7 +71,7 @@ class Command(BaseCommand):
             if dry_run:
                 self.stdout.write(
                     self.style.WARNING(
-                        f'\n🔍 Mode dry-run: {total_to_delete} entrée(s) seraient supprimées.'
+                        f'\n Mode dry-run: {total_to_delete} entrée(s) seraient supprimées.'
                     )
                 )
                 return
@@ -79,7 +79,7 @@ class Command(BaseCommand):
             # Demander confirmation
             self.stdout.write(
                 self.style.WARNING(
-                    f'\n⚠️  Cette opération va supprimer {total_to_delete} entrée(s) dupliquée(s).'
+                    f'\n[ATTENTION]  Cette opération va supprimer {total_to_delete} entrée(s) dupliquée(s).'
                 )
             )
             response = input('Continuer ? (oui/non): ')

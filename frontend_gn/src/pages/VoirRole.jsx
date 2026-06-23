@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { 
   ArrowLeft, Edit, Key, Users, CheckCircle, Activity, ShieldCheck
@@ -34,8 +34,8 @@ const VoirRole = () => {
         // Format: { id, name, description, is_active, permissions: [{ id, code, label, category }], ... }
         const roleInfo = roleData.role || roleData
         
-        console.log('📥 Données reçues du backend:', roleInfo)
-        console.log('📥 Permissions reçues:', roleInfo.permissions)
+        console.log('Données reçues du backend:', roleInfo)
+        console.log('Permissions reçues:', roleInfo.permissions)
         
         // Formater les permissions - peut être un tableau d'objets ou de chaînes
         const formattedPermissions = (roleInfo.permissions || []).map(perm => {
@@ -89,7 +89,7 @@ const VoirRole = () => {
           permissions: formattedPermissions
         })
         
-        console.log('✅ Rôle chargé avec succès:', {
+        console.log('[OK] Rôle chargé avec succès:', {
           nom: roleInfo.name || roleInfo.nom,
           permissions: formattedPermissions.length,
           usersCount

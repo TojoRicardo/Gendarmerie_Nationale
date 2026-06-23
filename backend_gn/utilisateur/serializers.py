@@ -6,6 +6,8 @@ from django.contrib.auth.password_validation import validate_password
 from datetime import date
 
 from .models import ADMIN_ROLE_CODES, normalize_role_value, Role, PermissionSGIC
+from .pin_utils import verify_user_pin
+from .user_status import compute_statut_effectif
 
 User = get_user_model()
 
@@ -92,85 +94,14 @@ class LoginSerializer(serializers.Serializer):
             else:
                 user = User.objects.get(username__iexact=identifier)
         except User.DoesNotExist:
-            # Suggestions pour aider l'utilisateur
-            suggestions = []
-            if is_email:
-                email_parts = identifier.lower().split('@')
-                if len(email_parts) == 2:
-                    local_part = email_parts[0]
-                    domain_part = email_parts[1]
-                    
-                    # Chercher des emails similaires avec plusieurs stratégies
-                    # 2. Exclure les comptes suspendus et inactifs pour ne montrer que les comptes utilisables
-                    
-                    prefix_length = min(5, len(local_part))
-                    if prefix_length >= 3:
-                        # Chercher les emails contenant le préfixe dans la partie locale
-                        # Ex: "tojoriacrdo" trouvera "tojoricardo" grâce au préfixe "tojor"
-                        prefix = local_part[:prefix_length]
-                        
-                        similar_users = User.objects.filter(
-                            email__icontains=prefix
-                        ).exclude(
-                            statut__in=['suspendu']
-                        ).exclude(
-                            is_active=False
-                        ).exclude(
-                            email__iexact=identifier.lower()  # Exclure l'email exact (déjà vérifié)
-                        ).distinct()[:10]  # Prendre plus de résultats pour mieux filtrer
-                        
-                        if similar_users.exists():
-                            def similarity_score(user_email):
-                                user_local = user_email.lower().split('@')[0]
-                                # Score basé sur:
-                                # 1. Si commence par le même préfixe
-                                # 2. Longueur similaire
-                                # 3. Nombre de caractères communs au début
-                                starts_same = user_local.startswith(local_part[:prefix_length])
-                                length_diff = abs(len(user_local) - len(local_part))
-                                common_chars = sum(1 for i, c in enumerate(user_local) if i < len(local_part) and c == local_part[i])
-                                
-                                return (not starts_same, length_diff, -common_chars)
-                            
-                            sorted_users = sorted(
-                                similar_users,
-                                key=lambda u: similarity_score(u.email)
-                            )
-                            # Prendre seulement les 3 plus similaires
-                            suggestions.append("Emails similaires trouvés:")
-                            for u in sorted_users[:3]:
-                                suggestions.append(f"  - {u.email}")
-            else:
-                # Essayer de trouver des utilisateurs avec un username similaire
-                # Exclure les comptes suspendus et inactifs
-                similar_users = User.objects.filter(
-                    username__icontains=identifier[:4] if len(identifier) >= 4 else identifier
-                ).exclude(
-                    statut__in=['suspendu']
-                ).exclude(
-                    is_active=False
-                ).exclude(
-                    username__iexact=identifier  # Exclure le username exact
-                )[:3]
-                if similar_users.exists():
-                    suggestions.append("Noms d'utilisateur similaires trouvés:")
-                    for u in similar_users:
-                        suggestions.append(f"  - {u.username}")
-            
-            # Utiliser une variable intermédiaire car les f-strings ne peuvent pas contenir de backslash dans les expressions
             identifiant_type = "l'email" if is_email else "le nom d'utilisateur"
-            error_msg = f"Aucun compte n'existe avec {identifiant_type} '{identifier}'. Vérifiez votre identifiant."
-            if suggestions:
-                error_msg += "\n" + "\n".join(suggestions)
-            
+            error_msg = (
+                f"Aucun compte n'existe avec {identifiant_type} '{identifier}'. "
+                "Vérifiez votre identifiant."
+            )
             if is_email:
-                raise serializers.ValidationError({
-                    "email": [error_msg]
-                })
-            else:
-                raise serializers.ValidationError({
-                    "username": [error_msg]
-                })
+                raise serializers.ValidationError({"email": [error_msg]})
+            raise serializers.ValidationError({"username": [error_msg]})
         except User.MultipleObjectsReturned:
             if is_email:
                 user = User.objects.filter(email__iexact=identifier.lower()).first()
@@ -257,21 +188,23 @@ class LoginSerializer(serializers.Serializer):
         except UserProfile.DoesNotExist:
             has_pin = False
         
-        # Si l'utilisateur a un PIN configuré mais qu'il n'a pas été fourni dans la requête
-        # on indique que le PIN est requis
+        # Si l'utilisateur a un PIN configuré, exiger sa vérification
         pin_provided = data.get('pin', '').strip()
-        if has_pin and not pin_provided:
-            # Stocker l'information que le PIN est requis
-            data['pin_required'] = True
-            # Ne pas mettre à jour la dernière connexion ici, ce sera fait après vérification du PIN
+        if has_pin:
+            if not pin_provided:
+                data['pin_required'] = True
+            else:
+                success, message = verify_user_pin(user, pin_provided)
+                if not success:
+                    raise serializers.ValidationError({"pin": [message]})
+                now = timezone.now()
+                user.derniereConnexion = now
+                user.last_login = now
+                user.save(update_fields=['derniereConnexion', 'last_login'])
         else:
-            # Mettre à jour la date de dernière connexion seulement si le PIN n'est pas requis
-            # ou s'il a été fourni et validé
-            # IMPORTANT: Mettre à jour à la fois derniereConnexion (champ personnalisé) 
-            # et last_login (champ Django standard) pour cohérence
             now = timezone.now()
             user.derniereConnexion = now
-            user.last_login = now  # Champ Django standard AbstractUser
+            user.last_login = now
             user.save(update_fields=['derniereConnexion', 'last_login'])
 
         data['user'] = user
@@ -293,17 +226,21 @@ class UtilisateurReadSerializer(serializers.ModelSerializer):
     photo_profil_upload = serializers.ImageField(write_only=True, required=False, allow_null=True)
     # Champ calculé pour identifier l'utilisateur actuellement connecté
     is_current_user = serializers.SerializerMethodField()
-    # Champ calculé pour indiquer si l'utilisateur est actuellement connecté (session active)
     is_connected = serializers.SerializerMethodField()
+    statut_effectif = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'matricule', 'nom', 'prenom', 
                   'telephone', 'dateNaissance', 'adresse', 'role', 'statut', 
-                  'grade', 'dateCreation', 'derniereConnexion', 'is_active', 
+                  'statut_effectif', 'grade', 'dateCreation', 'derniereConnexion',
+                  'last_login', 'is_active', 
                   'permissions', 'photo_profil', 'photo_profil_upload',
                   'is_current_user', 'is_connected']
-        read_only_fields = ['id', 'dateCreation', 'derniereConnexion', 'permissions', 'is_current_user', 'is_connected']
+        read_only_fields = [
+            'id', 'dateCreation', 'derniereConnexion', 'last_login',
+            'permissions', 'is_current_user', 'is_connected', 'statut_effectif',
+        ]
     
     def get_permissions(self, obj):
         """Récupère les permissions de l'utilisateur selon son rôle"""
@@ -311,11 +248,8 @@ class UtilisateurReadSerializer(serializers.ModelSerializer):
         return get_user_permissions(obj)
     
     def get_photo_profil(self, obj):
-        """Retourne l'URL complète de la photo de profil"""
+        """Retourne l'URL relative de la photo (compatible proxy frontend /media)."""
         if obj.photo_profil:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.photo_profil.url)
             return obj.photo_profil.url
         return None
     
@@ -336,6 +270,11 @@ class UtilisateurReadSerializer(serializers.ModelSerializer):
         - False sinon
         """
         return self.get_is_current_user(obj)
+
+    def get_statut_effectif(self, obj):
+        request = self.context.get('request')
+        current_user = request.user if request and getattr(request.user, 'is_authenticated', False) else None
+        return compute_statut_effectif(obj, current_user=current_user)
     
     def update(self, instance, validated_data):
         """Mise à jour de l'utilisateur avec gestion de la photo de profil"""

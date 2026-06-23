@@ -10,12 +10,11 @@ Utilise la distance L2 pour calculer la similarité.
 
 import logging
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 from django.db.models import Q
 from django.utils import timezone
 
 from ..models import UnidentifiedPerson, UPRMatchLog, CriminelMatchLog
-from criminel.models import CriminalFicheCriminelle
 
 logger = logging.getLogger(__name__)
 

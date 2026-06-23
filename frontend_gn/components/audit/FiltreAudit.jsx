@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  Filter, Calendar, User, Activity, X, RefreshCw, 
-  Clock, Shield, Zap, Save, Trash2, CheckCircle2, Download, Brain, Loader2
+  Filter, Calendar, User, X, RefreshCw, Save, Download, Brain, Loader2
 } from 'lucide-react';
 import ChampTexte from '../commun/ChampTexte';
 import Select from '../commun/Select';
-import Bouton from '../commun/Bouton';
 import { getUsers } from '../../src/services/authService';
 import { getAuditEntries, getDerniereConnexion, getStatutIA } from '../../src/services/auditService';
 
@@ -23,7 +21,6 @@ const FiltreAudit = ({ onFiltrer, onReinitialiser, onToggleOllama }) => {
   const [enCoursGeneration, setEnCoursGeneration] = useState(false);
   const [formatRapport, setFormatRapport] = useState('pdf');
   const [filtreRapideActif, setFiltreRapideActif] = useState(null);
-  const [chargementConnexion, setChargementConnexion] = useState(false);
   const [statutIA, setStatutIA] = useState(null);
   const [resetKey, setResetKey] = useState(0); // Clé pour forcer la réinitialisation des champs
 
@@ -64,7 +61,6 @@ const FiltreAudit = ({ onFiltrer, onReinitialiser, onToggleOllama }) => {
   useEffect(() => {
     if (filtreRapideActif === 'depuis_connexion' && filtres.utilisateur) {
       const appliquerFiltreConnexion = async () => {
-        setChargementConnexion(true);
         try {
           const connexionData = await getDerniereConnexion(filtres.utilisateur);
           
@@ -83,8 +79,6 @@ const FiltreAudit = ({ onFiltrer, onReinitialiser, onToggleOllama }) => {
           }
         } catch (error) {
           console.error('Erreur lors de la récupération de la dernière connexion:', error);
-        } finally {
-          setChargementConnexion(false);
         }
       };
       
@@ -264,9 +258,6 @@ const FiltreAudit = ({ onFiltrer, onReinitialiser, onToggleOllama }) => {
       setEnCoursGeneration(false);
     }
   };
-
-  // Filtres rapides - Tous supprimés, seulement l'option "Tout" reste disponible
-  const filtresRapides = [];
 
   // Compter les filtres actifs
   const nombreFiltresActifs = Object.values(filtres).filter(v => v && v !== new Date().toISOString().split('T')[0]).length;

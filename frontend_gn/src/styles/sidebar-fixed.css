@@ -1,12 +1,14 @@
 /* Sidebar - Style professionnel moderne avec thème sombre */
 
 /* Sidebar principale - Thème sombre */
+
 /* Les styles Tailwind du composant ont la priorité */
 aside {
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
+
   /* Le background est géré par les classes Tailwind dans le composant */
   width: 200px;
   overflow: hidden;
@@ -17,8 +19,7 @@ aside nav {
   flex: 1 1 auto;
   min-height: 0;
   max-height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
   display: flex;
   flex-direction: column;
 }
@@ -33,15 +34,16 @@ aside nav::-webkit-scrollbar-track {
 }
 
 aside nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(255 255 255 / 10%);
   border-radius: 3px;
 }
 
 aside nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(255 255 255 / 20%);
 }
 
 /* Boutons du menu - Style thème sombre */
+
 /* Les styles sont principalement gérés par Tailwind dans le composant */
 aside nav button {
   width: 100%;
@@ -72,7 +74,7 @@ aside > div:last-child {
 }
 
 /* Responsive - Desktop */
-@media (min-width: 1024px) {
+@media (width >= 1024px) {
   aside {
     position: relative;
     height: 100%;
@@ -80,7 +82,7 @@ aside > div:last-child {
 }
 
 /* Responsive - Mobile */
-@media (max-width: 1023px) {
+@media (width <= 1023px) {
   aside {
     position: fixed;
     z-index: 50;

@@ -1,9 +1,6 @@
 ﻿from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
-from django.contrib.auth.hashers import make_password, check_password
-from datetime import timedelta
-import os
 
 
 ADMIN_ROLE_CODES = {'ADMIN', 'ADMINISTRATEUR', 'ADMINISTRATEUR SYSTÈME'}

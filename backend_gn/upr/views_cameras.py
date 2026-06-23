@@ -5,19 +5,17 @@ Vues pour la gestion des caméras et alertes multi-caméras.
 import logging
 import base64
 import os
-from datetime import datetime, timezone
-from io import BytesIO
+from datetime import datetime
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.utils import timezone as django_timezone
-from django.db import transaction
 
 from .models import Camera, UPRLog, CameraCapture
 from .serializers import (
@@ -94,7 +92,7 @@ class CameraViewSet(viewsets.ModelViewSet):
                             }
                         )
                         cameras_found.append(CameraSerializer(camera).data)
-                        logger.info(f"  ✅ Caméra USB {idx} détectée")
+                        logger.info(f"  [OK] Camera USB {idx} detectee")
                     cap.release()
             
             # Caméras IP depuis config
@@ -760,7 +758,7 @@ class CaptureUSBCameraView(APIView):
         notes = request.data.get('notes', '')
         
         try:
-            camera_service = CameraService()
+            CameraService()
             
             # Capturer depuis la caméra USB (détection automatique)
             try:
@@ -779,7 +777,7 @@ class CaptureUSBCameraView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Récupérer ou créer l'objet Camera pour USB
-            camera_id = f"usb_auto"
+            camera_id = "usb_auto"
             camera, _ = Camera.objects.get_or_create(
                 camera_id=camera_id,
                 defaults={
@@ -938,7 +936,6 @@ def _generate_narrative_audit_for_capture(request, capture: CameraCapture):
             
             # Ajouter aussi la phrase personnalisée si possible
             try:
-                from audit.models import JournalAuditNarratif
                 journal = getattr(session, 'journal_narratif', None)
                 if journal and not journal.est_cloture:
                     phrase_complete = ' '.join(phrase_parts)

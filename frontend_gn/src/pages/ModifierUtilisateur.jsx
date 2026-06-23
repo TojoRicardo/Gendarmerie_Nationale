@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   User, Mail, Phone, MapPin, Calendar, Save, X, ArrowLeft, Users, Activity, Lock,
@@ -8,7 +8,7 @@ import { formatPhoneNumber } from '../utils/phoneUtils'
 import { useNotification } from '../context/NotificationContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { PERMISSIONS } from '../constants/permissions'
-import { RoleBasedUI, PermissionButton } from '../components/RoleBasedUI'
+import { RoleBasedUI } from '../components/RoleBasedUI'
 
 // Utiliser le service authService
 import { getUserById, updateUser as updateUserService } from '../services/authService'
@@ -18,7 +18,7 @@ const ModifierUtilisateur = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const notification = useNotification()
-  const { hasPermission, isAdmin, canModify, displayRestrictions } = usePermissions()
+  const { hasPermission, isAdmin } = usePermissions()
 
   const [formData, setFormData] = useState({
     username: '',
@@ -60,7 +60,7 @@ const ModifierUtilisateur = () => {
               if (!isNaN(dateObj.getTime())) {
                 formattedDate = dateObj.toISOString().split('T')[0]
               }
-            } catch (e) {
+            } catch (_e) {
               console.warn('Impossible de parser la date:', data.dateNaissance)
             }
           }
@@ -161,7 +161,7 @@ const ModifierUtilisateur = () => {
       const roleHasChanged = originalRole !== formData.role
       
       if (roleHasChanged) {
-        console.log('🔄 Changement de rôle détecté:', {
+        console.log('Changement de rôle détecté:', {
           ancien: originalRole,
           nouveau: formData.role,
           utilisateur: id
@@ -176,10 +176,10 @@ const ModifierUtilisateur = () => {
             modifiedBy: 'admin' // Vous pouvez remplacer par l'ID de l'admin connecté
           })
           
-          console.log('✅ Notification de changement de rôle envoyée')
+          console.log('[OK] Notification de changement de rôle envoyée')
           notification.showSuccess('Utilisateur modifié avec succès ! Il sera notifié du changement.')
         } catch (notifyError) {
-          console.warn('⚠️ Erreur lors de la notification (non-bloquant):', notifyError)
+          console.warn('[ATTENTION] Erreur lors de la notification (non-bloquant):', notifyError)
           // Ne pas bloquer le processus si la notification échoue
           notification.showSuccess('Utilisateur modifié avec succès !')
         }

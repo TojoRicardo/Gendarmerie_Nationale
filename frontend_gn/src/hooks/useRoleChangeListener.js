@@ -35,7 +35,6 @@ const useRoleChangeListener = (options = {}) => {
       const result = await roleChangeService.checkForRoleChanges()
 
       if (result.has_changes) {
-        console.log('🔄 Changements de rôle/permissions détectés pour l\'utilisateur')
 
         // Afficher une notification à l'utilisateur
         notification?.showInfo(
@@ -55,10 +54,7 @@ const useRoleChangeListener = (options = {}) => {
 
           // Marquer les changements comme vus
           await roleChangeService.acknowledgeRoleChanges()
-          
-          console.log('✅ Permissions utilisateur rafraîchies avec succès')
-        } catch (refreshError) {
-          console.error('❌ Erreur lors du rafraîchissement des permissions:', refreshError)
+        } catch (_refreshError) {
           
           notification?.showError(
             'Erreur lors de la mise à jour de vos permissions. Veuillez vous reconnecter.',
@@ -115,7 +111,6 @@ const useRoleChangeListener = (options = {}) => {
 
     // Nettoyage
     return () => {
-      console.log('🛑 Arrêt du listener de changements de rôle')
       clearTimeout(initialTimeout)
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -125,7 +120,6 @@ const useRoleChangeListener = (options = {}) => {
 
   // Fournir une méthode pour forcer une vérification manuelle
   const forceCheck = useCallback(() => {
-    console.log('🔍 Vérification manuelle des changements de rôle...')
     return checkForChanges()
   }, [checkForChanges])
 

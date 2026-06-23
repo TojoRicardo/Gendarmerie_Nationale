@@ -283,6 +283,49 @@ export const createRapportEnquete = async ({ enquete, titre, contenu, statut = '
   return response.data
 }
 
+// ============================================================================
+// GESTION DES DOCUMENTS D'ENQUÊTE
+// ============================================================================
+
+export const fetchDocumentsEnquete = async (params = {}) => {
+  const queryParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      queryParams.append(key, value)
+    }
+  })
+  const qs = queryParams.toString()
+  const url = `${BASE}/documents/${qs ? `?${qs}` : ''}`
+  const response = await get(url)
+  return response.data
+}
+
+export const fetchDocumentsStats = async () => {
+  const response = await get(`${BASE}/documents/stats/`)
+  return response.data
+}
+
+export const uploadDocumentEnquete = async ({ categorie, nom, type_document, description, fichier }) => {
+  const formData = buildFormData({ categorie, nom, type_document, description, fichier })
+  const response = await post(`${BASE}/documents/`, formData, multipartConfig)
+  return response.data
+}
+
+export const updateDocumentEnquete = async (documentId, payload) => {
+  const formData = buildFormData(payload)
+  const response = await patch(`${BASE}/documents/item/${documentId}/`, formData, multipartConfig)
+  return response.data
+}
+
+export const deleteDocumentEnquete = async (documentId) => {
+  const response = await del(`${BASE}/documents/item/${documentId}/`)
+  return response.data
+}
+
+export const getDocumentDownloadUrl = (documentId) => {
+  return `${BASE}/documents/item/${documentId}/download/`
+}
+
 export default {
   fetchPreuves,
   createPreuve,
@@ -306,7 +349,6 @@ export default {
   fetchAvancementDetail,
   editAvancementEntry,
   deleteAvancementEntry,
-  // Nouvelles méthodes pour les enquêtes
   fetchEnquetes,
   createEnquete,
   fetchEnqueteDetail,
@@ -315,10 +357,15 @@ export default {
   updateEnqueteStatut,
   fetchEnqueteRapports,
   fetchTypesEnquete,
-  // Relations Enquête-Criminel
   fetchEnqueteCriminels,
   createEnqueteCriminel,
   updateEnqueteCriminel,
   deleteEnqueteCriminel,
+  fetchDocumentsEnquete,
+  fetchDocumentsStats,
+  uploadDocumentEnquete,
+  updateDocumentEnquete,
+  deleteDocumentEnquete,
+  getDocumentDownloadUrl,
 }
 

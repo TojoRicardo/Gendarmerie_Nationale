@@ -1,5 +1,4 @@
 import os
-import csv
 import logging
 from datetime import datetime
 from django.conf import settings
@@ -63,7 +62,7 @@ class GenerateurRapport:
                 media_root_normalized = os.path.normpath(settings.MEDIA_ROOT)
                 
                 if not fichier_normalized.startswith(media_root_normalized):
-                    logger.error(f"ERREUR: Le fichier généré n'est pas dans MEDIA_ROOT!")
+                    logger.error("ERREUR: Le fichier généré n'est pas dans MEDIA_ROOT!")
                     logger.error(f"Fichier: {fichier_normalized}")
                     logger.error(f"MEDIA_ROOT: {media_root_normalized}")
                     raise ValueError(f"Le fichier généré doit être dans MEDIA_ROOT. Fichier: {fichier_normalized}, MEDIA_ROOT: {media_root_normalized}")
@@ -125,7 +124,7 @@ class GenerateurRapport:
                 logger.info(f"Chemin calculé par Django (rapport.fichier.path): {test_path}")
                 
                 if not os.path.exists(test_path):
-                    logger.error(f"ERREUR CRITIQUE: Fichier non accessible après sauvegarde!")
+                    logger.error("ERREUR CRITIQUE: Fichier non accessible après sauvegarde!")
                     logger.error(f"Chemin attendu (rapport.fichier.path): {test_path}")
                     logger.error(f"Chemin original du fichier généré: {fichier}")
                     logger.error(f"Chemin relatif sauvegardé dans DB: {rel_path}")
@@ -214,6 +213,9 @@ class GenerateurRapport:
         
         if params.get('province'):
             info_data.append(['Province', params['province']])
+
+        if donnees.get('periode_donnees') and donnees.get('periode_donnees') != donnees.get('periode_demandee'):
+            info_data.append(['Période des données', donnees['periode_donnees']])
         
         info_table = Table(info_data, colWidths=[2*inch, 4*inch])
         info_table.setStyle(TableStyle([

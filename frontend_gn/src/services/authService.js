@@ -5,12 +5,14 @@
 
 import { get, post, put, patch, del } from './apiGlobal'
 import { writeCache, readCache, isNetworkError } from '../utils/apiFallback'
+import { getErrorMessage } from '../utils/errorHandler'
 import {
   saveAuthToken,
   saveUserData,
   clearAuthData,
   saveRefreshToken,
   getUserData,
+  getRefreshToken,
 } from '../utils/sessionStorage'
 
 const CURRENT_USER_CACHE_KEY = 'auth:current_user'
@@ -24,8 +26,6 @@ const USERS_CACHE_KEY = 'auth:users'
 export const login = async (credentials) => {
   try {
     const response = await post('/utilisateur/login/', credentials)
-    console.log('Réponse du backend:', response.data)
-    
     const loginData = response.data || response
 
     // Vérifier si le PIN est requis
@@ -43,28 +43,15 @@ export const login = async (credentials) => {
     const authToken = access || token
     const refreshToken = refresh
     
-    console.log('Token extrait:', authToken)
-    console.log('User:', user)
-    
     if (!authToken) {
-      console.error('ERREUR: Aucun token reçu du backend!')
       throw new Error('Aucun token reçu du backend')
     }
     
     saveAuthToken(authToken)
-    console.log('Token sauvegardé dans localStorage')
-    
-    // Vérifier immédiatement que le token est bien sauvegardé
-    const savedToken = localStorage.getItem('auth_token')
-    console.log('Vérification token sauvegardé:', savedToken ? 'OK' : 'ÉCHEC')
-    
     saveUserData(user)
-    console.log('User data sauvegardé')
     
-    // Sauvegarder le refresh token s'il existe
     if (refreshToken) {
       saveRefreshToken(refreshToken)
-      console.log('Refresh token sauvegardé')
     }
 
     // Marquer que l'utilisateur vient de se connecter (pour afficher la bannière de bienvenue)
@@ -211,13 +198,13 @@ export const register = async (userData) => {
 export const logout = async () => {
   try {
     // Récupérer le refresh token
-    const refreshToken = localStorage.getItem('refresh_token')
+    const refreshToken = getRefreshToken()
     
     // Appeler l'API de déconnexion pour marquer l'utilisateur comme inactif
     // Ignorer silencieusement les erreurs 401 (utilisateur déjà déconnecté) et 404 (endpoint non disponible)
     try {
       if (refreshToken) {
-        await post('/utilisateur/logout/', { refresh_token: refreshToken })
+        await post('/utilisateur/logout/', { refresh: refreshToken, refresh_token: refreshToken })
       }
     } catch (apiError) {
       // Ne pas logger les erreurs 401 (non autorisé) ou 404 (endpoint non trouvé) lors de la déconnexion
@@ -355,6 +342,7 @@ export const updateProfile = async (userData) => {
  * @returns {Promise<Array>} Liste des utilisateurs
  */
 export const getUsers = async (params = {}) => {
+  const hasFilters = Boolean(params.statut || params.search || params.role || params.q)
   try {
     const response = await get('/utilisateur/utilisateurs/', { params })
     let normalized = response.data
@@ -378,17 +366,21 @@ export const getUsers = async (params = {}) => {
     
     // Fallback
     const finalResult = Array.isArray(normalized) ? normalized : []
-    writeCache(USERS_CACHE_KEY, finalResult)
+    if (!hasFilters) {
+      writeCache(USERS_CACHE_KEY, finalResult)
+    }
     return finalResult
   } catch (error) {
     if (isNetworkError(error)) {
-      const cachedUsers = readCache(USERS_CACHE_KEY, [])
-      if (cachedUsers.length) {
-        // Message silencieux - seulement en mode développement
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('getUsers: serveur indisponible, utilisation du cache local.')
+      if (!hasFilters) {
+        const cachedUsers = readCache(USERS_CACHE_KEY, [])
+        if (cachedUsers.length) {
+          // Message silencieux - seulement en mode développement
+          if (import.meta.env.DEV) {
+            console.debug('getUsers: serveur indisponible, utilisation du cache local.')
+          }
+          return cachedUsers
         }
-        return cachedUsers
       }
       return []
     }
@@ -412,7 +404,7 @@ export const getUserById = async (userId) => {
       const cachedUser = getUserData()
       if (cachedUser) {
         // Message silencieux - seulement en mode développement avec debug activé
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.debug('getUserById: serveur indisponible, utilisation des données utilisateur en cache.')
         }
         return cachedUser
@@ -987,9 +979,6 @@ export default {
   updateRoleById,
   deleteRoleById,
   fetchPermissions,
-  // Anciennes fonctions (compatibilité)
-  updateRole,
-  deleteRole,
   getPermissions,
 }
 

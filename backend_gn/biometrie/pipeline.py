@@ -11,13 +11,12 @@ Ce module orchestre l'ensemble du pipeline biométrique :
 """
 
 import logging
-from typing import Dict, Any, Optional, Union, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 from PIL import Image
 import cv2
 import json
 
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.db import transaction
 
 from .detectors.scrfd_detector import detect_face
@@ -164,7 +163,6 @@ def enrollement_pipeline(image: UploadedImage) -> Dict[str, Any]:
         if len(landmarks106) != 106:
             warnings.append(f"Nombre de landmarks inattendu: {len(landmarks106)} au lieu de 106")
         
-        aligned_face = None
         if landmarks106 and len(landmarks106) >= 5:
             try:
                 # Charger l'image complète pour l'alignement
@@ -175,7 +173,7 @@ def enrollement_pipeline(image: UploadedImage) -> Dict[str, Any]:
                     full_image = _load_image(image)
                 
                 if full_image is not None:
-                    aligned_face = _align_face(full_image, landmarks106)
+                    _align_face(full_image, landmarks106)
             except Exception as exc:
                 logger.warning("Erreur lors de l'alignement: %s", exc)
                 warnings.append("Alignement du visage échoué")

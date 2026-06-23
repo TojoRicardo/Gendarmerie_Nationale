@@ -3,17 +3,23 @@ Signals Django pour enregistrer automatiquement les actions dans le Journal d'Au
 """
 
 import logging
+import json
 from django.dispatch import receiver
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from django.db.models.signals import post_save, post_delete, pre_save, pre_delete
 from django.contrib.contenttypes.models import ContentType
-from django.conf import settings
 from django.utils import timezone
-from .models import AuditLog, JournalAudit
+from .models import AuditLog
 from .middleware import get_current_user, get_current_request, get_role
 
 logger = logging.getLogger(__name__)
 
+# Modèles gérés par des signals dédiés (évite les doublons avec post_save générique)
+MODELS_WITH_DEDICATED_AUDIT = set()
+
+
+def register_dedicated_audit_model(model_class):
+    MODELS_WITH_DEDICATED_AUDIT.add(model_class)
 
 
 def _serialize_field_value(field, value):
@@ -75,8 +81,7 @@ def pre_save_audit(sender, instance, **kwargs):
 @receiver(post_save)
 def post_save_audit(sender, instance, created, **kwargs):
     """Enregistre la création ou modification d'un objet."""
-    # Ignorer les modifications sur AuditLog lui-même pour éviter les boucles
-    if sender == AuditLog:
+    if sender == AuditLog or sender in MODELS_WITH_DEDICATED_AUDIT:
         return
     
     user = get_current_user()
@@ -115,7 +120,6 @@ def post_save_audit(sender, instance, created, **kwargs):
     # Pour CREATE/UPDATE/DELETE, vérifier s'il existe déjà un log similaire très récent
     if middleware_logged and action in ['CREATE', 'UPDATE', 'DELETE']:
         # Vérifier s'il existe un log très récent avec les mêmes caractéristiques
-        from django.utils import timezone
         from datetime import timedelta
         
         recent_logs = AuditLog.objects.filter(
@@ -191,7 +195,6 @@ def post_save_audit(sender, instance, created, **kwargs):
                 try:
                     if hasattr(request, 'body') and request.body:
                         try:
-                            import json
                             body_data = json.loads(request.body.decode('utf-8'))
                             # Filtrer les données sensibles
                             if isinstance(body_data, dict):
@@ -230,16 +233,37 @@ def post_save_audit(sender, instance, created, **kwargs):
         after_enriched = after.copy() if after else {}
         if request_details:
             after_enriched['_request_details'] = request_details
+
+        from .audit_service import (
+            resolve_module,
+            format_audit_line,
+            get_user_display_name,
+            ACTION_LABELS,
+            _build_audit_payload,
+        )
+        resource_type_name = sender.__name__
+        module_name = resolve_module(None, endpoint, resource_type_name)
+        action_label = ACTION_LABELS.get(action, action)
+        details_parts = [f"{resource_type_name} #{instance.pk}"]
+        if changed_fields:
+            details_parts.append(f"Champs modifiés: {', '.join(changed_fields)}")
+        if additional_info:
+            details_parts.append(additional_info)
+        details = ' | '.join(details_parts)
+        user_name = get_user_display_name(user)
+        standard_line = format_audit_line(timezone.now(), user_name, action_label, module_name, details)
+        after_enriched = _build_audit_payload(module_name, details, standard_line, after_enriched)
         
-        audit_log = AuditLog.objects.create(
+        AuditLog.objects.create(
             user=user,
             user_role=get_role(user),
             action=action,
             content_type=ContentType.objects.get_for_model(instance),
             object_id=instance.pk,
+            resource_type=resource_type_name,
+            resource_id=str(instance.pk),
             before=before,
-            after=after_enriched,  # Données enrichies avec détails de la requête
-            # Compatibilité avec ancien format
+            after=after_enriched,
             changes_before=before,
             changes_after=after_enriched,
             data_before=before,
@@ -248,7 +272,7 @@ def post_save_audit(sender, instance, created, **kwargs):
             method=method,
             ip_address=ip_address,
             user_agent=user_agent,
-            additional_info=additional_info
+            additional_info=standard_line,
         )
         
         # Ajouter l'action au journal narratif si une session existe
@@ -340,7 +364,6 @@ def post_delete_audit(sender, instance, **kwargs):
     # Vérifier s'il existe déjà un log très récent pour éviter les doublons
     request = get_current_request()
     if request:
-        from django.utils import timezone
         from datetime import timedelta
         
         endpoint = request.path if request else None
@@ -385,7 +408,6 @@ def post_delete_audit(sender, instance, **kwargs):
                 try:
                     if hasattr(request, 'body') and request.body:
                         try:
-                            import json
                             body_data = json.loads(request.body.decode('utf-8'))
                             if isinstance(body_data, dict):
                                 filtered_body = {}
@@ -413,7 +435,7 @@ def post_delete_audit(sender, instance, **kwargs):
         if request_details:
             before_enriched['_request_details'] = request_details
         
-        audit_log = AuditLog.objects.create(
+        AuditLog.objects.create(
             user=user,
             user_role=get_role(user),
             action='DELETE',
@@ -553,10 +575,9 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
         
         # Extraire le username/email depuis les credentials
         username = None
-        email = None
         if isinstance(credentials, dict):
             username = credentials.get('username', '') or credentials.get('email', '')
-            email = credentials.get('email', '')
+            credentials.get('email', '')
         else:
             username = str(credentials)
         
@@ -590,12 +611,14 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
         
         log_action(
             request=request,
-            user=None,  # Pas d'utilisateur pour une connexion échouée
+            user=None,
             action='FAILED_LOGIN',
             resource_type='Système',
             resource_id=username,
             endpoint=request.path if request else '/api/auth/login/',
-            method='POST'
+            method='POST',
+            allow_anonymous=True,
+            message_erreur=reason,
         )
     except Exception as e:
         logger.error(f"Erreur lors de l'enregistrement de la tentative de connexion échouée: {e}")
@@ -606,40 +629,32 @@ def enregistrer_action_audit(
     action=None,
     ressource=None,
     ressource_id=None,
+    resource_type=None,
+    resource_id=None,
     ip_address=None,
     user_agent=None,
     details=None,
+    additional_info=None,
     reussi=True,
     message_erreur=None,
     old_values=None,
-    new_values=None
+    new_values=None,
 ):
     """
     Fonction utilitaire pour enregistrer une action dans le Journal d'Audit.
-    (Alias pour compatibilité avec l'ancien code - utilise log_action en interne)
-    
-    Si user, ip_address ou user_agent ne sont pas fournis, ils seront récupérés
-    automatiquement depuis le thread local (via le middleware).
-    
-    Usage:
-        from audit.signals import enregistrer_action_audit
-        
-        enregistrer_action_audit(
-            action='CREATE',
-            ressource='Fiche Criminelle',
-            ressource_id='123',
-            details={'nom': 'John Doe'},
-            old_values={'nom': 'Ancien Nom'},
-            new_values={'nom': 'Nouveau Nom'}
-        )
+    Accepte les alias ressource/resource_type et additional_info/details.
     """
     try:
-        from .utils import log_action
-        
-        # Récupérer la requête pour IP, User-Agent, endpoint, méthode HTTP si non fournis
-        request = get_current_request()
-        
-        # Mapper les actions vers le nouveau format
+        resource_type = resource_type or ressource or 'Ressource'
+        resource_id = resource_id if resource_id is not None else ressource_id
+
+        detail_text = additional_info
+        if not detail_text and details:
+            if isinstance(details, dict):
+                detail_text = ' | '.join(f"{k}: {v}" for k, v in details.items() if v not in (None, ''))
+            else:
+                detail_text = str(details)
+
         action_map = {
             'creation': 'CREATE',
             'modification': 'UPDATE',
@@ -648,21 +663,31 @@ def enregistrer_action_audit(
             'connexion': 'LOGIN',
             'deconnexion': 'LOGOUT',
         }
-        mapped_action = action_map.get(action, action)
-        
-        # Utiliser log_action avec les nouveaux paramètres
-        log_action(
-            request=request,
+        mapped_action = action_map.get(action or '', action or 'VIEW')
+
+        if mapped_action in ('UPDATE', 'CREATE') and resource_type and str(resource_type).lower() == 'role':
+            if detail_text and ('permission' in detail_text.lower() or 'permissions' in detail_text.lower()):
+                mapped_action = 'PERMISSION_CHANGE'
+            else:
+                mapped_action = 'ROLE_CHANGE'
+
+        from .audit_service import record_audit
+
+        after_data = new_values if isinstance(new_values, dict) else {}
+        if isinstance(details, dict):
+            after_data = {**details, **after_data}
+
+        record_audit(
             user=user,
             action=mapped_action,
-            resource_type=ressource or 'Ressource',
-            resource_id=ressource_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            details=detail_text,
             data_before=old_values,
-            data_after=new_values,
+            data_after=after_data or None,
             reussi=reussi,
-            message_erreur=message_erreur
+            message_erreur=message_erreur,
+            skip_dedupe=True,
         )
     except Exception as e:
         logger.error(f"Erreur lors de l'enregistrement de l'action d'audit: {e}", exc_info=True)
@@ -672,6 +697,7 @@ def enregistrer_action_audit(
 # Signal pour les Fiches Criminelles
 try:
     from criminel.models import CriminalFicheCriminelle
+    register_dedicated_audit_model(CriminalFicheCriminelle)
     
     # Stocker les valeurs avant modification
     _fiche_pre_save_data = {}
@@ -745,6 +771,7 @@ except ImportError:
 # Signals pour les Photos Biométriques
 try:
     from biometrie.models import BiometriePhoto
+    register_dedicated_audit_model(BiometriePhoto)
     
     @receiver(post_save, sender=BiometriePhoto)
     def log_photo_biometrique_action(sender, instance, created, **kwargs):
@@ -777,24 +804,34 @@ except ImportError:
 # Signals pour les Empreintes Digitales
 try:
     from biometrie.models import BiometrieEmpreinte
+    register_dedicated_audit_model(BiometrieEmpreinte)
     
     @receiver(post_save, sender=BiometrieEmpreinte)
     def log_empreinte_action(sender, instance, created, **kwargs):
         """Enregistre la création ou modification d'une empreinte digitale."""
         try:
             action = 'creation' if created else 'modification'
+            criminel = instance.criminel
+            suspect = ''
+            if criminel:
+                suspect = f"{getattr(criminel, 'nom', '')} {getattr(criminel, 'prenom', '')}".strip()
             details = {
                 'doigt': instance.doigt or '',
                 'type_empreinte': instance.type_empreinte or '',
-                'criminel_id': instance.criminel.id if instance.criminel else None,
+                'criminel_id': criminel.id if criminel else None,
+                'suspect': suspect or 'Non renseigné',
                 'taille_fichier': instance.taille_fichier or 0,
             }
-            
+            detail_text = (
+                f"Empreinte #{instance.id} | Doigt: {details['doigt']} | "
+                f"Dossier #{details['criminel_id']} | Suspect: {details['suspect']}"
+            )
             enregistrer_action_audit(
                 action=action,
-                ressource='Empreinte Digitale',
+                ressource='Empreinte digitale',
                 ressource_id=instance.id,
-                details=details
+                additional_info=detail_text,
+                details=details,
             )
         except Exception as e:
             logger.error(f"Erreur lors de l'enregistrement de l'audit pour empreinte: {e}")
@@ -810,6 +847,7 @@ except ImportError:
 try:
     from django.contrib.auth import get_user_model
     User = get_user_model()
+    register_dedicated_audit_model(User)
     
     @receiver(post_save, sender=User)
     def log_utilisateur_action(sender, instance, created, **kwargs):
@@ -846,6 +884,7 @@ except Exception as e:
 # Signals pour les Preuves
 try:
     from enquete.models import Preuve
+    register_dedicated_audit_model(Preuve)
     
     @receiver(post_save, sender=Preuve)
     def log_preuve_action(sender, instance, created, **kwargs):
@@ -879,6 +918,7 @@ except ImportError:
 # Signals pour les Rapports d'Enquête
 try:
     from enquete.models import RapportEnquete
+    register_dedicated_audit_model(RapportEnquete)
     
     @receiver(post_save, sender=RapportEnquete)
     def log_rapport_enquete_action(sender, instance, created, **kwargs):
@@ -913,6 +953,7 @@ except ImportError:
 # Signals pour les Observations
 try:
     from enquete.models import Observation
+    register_dedicated_audit_model(Observation)
     
     @receiver(post_save, sender=Observation)
     def log_observation_action(sender, instance, created, **kwargs):
@@ -945,6 +986,7 @@ except ImportError:
 # Signals pour les Avancements
 try:
     from enquete.models import Avancement
+    register_dedicated_audit_model(Avancement)
     
     # Stocker les valeurs avant modification
     _avancement_pre_save_data = {}
@@ -1013,6 +1055,7 @@ except ImportError:
 # Signals pour les Assignations d'Enquête
 try:
     from criminel.models import InvestigationAssignment
+    register_dedicated_audit_model(InvestigationAssignment)
     
     # Stocker les valeurs avant modification
     _assignment_pre_save_data = {}

@@ -123,6 +123,33 @@ urlpatterns = [
         views.EnqueteCriminelDetailView.as_view(),
         name="enquetes-criminels-detail",
     ),
+    # Enquêtes d'un criminel (lookup inverse)
+    path(
+        "par-criminel/<int:criminel_id>/",
+        views.CriminelEnquetesListView.as_view(),
+        name="enquetes-par-criminel",
+    ),
+    # Documents d'enquete (upload Excel, Word, PDF, etc.)
+    path(
+        "documents/",
+        views.DocumentEnqueteListCreateView.as_view(),
+        name="documents-list-create",
+    ),
+    path(
+        "documents/stats/",
+        views.DocumentEnqueteStatsView.as_view(),
+        name="documents-stats",
+    ),
+    path(
+        "documents/item/<uuid:pk>/",
+        views.DocumentEnqueteDetailView.as_view(),
+        name="documents-detail",
+    ),
+    path(
+        "documents/item/<uuid:pk>/download/",
+        views.DocumentEnqueteDownloadView.as_view(),
+        name="documents-download",
+    ),
     # Module de versement des dossiers d'enquête
     path(
         "dossier/versement/",

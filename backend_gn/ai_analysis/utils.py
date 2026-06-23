@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 import logging
@@ -386,7 +386,7 @@ def generer_graphique(type_graph: str, data: dict, filename_prefix: str = 'graph
         elif type_graph == 'pie':
             labels = data.get('labels', [])
             values = data.get('values', [])
-            pourcentages = data.get('pourcentages', None)
+            data.get('pourcentages', None)
             
             if not labels or not values:
                 return ''

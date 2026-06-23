@@ -1,23 +1,20 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  BarChart3, PieChart, TrendingUp, Activity, Download, Filter, 
-  RefreshCw, Eye, EyeOff, Settings, Maximize2, Minimize2,
+  BarChart3, TrendingUp, Activity, 
+  RefreshCw, Maximize2, Minimize2,
   AlertTriangle, Clock, MapPin, UserSearch, CheckCircle, Fingerprint
 } from 'lucide-react'
 import {
   PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart as RechartsBar, Bar, XAxis, YAxis, CartesianGrid,
-  LineChart as RechartsLine, Line, AreaChart, Area, ComposedChart,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  LineChart as RechartsLine, Line, Area, ComposedChart,
   LabelList
 } from 'recharts'
 import RepartitionCamembert from './RepartitionCamembert'
 import { 
   getGeographicStats, 
   getMonthlyStats, 
-  getEvolutionStats, 
-  getHourlyStats,
-  getHourlyActivityStats
+  getEvolutionStats
 } from '../../src/services/statsService'
 import reportService from '../../src/services/reportService'
 import api from '../../src/services/api'
@@ -69,13 +66,13 @@ const shouldLogError = (error) => {
 const useStatsData = (fetchFn, interval = 60000, dependencies = []) => {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
-  const fetchFnRef = React.useRef(fetchFn)
-  const intervalRef = React.useRef(null)
-  const isMountedRef = React.useRef(true)
+  const fetchFnRef = useRef(fetchFn)
+  const intervalRef = useRef(null)
+  const isMountedRef = useRef(true)
 
   // Mettre à jour la référence de la fonction sans recréer le callback
   // Cela évite les boucles infinies tout en gardant la fonction à jour
-  React.useEffect(() => {
+  useEffect(() => {
     fetchFnRef.current = fetchFn
   }, [fetchFn])
 
@@ -140,8 +137,8 @@ const useStatsData = (fetchFn, interval = 60000, dependencies = []) => {
 // Hook pour l'analyse IA
 const useAIAnalysis = (data, interval = 180000) => {
   const [analysis, setAnalysis] = useState(null)
-  const intervalRef = React.useRef(null)
-  const isMountedRef = React.useRef(true)
+  const intervalRef = useRef(null)
+  const isMountedRef = useRef(true)
   const dataLength = data?.length || 0
 
   useEffect(() => {
@@ -248,7 +245,7 @@ const UpdateIndicator = () => (
 )
 
 // Composant pour l'état vide
-const EmptyState = ({ icon: Icon, loading, title, description }) => (
+const EmptyState = ({ icon: Icon, loading, description }) => (
   <div className="flex items-center justify-center h-[400px] text-gray-500">
     <div className="text-center">
       {Icon && <Icon size={48} className="mx-auto mb-2 opacity-30" />}
@@ -267,8 +264,8 @@ const EmptyState = ({ icon: Icon, loading, title, description }) => (
   </div>
 )
 
-// Custom Tooltip pour graphiques en barres mensuelles
-const BarChartTooltip = ({ active, payload, label }) => {
+// Custom Tooltip pour graphique linéaire mensuel
+const MonthlyChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   
   // Récupérer les valeurs depuis le payload avec toutes les catégories
@@ -322,25 +319,37 @@ const BarChartTooltip = ({ active, payload, label }) => {
   )
 }
 
-// Custom Tooltip générique
-const CustomTooltip = ({ active, payload, label }) => {
+const GeographicChartTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
+  if (!item) return null
+  const cas = payload[0]?.value ?? 0
+  const color = getProvinceColor(item.ville)
   return (
-    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-xl">
-      <p className="font-semibold text-gray-900 mb-2">{label || 'Province'}</p>
-      {payload.map((entry, i) => (
-        <p key={i} style={{ color: entry.color }} className="text-sm font-medium">
-          <span className="text-gray-600">Cas: </span>
-          <span className="font-bold" style={{ color: entry.color }}>{entry.value}</span>
-        </p>
-      ))}
+    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-xl min-w-[220px]">
+      <p className="font-bold text-gray-900 mb-3 text-base border-b border-gray-200 pb-2 flex items-center gap-2">
+        <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+        {item.ville}
+      </p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm text-gray-600 font-medium">Fiches criminelles</span>
+          <span className="font-bold text-gray-900 text-base">{formatNumber(cas)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm text-gray-600 font-medium">Part du total</span>
+          <span className="font-bold text-base" style={{ color }}>
+            {formatNumber(item.pourcentage ?? 0, { maximumFractionDigits: 1 })}%
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
 
 const GraphiquesAvances = ({ 
-  data = {}, 
-  theme = 'light',
+  data: _data = {}, 
+  theme: _theme = 'light',
   showControls = true,
   enableAnimations = true,
   defaultView = 'overview'
@@ -348,7 +357,7 @@ const GraphiquesAvances = ({
   const [viewMode, setViewMode] = useState(defaultView)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState('30j')
-  const [animationEnabled, setAnimationEnabled] = useState(enableAnimations)
+  const [animationEnabled] = useState(enableAnimations)
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   
@@ -362,7 +371,7 @@ const GraphiquesAvances = ({
       if (newYear !== currentYear) {
         setCurrentYear(newYear)
         setRefreshKey(prev => prev + 1) // Forcer le rechargement des données
-        console.log(`🔄 Nouvelle année détectée: ${newYear}. Mise à jour automatique des dates.`)
+        console.log(`Nouvelle année détectée: ${newYear}. Mise à jour automatique des dates.`)
       }
     }
     
@@ -452,56 +461,12 @@ const GraphiquesAvances = ({
     [months, refreshKey]
   )
 
-  // Fonction pour récupérer les données horaires d'activité
-  const fetchHourlyActivity = useCallback(async () => {
-    return await getHourlyActivityStats()
-  }, [])
-
-  // Données horaires d'activité réelle (audit) - intervalle de 5 secondes pour temps réel
-  const [hourlyData, isLoadingHourly] = useStatsData(
-    fetchHourlyActivity,
-    5000, // 5 secondes pour un vrai temps réel
-    [refreshKey]
-  )
-
-  // S'assurer que toutes les heures sont présentes (00h-23h) - calculé au niveau du composant
-  const completeHourlyData = useMemo(() => {
-    if (!hourlyData || hourlyData.length === 0) {
-      // Générer un tableau complet de 24 heures avec count = 0
-      return Array.from({ length: 24 }, (_, i) => ({
-        hour: `${String(i).padStart(2, '0')}h`,
-        heure: `${String(i).padStart(2, '0')}h`,
-        count: 0,
-        activite: 0
-      }))
-    }
-    
-    // Créer un Map pour faciliter la recherche
-    const dataMap = new Map()
-    hourlyData.forEach(item => {
-      const hour = item.heure || item.hour || ''
-      const count = item.count || item.activite || 0
-      dataMap.set(hour, count)
-    })
-    
-    // Générer un tableau complet de 24 heures
-    return Array.from({ length: 24 }, (_, i) => {
-      const hour = `${String(i).padStart(2, '0')}h`
-      const count = dataMap.get(hour) || 0
-      return {
-        hour,
-        heure: hour,
-        count,
-        activite: count
-      }
-    })
-  }, [hourlyData])
+  // Données horaires d'activité retirées (vue temps réel non exposée dans l'UI)
 
   // Analyses IA
   const aiAnalysisOverview = useAIAnalysis(monthlyData)
   const aiAnalysisEvolution = useAIAnalysis(evolutionData)
   const aiAnalysisGeographic = useAIAnalysis(geographicData, 60000)
-  const aiAnalysisHourly = useAIAnalysis(hourlyData)
 
   const refreshData = () => setRefreshKey(prev => prev + 1)
 
@@ -576,20 +541,13 @@ const GraphiquesAvances = ({
       }
     }).filter(item => item.mois) // Filtrer les items sans mois
 
-    // Calculer les totaux pour affichage
-    const totalResolus = chartData.reduce((sum, item) => sum + (item.resolus || 0), 0)
-    const totalEnAttente = chartData.reduce((sum, item) => sum + (item.enAttente || 0), 0)
-    const totalEnCours = chartData.reduce((sum, item) => sum + (item.enCours || 0), 0)
-    const totalEcheanceDepassee = chartData.reduce((sum, item) => sum + (item.echeanceDepassee || 0), 0)
-    const totalCas = chartData.reduce((sum, item) => sum + (item.total || 0), 0)
-
     return (
     <div className="space-y-6 w-full">
       <div className="bg-white rounded-2xl shadow-xl p-6 w-full">
         <div className="flex items-center justify-between mb-4">
           <div className="flex-1">
           <h3 className="text-lg font-bold text-gray-900 flex items-center">
-            <BarChart3 className="mr-2 text-gendarme-blue" size={20} />
+            <TrendingUp className="mr-2 text-gendarme-blue" size={20} />
             Évolution mensuelle
           </h3>
         </div>
@@ -598,34 +556,10 @@ const GraphiquesAvances = ({
         {chartData.length > 0 ? (
             <div className="w-full">
           <ResponsiveContainer width="100%" height={450}>
-                <RechartsBar 
+                <RechartsLine 
                   data={chartData} 
                   margin={{ top: 30, right: 30, left: 20, bottom: 60 }}
-                  barCategoryGap="15%"
-                  barGap={4}
                 >
-                  <defs>
-                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#d9d9d9" stopOpacity={0.9}/>
-                      <stop offset="100%" stopColor="#d9d9d9" stopOpacity={0.7}/>
-                    </linearGradient>
-                    <linearGradient id="colorResolus" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#28a745" stopOpacity={0.95}/>
-                      <stop offset="100%" stopColor="#28a745" stopOpacity={0.85}/>
-                    </linearGradient>
-                    <linearGradient id="colorEnAttente" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.95}/>
-                      <stop offset="100%" stopColor="#2563eb" stopOpacity={0.85}/>
-                    </linearGradient>
-                    <linearGradient id="colorEnCours" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f28c2e" stopOpacity={0.95}/>
-                      <stop offset="100%" stopColor="#f28c2e" stopOpacity={0.85}/>
-                    </linearGradient>
-                    <linearGradient id="colorEcheanceDepassee" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#dc3545" stopOpacity={0.95}/>
-                      <stop offset="100%" stopColor="#c82333" stopOpacity={0.85}/>
-                    </linearGradient>
-                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} vertical={false} />
                   <XAxis 
                     dataKey="mois" 
@@ -647,120 +581,78 @@ const GraphiquesAvances = ({
                     allowDecimals={false}
                   />
                   <Tooltip 
-                    content={<BarChartTooltip />} 
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }} 
-                    animationDuration={200}
+                    content={<MonthlyChartTooltip />} 
+                    cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '5 5' }} 
                   />
                   <Legend 
                     wrapperStyle={{ paddingTop: '10px', paddingBottom: '10px' }}
-                    iconType="rect"
+                    iconType="line"
                     iconSize={14}
                     formatter={(value) => <span style={{ color: '#374151', fontSize: '13px', fontWeight: 500, marginLeft: '8px' }}>{value}</span>}
                     align="center"
                     verticalAlign="bottom"
                   />
-                  {/* Barre Total */}
-                  <Bar 
-                    dataKey="total" 
-                    fill="url(#colorTotal)" 
-                    name="Total" 
-                    radius={[4, 4, 0, 0]}
+                  <Line
+                    type="linear"
+                    dataKey="total"
+                    stroke="#9ca3af"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#9ca3af', strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    name="Total"
                     animationDuration={animationEnabled ? 1000 : 0}
-                    animationBegin={0}
-                  >
-                    <LabelList 
-                      dataKey="total" 
-                      position="center" 
-                      fill="#374151" 
-                      fontSize={12}
-                      fontWeight="700"
-                      formatter={(value) => value !== null && value !== undefined ? value : '0'}
-                      style={{ textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}
-                    />
-                  </Bar>
-                  {/* Barre Résolus */}
-                  <Bar 
-                    dataKey="resolus" 
-                    fill="url(#colorResolus)" 
-                    name="Résolus" 
-                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="resolus"
+                    stroke="#28a745"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#28a745', strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    name="Résolus"
                     animationDuration={animationEnabled ? 1000 : 0}
                     animationBegin={150}
-                  >
-                    <LabelList 
-                      dataKey="resolus" 
-                      position="center" 
-                      fill="#ffffff" 
-                      fontSize={12}
-                      fontWeight="700"
-                      formatter={(value) => value !== null && value !== undefined ? value : '0'}
-                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
-                    />
-                  </Bar>
-                  {/* Barre En attente */}
-                  <Bar 
-                    dataKey="enAttente" 
-                    fill="url(#colorEnAttente)" 
-                    name="En attente" 
-                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="enAttente"
+                    stroke="#3b82f6"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    name="En attente"
                     animationDuration={animationEnabled ? 1000 : 0}
                     animationBegin={300}
-                  >
-                    <LabelList 
-                      dataKey="enAttente" 
-                      position="center" 
-                      fill="#ffffff" 
-                      fontSize={12}
-                      fontWeight="700"
-                      formatter={(value) => value !== null && value !== undefined ? value : '0'}
-                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
-                    />
-                  </Bar>
-                  {/* Barre En cours */}
-                  <Bar 
-                    dataKey="enCours" 
-                    fill="url(#colorEnCours)" 
-                    name="En cours" 
-                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="enCours"
+                    stroke="#f28c2e"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#f28c2e', strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    name="En cours"
                     animationDuration={animationEnabled ? 1000 : 0}
                     animationBegin={450}
-                  >
-                    <LabelList 
-                      dataKey="enCours" 
-                      position="center" 
-                      fill="#ffffff" 
-                      fontSize={12}
-                      fontWeight="700"
-                      formatter={(value) => value !== null && value !== undefined ? value : '0'}
-                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
-                    />
-                  </Bar>
-                  {/* Barre Échéance dépassée */}
-                  <Bar 
-                    dataKey="echeanceDepassee" 
-                    fill="url(#colorEcheanceDepassee)" 
-                    name="Échéance dépassée" 
-                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="echeanceDepassee"
+                    stroke="#dc3545"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#dc3545', strokeWidth: 0 }}
+                    activeDot={{ r: 6 }}
+                    name="Échéance dépassée"
                     animationDuration={animationEnabled ? 1000 : 0}
                     animationBegin={600}
-                  >
-                    <LabelList 
-                      dataKey="echeanceDepassee" 
-                      position="center" 
-                      fill="#ffffff" 
-                      fontSize={12}
-                      fontWeight="700"
-                      formatter={(value) => value !== null && value !== undefined ? value : '0'}
-                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
-                    />
-                  </Bar>
-            </RechartsBar>
+                  />
+            </RechartsLine>
           </ResponsiveContainer>
             </div>
         ) : (
-            <EmptyState icon={BarChart3} loading={isLoadingMonthly} description="Récupération des statistiques mensuelles" />
+            <EmptyState icon={TrendingUp} loading={isLoadingMonthly} description="Récupération des statistiques mensuelles" />
         )}
-          <AIAnalysisCard analysis={aiAnalysisOverview} title="Analyse IA - Évolution Mensuelle" icon={BarChart3} />
+          <AIAnalysisCard analysis={aiAnalysisOverview} title="Analyse IA - Évolution Mensuelle" icon={TrendingUp} />
       </div>
     </div>
   )
@@ -800,12 +692,10 @@ const GraphiquesAvances = ({
       const month = months[date.getMonth()]
       const year = date.getFullYear()
       return `${month} ${year}`
-    } catch (error) {
+    } catch (_error) {
       return dateString // Retourner tel quel en cas d'erreur
     }
   }
-
-  // Vue évolution
   const renderEvolution = () => {
     // Normaliser et formater les données depuis l'API
     // Les données proviennent de l'endpoint /api/criminel/fiches-criminelles/evolution-stats/
@@ -972,26 +862,20 @@ const GraphiquesAvances = ({
                       </div>
                     </div>
                     
-                    {/* Graphique en aires adapté à l'évolution du nombre de cas */}
+                    {/* Graphique linéaire adapté à l'évolution du nombre de cas */}
                     <div className="flex items-center justify-center py-8">
                       <ResponsiveContainer width="100%" height={450}>
-                        <AreaChart 
+                        <RechartsLine
                           data={[{
                             periode: displayData[0].periode || 'N/A',
                             valeur: displayData[0].valeur || 0,
                             date: displayData[0].date || displayData[0].periode,
-                            // Données réelles depuis la base de données
                             total: displayData[0].valeur || 0,
                             cas: displayData[0].valeur || 0
                           }]}
                           margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                         >
                           <defs>
-                            <linearGradient id="areaGradientEvolutionSingle" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#2563EB" stopOpacity={0.8} />
-                              <stop offset="50%" stopColor="#3B82F6" stopOpacity={0.4} />
-                              <stop offset="100%" stopColor="#1E40AF" stopOpacity={0.1} />
-                            </linearGradient>
                             <linearGradient id="lineGradientEvolutionSingle" x1="0" y1="0" x2="1" y2="0">
                               <stop offset="0%" stopColor="#1E40AF" />
                               <stop offset="100%" stopColor="#2563EB" />
@@ -1046,17 +930,16 @@ const GraphiquesAvances = ({
                             }}
                             cursor={{ stroke: '#2563EB', strokeWidth: 2, strokeDasharray: '5 5', opacity: 0.5 }}
                           />
-                          <Area
-                            type="monotone"
+                          <Line
+                            type="linear"
                             dataKey="valeur"
                             stroke="url(#lineGradientEvolutionSingle)"
                             strokeWidth={3}
-                            fill="url(#areaGradientEvolutionSingle)"
                             dot={{ r: 8, fill: '#2563EB', stroke: '#1E40AF', strokeWidth: 2 }}
                             activeDot={{ r: 10, fill: '#2563EB', stroke: '#1E40AF', strokeWidth: 3 }}
                             name="Nombre de cas"
                           />
-                        </AreaChart>
+                        </RechartsLine>
                       </ResponsiveContainer>
                     </div>
                   </div>
@@ -1108,7 +991,7 @@ const GraphiquesAvances = ({
                   cursor={{ stroke: '#1E40AF', strokeWidth: 1, strokeDasharray: '5 5', opacity: 0.3 }}
                 />
                 <Line 
-                  type="monotone" 
+                  type="linear" 
                   dataKey="valeur" 
                   stroke="url(#lineGradientEvolution)" 
                   strokeWidth={3}
@@ -1152,87 +1035,204 @@ const GraphiquesAvances = ({
   // Vue géographie
   const renderGeographie = () => {
     const totalCas = geographicData.reduce((sum, r) => sum + r.cas, 0)
-    
+    const chartData = geographicData
+      .map((item) => ({
+        ...item,
+        pourcentage: totalCas > 0 ? (item.cas / totalCas) * 100 : 0,
+      }))
+      .sort((a, b) => b.cas - a.cas)
+
+    const provincesActives = chartData.filter((item) => item.cas > 0).length
+    const provinceLeader = chartData[0] || null
+    const hasData = totalCas > 0
+
     return (
       <div className="space-y-6 w-full">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 w-full">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-gray-900 flex items-center">
-              <BarChart3 className="mr-2 text-gendarme-red" size={24} />
-              Répartition géographique par province
-            </h3>
-            {geographicData.length > 0 && <UpdateIndicator />}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-gendarme-blue to-gendarme-blue-dark rounded-xl shadow-md">
+                <MapPin className="text-white" size={22} />
               </div>
-          {geographicData.length > 0 ? (
-                <div className="bg-gradient-to-b from-white to-blue-50 rounded-2xl border border-blue-100 p-6 shadow-inner w-full max-w-full">
-                  <h4 className="text-lg font-semibold text-gray-700 mb-6 uppercase tracking-wide text-center">Répartition % (Camembert)</h4>
-                  <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
-                    <div className="flex-1 flex justify-center">
-                      <ResponsiveContainer width="100%" height={400}>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  Répartition géographique par province
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Fiches criminelles actives — 6 provinces de Madagascar
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {hasData && (
+                <div className="text-right px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Total cas</p>
+                  <p className="text-xl font-extrabold text-gendarme-blue">{formatNumber(totalCas)}</p>
+                </div>
+              )}
+              {hasData && <UpdateIndicator />}
+            </div>
+          </div>
+
+          {!hasData ? (
+            <EmptyState
+              icon={MapPin}
+              loading={isLoadingGeographic}
+              description="Récupération des statistiques géographiques depuis la base de données"
+            />
+          ) : (
+            <>
+              {/* KPI */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total fiches</p>
+                  <p className="text-2xl font-bold text-gendarme-blue">{formatNumber(totalCas)}</p>
+                  <p className="text-xs text-gray-500 mt-1">sur l&apos;ensemble du territoire</p>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Province la plus touchée</p>
+                  <p className="text-lg font-bold text-gray-900 truncate">{provinceLeader?.ville || '—'}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formatNumber(provinceLeader?.cas || 0)} cas ({formatNumber(provinceLeader?.pourcentage || 0, { maximumFractionDigits: 1 })}%)
+                  </p>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Provinces actives</p>
+                  <p className="text-2xl font-bold text-emerald-600">{provincesActives}<span className="text-base text-gray-400 font-medium">/6</span></p>
+                  <p className="text-xs text-gray-500 mt-1">avec au moins une fiche</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* Barres horizontales — norme graphique du module */}
+                <div className="bg-gradient-to-b from-white to-slate-50 rounded-2xl border border-gray-100 p-5 shadow-inner">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">
+                    Classement par nombre de cas
+                  </h4>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsBar
+                      data={chartData}
+                      layout="vertical"
+                      margin={{ top: 8, right: 48, left: 8, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.6} horizontal={false} />
+                      <XAxis
+                        type="number"
+                        stroke="#6b7280"
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        axisLine={{ stroke: '#d1d5db', strokeWidth: 1 }}
+                        tickLine={{ stroke: '#d1d5db' }}
+                        allowDecimals={false}
+                        domain={[0, (max) => Math.max(max * 1.15, 1)]}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="ville"
+                        width={108}
+                        stroke="#6b7280"
+                        tick={{ fill: '#374151', fontSize: 12, fontWeight: 500 }}
+                        axisLine={{ stroke: '#d1d5db', strokeWidth: 1 }}
+                        tickLine={false}
+                      />
+                      <Tooltip content={<GeographicChartTooltip />} cursor={{ fill: 'rgba(37, 99, 235, 0.06)' }} />
+                      <Bar
+                        dataKey="cas"
+                        radius={[0, 6, 6, 0]}
+                        barSize={22}
+                        animationDuration={animationEnabled ? 900 : 0}
+                        name="Cas"
+                      >
+                        {chartData.map((entry) => (
+                          <Cell key={`bar-${entry.ville}`} fill={getProvinceColor(entry.ville)} />
+                        ))}
+                        <LabelList
+                          dataKey="cas"
+                          position="right"
+                          formatter={(v) => formatNumber(v)}
+                          style={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}
+                        />
+                      </Bar>
+                    </RechartsBar>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Camembert + légende */}
+                <div className="bg-gradient-to-b from-white to-blue-50/40 rounded-2xl border border-blue-100 p-5 shadow-inner">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide text-center">
+                    Répartition en pourcentage
+                  </h4>
+                  <div className="flex flex-col lg:flex-row items-center gap-4">
+                    <div className="w-full max-w-[280px] mx-auto">
+                      <ResponsiveContainer width="100%" height={280}>
                         <RechartsPie>
                           <Pie
-                        data={geographicData.filter(item => item.cas > 0)}
+                            data={chartData.filter((item) => item.cas > 0)}
                             dataKey="cas"
                             nameKey="ville"
                             cx="50%"
                             cy="50%"
-                            outerRadius={140}
-                            innerRadius={60}
-                            paddingAngle={4}
-                            labelLine={true}
-                            label={({ name, percent, cx, cy, midAngle, innerRadius, outerRadius }) => {
-                          if (percent < 0.05) return null
-                              const RADIAN = Math.PI / 180
-                              const radius = innerRadius + (outerRadius - innerRadius) * 0.5
-                              const x = cx + radius * Math.cos(-midAngle * RADIAN)
-                              const y = cy + radius * Math.sin(-midAngle * RADIAN)
-                              return (
-                            <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={11} fontWeight="bold" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
-                              {formatNumber(percent * 100, { maximumFractionDigits: 1 })}%
-                                </text>
-                              )
-                            }}
+                            outerRadius={105}
+                            innerRadius={52}
+                            paddingAngle={3}
+                            stroke="#fff"
+                            strokeWidth={2}
+                            animationDuration={animationEnabled ? 1000 : 0}
                           >
-                        {geographicData.filter(item => item.cas > 0).map((entry) => (
-                              <Cell key={`cell-${entry.ville}`} fill={getProvinceColor(entry.ville)} />
+                            {chartData.filter((item) => item.cas > 0).map((entry) => (
+                              <Cell key={`pie-${entry.ville}`} fill={getProvinceColor(entry.ville)} />
                             ))}
                           </Pie>
-                      <Tooltip formatter={(value) => [`${formatNumber(value)} cas`, '']} contentStyle={{ borderRadius: 12, borderColor: '#e0e7ff' }} />
+                          <Tooltip content={<GeographicChartTooltip />} />
+                          <Legend
+                            verticalAlign="bottom"
+                            iconType="circle"
+                            iconSize={8}
+                            formatter={(value) => (
+                              <span style={{ color: '#374151', fontSize: 11, fontWeight: 500 }}>{value}</span>
+                            )}
+                          />
                         </RechartsPie>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex-1 w-full lg:w-auto min-w-[220px]">
-                      <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm h-full">
-                        <h5 className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Détails par Province</h5>
-                        <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
-                      {geographicData.map((item) => {
-                            const pourcentage = totalCas > 0 ? (item.cas / totalCas) * 100 : 0
-                            const isActive = item.cas > 0
-                            return (
-                          <div key={item.ville} className={`flex items-center justify-between p-1.5 rounded-md transition-colors ${isActive ? 'bg-gray-50 hover:bg-gray-100' : 'opacity-60'}`}>
-                                <span className="flex items-center gap-2 flex-1">
-                              <span className="inline-block w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getProvinceColor(item.ville) }} />
-                              <span className={`text-xs font-semibold ${isActive ? 'text-gray-900' : 'text-gray-500'}`}>{item.ville}</span>
+                    <div className="flex-1 w-full min-w-0">
+                      <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                        {chartData.map((item) => {
+                          const isActive = item.cas > 0
+                          const color = getProvinceColor(item.ville)
+                          return (
+                            <div key={item.ville} className={isActive ? '' : 'opacity-50'}>
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="flex items-center gap-2 text-xs font-semibold text-gray-800 truncate">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                                  {item.ville}
                                 </span>
-                                <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium ${isActive ? 'text-gray-600' : 'text-gray-400'}`}>{formatNumber(item.cas)} cas</span>
-                                  <span className={`text-xs font-bold min-w-[45px] text-right ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
-                                    {formatNumber(pourcentage, { maximumFractionDigits: 1 })}%
-                                  </span>
-                                </div>
+                                <span className="text-xs font-bold text-gray-700 shrink-0">
+                                  {formatNumber(item.pourcentage, { maximumFractionDigits: 1 })}%
+                                </span>
                               </div>
-                            )
-                          })}
-                        </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                                <div
+                                  className="h-full rounded-full transition-all duration-700"
+                                  style={{
+                                    width: `${Math.max(item.pourcentage, isActive ? 4 : 0)}%`,
+                                    backgroundColor: color,
+                                  }}
+                                />
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{formatNumber(item.cas)} cas</p>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
-          ) : (
-            <EmptyState icon={BarChart3} loading={isLoadingGeographic} description="Récupération des statistiques géographiques" />
-          )}
-          <AIAnalysisCard analysis={aiAnalysisGeographic} title="Analyse IA - Répartition Géographique" icon={BarChart3} />
               </div>
+            </>
+          )}
+
+          <AIAnalysisCard analysis={aiAnalysisGeographic} title="Analyse IA - Répartition Géographique" icon={MapPin} />
+        </div>
       </div>
     )
   }
@@ -1293,7 +1293,6 @@ const GraphiquesAvances = ({
       upr_this_month = 0,
       resolution_rate = 0,
       evolution = [],
-      status_distribution = [],
       matches_by_type = []
     } = uprStats
 
@@ -1569,142 +1568,6 @@ const GraphiquesAvances = ({
             </div>
           </div>
               </div>
-      </div>
-    )
-  }
-
-  // Vue temps réel
-  const renderTempsReel = () => {
-    // Calculer les statistiques
-    const totalActivites = completeHourlyData.reduce((sum, item) => sum + (item.count || 0), 0)
-    const activiteMax = Math.max(...completeHourlyData.map(item => item.count || 0), 0)
-    const heurePointe = activiteMax > 0 
-      ? completeHourlyData.find(item => item.count === activiteMax)?.hour || 'N/A'
-      : 'N/A'
-    const heureActuelle = new Date().getHours()
-    const activiteActuelle = completeHourlyData[heureActuelle]?.count || 0
-    
-    return (
-      <div className="space-y-6 w-full">
-        <div className="bg-white rounded-2xl shadow-xl p-6 w-full">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
-                <Activity className="text-white animate-pulse" size={20} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Activité en temps réel</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Utilisation de l'application par heure (00h - 23h)</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-semibold text-green-700">Mise à jour automatique (5s)</span>
-              </div>
-              {completeHourlyData.length > 0 && <UpdateIndicator />}
-          </div>
-          </div>
-          
-              {isLoadingHourly ? (
-            <EmptyState icon={Activity} loading={true} description="Récupération de l'activité en temps réel" />
-              ) : (
-                <>
-              {/* Message informatif si aucune activité */}
-              {totalActivites === 0 && (
-                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      <Activity className="text-blue-600" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-blue-900">Aucune activité enregistrée aujourd'hui</p>
-                      <p className="text-xs text-blue-700 mt-1">
-                        Les activités de l'application (connexions, créations, modifications, etc.) seront affichées ici au fur et à mesure qu'elles se produisent.
-                      </p>
-                    </div>
-            </div>
-          </div>
-        )}
-        
-              {/* Graphique LineChart */}
-              <ResponsiveContainer width="100%" height={450}>
-                <RechartsLine data={completeHourlyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" opacity={0.5} />
-                  <XAxis 
-                    dataKey="hour" 
-                    stroke="#6B7280" 
-                    tick={{ fill: '#6B7280', fontSize: 11, fontFamily: 'Inter, sans-serif' }} 
-                    axisLine={{ stroke: '#E5E7EB' }} 
-                    tickLine={{ stroke: '#E5E7EB' }}
-                    interval={0}
-                  />
-                  <YAxis 
-                    stroke="#6B7280" 
-                    tick={{ fill: '#6B7280', fontSize: 11, fontFamily: 'Inter, sans-serif' }} 
-                    axisLine={{ stroke: '#E5E7EB' }} 
-                    tickLine={{ stroke: '#E5E7EB' }}
-                    label={{ value: 'Nombre d\'activités', angle: -90, position: 'insideLeft', fill: '#6B7280', style: { textAnchor: 'middle', fontFamily: 'Inter, sans-serif' } }}
-                    domain={[0, Math.max(activiteMax, 1)]}
-                  />
-                  <Tooltip 
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        const value = payload[0].value || 0
-                        return (
-                          <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            <p className="text-gray-900 font-semibold mb-1 text-sm">{label}</p>
-                            <p className="text-blue-600 font-bold text-lg">{value} activité{value > 1 ? 's' : ''}</p>
-            </div>
-                        )
-                      }
-                      return null
-                    }} 
-                    cursor={{ stroke: '#2563EB', strokeWidth: 1, strokeDasharray: '5 5', opacity: 0.3 }} 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="count" 
-                    stroke="#2563EB" 
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#2563EB', stroke: '#2563EB', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#2563EB', stroke: '#2563EB', strokeWidth: 3 }}
-                    animationDuration={animationEnabled ? 800 : 0}
-                    name="Activités"
-                  />
-                </RechartsLine>
-              </ResponsiveContainer>
-              
-              {/* Statistiques */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total activités (24h)</p>
-                  <p className="text-2xl font-bold text-blue-600">{totalActivites}</p>
-                  <p className="text-xs text-gray-500 mt-1">sur les dernières 24 heures</p>
-              </div>
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Heure de pointe</p>
-                  <p className="text-2xl font-bold text-blue-600">{heurePointe}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {activiteMax > 0 ? `${activiteMax} activité${activiteMax > 1 ? 's' : ''}` : 'Aucune activité'}
-                  </p>
-                </div>
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Heure actuelle</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {completeHourlyData[heureActuelle]?.hour || `${String(heureActuelle).padStart(2, '0')}h`}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {activiteActuelle} activité{activiteActuelle > 1 ? 's' : ''}
-                  </p>
-                </div>
-              </div>
-            </>
-            )}
-          </div>
-        {completeHourlyData.length > 0 && totalActivites > 0 && (
-          <AIAnalysisCard analysis={aiAnalysisHourly} title="Analyse IA - Activité en Temps Réel" icon={Activity} />
-        )}
       </div>
     )
   }

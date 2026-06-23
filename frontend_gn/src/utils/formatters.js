@@ -179,7 +179,7 @@ export const calculateAge = (dateOfBirth) => {
     }
     
     return age
-  } catch (error) {
+  } catch (_error) {
     return 'Non renseigné'
   }
 }

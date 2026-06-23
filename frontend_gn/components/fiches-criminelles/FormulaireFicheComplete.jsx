@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, Calendar, MapPin, Briefcase, Scale, UserCheck, FileText, Save, AlertTriangle, Plus, Trash2, Loader2, Users, Heart, Car, Building2, Network } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Calendar, MapPin, Scale, UserCheck, FileText, Save, AlertTriangle, Plus, Trash2, Loader2, Users, Car, Building2, Network } from 'lucide-react';
 import { getProvinces, getRegions, getDistricts } from '../../src/constants/madagascar-geography';
 
 const FormulaireFicheComplete = ({ onSauvegarder, onAnnuler, fiche }) => {

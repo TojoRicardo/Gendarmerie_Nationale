@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 def check_camera_availability(camera_id: int = 0):
     """Vérifie si une caméra est disponible et peut être ouverte."""
     logger.info("=" * 60)
-    logger.info(f"🔍 Diagnostic de la caméra ID {camera_id}")
+    logger.info(f"Diagnostic de la caméra ID {camera_id}")
     logger.info("=" * 60)
     
     # 1. Vérifier les backends disponibles
-    logger.info("\n1️⃣ Vérification des backends OpenCV...")
+    logger.info("\n1. Vérification des backends OpenCV...")
     backends = []
     if platform.system() == 'Windows':
         if hasattr(cv2, 'CAP_DSHOW'):
@@ -43,7 +43,7 @@ def check_camera_availability(camera_id: int = 0):
     logger.info(f"   Backends disponibles: {[b[0] for b in backends]}")
     
     # 2. Tester chaque backend
-    logger.info("\n2️⃣ Test d'ouverture de la caméra avec chaque backend...")
+    logger.info("\n2. Test d'ouverture de la caméra avec chaque backend...")
     successful_backend = None
     
     for backend_name, backend_id in backends:
@@ -53,22 +53,22 @@ def check_camera_availability(camera_id: int = 0):
             cap = cv2.VideoCapture(camera_id, backend_id)
             
             if cap is None:
-                logger.warning(f"      ❌ VideoCapture retourne None")
+                logger.warning("      [ERREUR] VideoCapture retourne None")
                 continue
             
             if not cap.isOpened():
-                logger.warning(f"      ❌ Caméra non ouverte")
+                logger.warning("      [ERREUR] Caméra non ouverte")
                 if cap:
                     cap.release()
                 continue
             
-            logger.info(f"      ✅ Caméra ouverte")
+            logger.info("      [OK] Caméra ouverte")
             
             # Attendre un peu pour l'initialisation
             time.sleep(0.3)
             
             # Tester la lecture de frames
-            logger.info(f"      Test de lecture de frames...")
+            logger.info("      Test de lecture de frames...")
             frames_read = 0
             for attempt in range(10):
                 ret, frame = cap.read()
@@ -76,13 +76,13 @@ def check_camera_availability(camera_id: int = 0):
                     frames_read += 1
                     if attempt == 0:
                         height, width = frame.shape[0], frame.shape[1]
-                        logger.info(f"      ✅ Frame lue: {width}x{height}")
+                        logger.info(f"      [OK] Frame lue: {width}x{height}")
                 else:
-                    logger.warning(f"      ⚠️  Échec lecture frame (tentative {attempt + 1}/10)")
+                    logger.warning(f"      [ATTENTION] Échec lecture frame (tentative {attempt + 1}/10)")
                 time.sleep(0.1)
             
             if frames_read > 0:
-                logger.info(f"      ✅ {frames_read}/10 frames lues avec succès")
+                logger.info(f"      [OK] {frames_read}/10 frames lues avec succès")
                 successful_backend = (backend_name, backend_id)
                 
                 # Obtenir les propriétés de la caméra
@@ -94,32 +94,32 @@ def check_camera_availability(camera_id: int = 0):
                 cap.release()
                 break
             else:
-                logger.error(f"      ❌ Aucune frame lue après 10 tentatives")
+                logger.error("      [ERREUR] Aucune frame lue après 10 tentatives")
                 cap.release()
                 
         except cv2.error as e:
-            logger.error(f"      ❌ Erreur OpenCV: {e}")
+            logger.error(f"      [ERREUR] Erreur OpenCV: {e}")
             if cap:
                 try:
                     cap.release()
-                except:
+                except Exception:
                     pass
         except Exception as e:
-            logger.error(f"      ❌ Erreur inattendue: {e}", exc_info=True)
+            logger.error(f"      [ERREUR] Erreur inattendue: {e}", exc_info=True)
             if cap:
                 try:
                     cap.release()
-                except:
+                except Exception:
                     pass
     
     # 3. Résumé et recommandations
     logger.info("\n" + "=" * 60)
     if successful_backend:
-        logger.info(f"✅ SUCCÈS: Caméra fonctionne avec {successful_backend[0]}")
+        logger.info(f"[OK] SUCCÈS: Caméra fonctionne avec {successful_backend[0]}")
         logger.info(f"   Utilisez ce backend dans votre code: cv2.CAP_{successful_backend[0].upper().replace(' ', '_')}")
     else:
-        logger.error("❌ ÉCHEC: Aucun backend n'a réussi à ouvrir la caméra")
-        logger.info("\n💡 Solutions à essayer:")
+        logger.error("[ERREUR] ÉCHEC: Aucun backend n'a réussi à ouvrir la caméra")
+        logger.info("\nSolutions à essayer:")
         logger.info("   1. Vérifier que la webcam A03 est branchée et allumée")
         logger.info("   2. Fermer TOUTES les applications qui utilisent la caméra:")
         logger.info("      - Zoom, Teams, Skype, Discord")
@@ -141,7 +141,7 @@ def check_camera_availability(camera_id: int = 0):
 def test_multi_camera_service():
     """Teste l'intégration avec MultiCameraService."""
     logger.info("\n" + "=" * 60)
-    logger.info("3️⃣ Test avec MultiCameraService...")
+    logger.info("3. Test avec MultiCameraService...")
     logger.info("=" * 60)
     
     try:
@@ -157,17 +157,17 @@ def test_multi_camera_service():
             logger.info(f"      - ID {cam['id']}: {cam.get('name', 'N/A')} ({cam.get('width', 0)}x{cam.get('height', 0)})")
         
         if not cameras:
-            logger.error("   ❌ Aucune caméra détectée par MultiCameraService")
+            logger.error("   [ERREUR] Aucune caméra détectée par MultiCameraService")
             return False
         
         # Sélectionner la première caméra
         camera_id = cameras[0]['id']
         logger.info(f"\n   Sélection de la caméra ID {camera_id}...")
         if not service.select_camera(camera_id):
-            logger.error("   ❌ Échec de sélection de la caméra")
+            logger.error("   [ERREUR] Échec de sélection de la caméra")
             return False
         
-        logger.info("   ✅ Caméra sélectionnée avec succès")
+        logger.info("   [OK] Caméra sélectionnée avec succès")
         
         # Tester le démarrage (sans callback pour éviter les erreurs d'affichage)
         logger.info("\n   Test de démarrage de la reconnaissance (5 secondes)...")
@@ -179,20 +179,20 @@ def test_multi_camera_service():
                 logger.info(f"      Frames traitées: {frame_count[0]}")
         
         if service.start_recognition(callback=test_callback):
-            logger.info("   ✅ Service démarré")
+            logger.info("   [OK] Service démarré")
             time.sleep(5)
             service.stop()
-            logger.info(f"   ✅ Service arrêté après {frame_count[0]} frames")
+            logger.info(f"   [OK] Service arrêté après {frame_count[0]} frames")
             return True
         else:
-            logger.error("   ❌ Échec du démarrage du service")
+            logger.error("   [ERREUR] Échec du démarrage du service")
             return False
             
     except ImportError as e:
-        logger.error(f"   ❌ Impossible d'importer MultiCameraService: {e}")
+        logger.error(f"   [ERREUR] Impossible d'importer MultiCameraService: {e}")
         return False
     except Exception as e:
-        logger.error(f"   ❌ Erreur lors du test: {e}", exc_info=True)
+        logger.error(f"   [ERREUR] Erreur lors du test: {e}", exc_info=True)
         return False
 
 

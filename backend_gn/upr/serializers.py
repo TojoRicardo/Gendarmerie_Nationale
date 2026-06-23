@@ -4,7 +4,6 @@ Serializers complets pour le module UPR avec nested objects.
 
 from rest_framework import serializers
 from .models import UnidentifiedPerson, UPRMatchLog, CriminelMatchLog, Camera, UPRLog, CameraCapture
-from criminel.models import CriminalFicheCriminelle
 import logging
 
 logger = logging.getLogger(__name__)
@@ -219,7 +218,7 @@ class UnidentifiedPersonCreateSerializer(serializers.ModelSerializer):
         if upr.profil_face:
             logger.info(f"UPR créé - profil_face.name: {upr.profil_face.name}, profil_face.url: {upr.profil_face.url}")
         else:
-            logger.error(f"UPR créé SANS profil_face!")
+            logger.error("UPR créé SANS profil_face!")
         
         return upr
 

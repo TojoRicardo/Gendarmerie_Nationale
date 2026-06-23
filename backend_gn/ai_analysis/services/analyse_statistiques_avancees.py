@@ -3,14 +3,12 @@ Service d'analyse statistique avancée utilisant les DONNÉES RÉELLES PostgreSQ
 Analyse par région, sexe, statut d'enquête, gravité de crime, etc.
 """
 
-from django.db.models import Count, Q, Avg, F
+from django.db.models import Count, Q
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
-import pandas as pd
-import numpy as np
 
-from criminel.models import CriminalFicheCriminelle, RefStatutFiche, RefTypeInfraction
+from criminel.models import CriminalFicheCriminelle
 
 
 def analyser_par_region(start_date=None, end_date=None):
@@ -159,7 +157,7 @@ def analyser_par_statut_enquete(start_date=None, end_date=None):
     ).order_by('-count')
     
     # Si aucun statut_fiche n'est défini, compter les fiches sans statut
-    total_avec_statut = sum(item['count'] for item in stats_statut)
+    sum(item['count'] for item in stats_statut)
     total_sans_statut = queryset.filter(statut_fiche__isnull=True).count()
     
     statuts = []

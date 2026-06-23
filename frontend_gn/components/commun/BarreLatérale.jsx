@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { X, ChevronRight, Shield } from 'lucide-react';
 import { usePermissions } from '../../src/hooks/usePermissions';
 import { useAuth } from '../../src/context/AuthContext';
-import { MENU_ITEMS, getFilteredMenuItems } from '../../src/constants/menuItems';
+import { getFilteredMenuItems } from '../../src/constants/menuItems';
 
 const BarreLatérale = ({ isOpen, onClose, isCollapsed = false }) => {
-  const { hasPermission, permissions } = usePermissions();
+  const { permissions } = usePermissions();
   const { utilisateur } = useAuth();
   const [hoveredItem, setHoveredItem] = useState(null);
   const [showSparkles, setShowSparkles] = useState(false);

@@ -3,7 +3,7 @@
  * Interface complète pour consulter l'historique des actions utilisateur
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   History, Calendar, User, Filter, Search,
   RefreshCw, CheckCircle, XCircle, Clock, Activity,
@@ -77,11 +77,6 @@ const HistoriqueActivite = () => {
     chargerStatistiques();
   }, []);
 
-  // Charger les activités quand les filtres ou la page changent
-  useEffect(() => {
-    chargerActivites();
-  }, [pageActuelle, filtres]);
-
   const chargerUtilisateurs = async () => {
     try {
       const response = await getUsers({ limit: 1000 });
@@ -108,17 +103,15 @@ const HistoriqueActivite = () => {
     }
   };
 
-  const chargerActivites = async () => {
+  const chargerActivites = useCallback(async () => {
     setChargement(true);
     try {
-      // Préparer les paramètres
       const params = {
         page: pageActuelle,
         page_size: elementsParPage,
-        group_by_session: false, // Afficher toutes les actions individuellement
+        group_by_session: false,
       };
 
-      // Ajouter les filtres non vides
       if (filtres.dateDebut) params.date_debut = filtres.dateDebut;
       if (filtres.dateFin) params.date_fin = filtres.dateFin;
       if (filtres.utilisateur) params.utilisateur = filtres.utilisateur;
@@ -127,8 +120,15 @@ const HistoriqueActivite = () => {
       if (filtres.recherche) params.search = filtres.recherche;
 
       const data = await getAuditEntries(params);
-      
-      setActivites(data.results || []);
+
+      const results = data.results || [];
+      results.sort((a, b) => {
+        const dateA = new Date(a.timestamp || a.date_action || 0).getTime();
+        const dateB = new Date(b.timestamp || b.date_action || 0).getTime();
+        return dateB - dateA;
+      });
+
+      setActivites(results);
       setTotalPages(data.total_pages || 1);
       setTotalElements(data.count || 0);
     } catch (error) {
@@ -139,7 +139,11 @@ const HistoriqueActivite = () => {
     } finally {
       setChargement(false);
     }
-  };
+  }, [pageActuelle, elementsParPage, filtres]);
+
+  useEffect(() => {
+    chargerActivites();
+  }, [chargerActivites]);
 
   const handleFiltreChange = (name, value) => {
     setFiltres(prev => ({ ...prev, [name]: value }));
@@ -267,7 +271,14 @@ const HistoriqueActivite = () => {
               {statistiques && (
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Total d'activités</div>
-                  <div className="text-2xl font-bold text-blue-600">{statistiques.total || totalElements}</div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {statistiques.total_actions_visibles ?? statistiques.total_actions ?? totalElements}
+                  </div>
+                  {statistiques.navigation_actions > 0 && (
+                    <div className="text-xs text-gray-400">
+                      + {statistiques.navigation_actions} navigation(s)
+                    </div>
+                  )}
                 </div>
               )}
               <button
@@ -403,7 +414,6 @@ const HistoriqueActivite = () => {
               </button>
             </div>
           </div>
-        </div>
       )}
 
       {/* Tableau des activités */}

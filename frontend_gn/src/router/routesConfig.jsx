@@ -1,12 +1,12 @@
-import React, { lazy } from 'react'
+import { lazy } from 'react'
 import { Navigate } from 'react-router-dom'
+import RoleModifierRedirect from './RoleModifierRedirect'
+import AuditPage from './AuditPage'
 
 // Lazy loading des pages
 const Dashboard = lazy(() => import('../pages/Dashboard'))
-const Connexion = lazy(() => import('../pages/Connexion'))
+const Login = lazy(() => import('../auth/Login'))
 const Register = lazy(() => import('../pages/Register'))
-const Inscription = lazy(() => import('../pages/Inscription'))
-const PhotoBiometrique = lazy(() => import('../pages/PhotoBiometrique'))
 const BiometrieCriminelle = lazy(() => import('../pages/BiometrieCriminelle'))
 const AjouterPhotoCriminelle = lazy(() => import('../pages/AjouterPhotoCriminelle'))
 const IntelligenceArtificielle = lazy(() => import('../pages/IntelligenceArtificielle'))
@@ -14,10 +14,6 @@ const Profil = lazy(() => import('../pages/Profil'))
 
 // Nouvelles pages SGIC
 const Assignments = lazy(() => import('../pages/Assignments'))
-const RegisterSuspect = lazy(() => import('../pages/RegisterSuspect'))
-const EvidenceManagement = lazy(() => import('../pages/EvidenceManagement'))
-const Analytics = lazy(() => import('../pages/Analytics'))
-const CloseCase = lazy(() => import('../pages/CloseCase'))
 const EnqueteDashboard = lazy(() => import('../pages/EnqueteDashboard'))
 const EnqueteList = lazy(() => import('../pages/EnqueteList'))
 const CreerEnquete = lazy(() => import('../pages/CreerEnquete'))
@@ -45,20 +41,12 @@ const CreerRole = lazy(() => import('../pages/CreerRole'))
 const VoirRole = lazy(() => import('../pages/VoirRole'))
 const ModifierRole = lazy(() => import('../pages/ModifierRole'))
 
-// Rôles (nouveau système)
-const GestionRoles = lazy(() => import('../pages/GestionRoles'))
-const CreerRoleNouveau = lazy(() => import('../pages/CreerRoleNouveau'))
-const ModifierRoleNouveau = lazy(() => import('../pages/ModifierRoleNouveau'))
 const AssignerRoleUtilisateur = lazy(() => import('../pages/AssignerRoleUtilisateur'))
 
 // Lazy loading des composants
 const ListeNotifications = lazy(() => import('../../components/notifications/ListeNotifications'))
 const ParametresNotifications = lazy(() => import('../../components/notifications/ParametresNotifications'))
 const Rapports = lazy(() => import('../pages/Rapports'))
-const ReportGeneratorPage = lazy(() => import('../pages/ReportGeneratorPage'))
-const TableauAudit = lazy(() => import('../../components/audit/TableauAudit'))
-const FiltreAudit = lazy(() => import('../../components/audit/FiltreAudit'))
-const OllamaManager = lazy(() => import('../../components/audit/OllamaManager'))
 const HistoriqueActivite = lazy(() => import('../pages/HistoriqueActivite'))
 
 // Dashboards spécialisés
@@ -69,54 +57,11 @@ const UPRList = lazy(() => import('../pages/UPRList'))
 const UPRDetail = lazy(() => import('../pages/UPRDetail'))
 const MultiCameraDashboard = lazy(() => import('../components/cameras/MultiCameraDashboard'))
 
-/**
- * Composant spécial pour la page Audit
- * (nécessite état local pour les filtres)
- */
-const AuditPage = React.memo(function AuditPage() {
-  const [filtresAudit, setFiltresAudit] = React.useState({}) // Par défaut, aucun filtre = afficher tout
-  const [showOllamaManager, setShowOllamaManager] = React.useState(false)
-
-  // Charger tous les journaux au montage (sans filtres)
-  React.useEffect(() => {
-    // Les journaux seront chargés automatiquement par TableauAudit avec filtres vides
-  }, [])
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Section Filtres */}
-        <div className="bg-white rounded-xl shadow-sm">
-          <FiltreAudit
-            onFiltrer={setFiltresAudit}
-            onReinitialiser={() => {
-              setFiltresAudit({}) // Réinitialiser à vide = afficher tout
-            }}
-            onToggleOllama={() => setShowOllamaManager(!showOllamaManager)}
-          />
-        </div>
-
-        {/* Gestionnaire Ollama */}
-        {showOllamaManager && (
-          <div className="bg-white rounded-xl shadow-sm">
-            <OllamaManager />
-          </div>
-        )}
-
-        {/* Section Journal d'Audit */}
-        <div className="bg-white rounded-xl shadow-sm">
-          <TableauAudit filtres={filtresAudit} />
-        </div>
-      </div>
-    </div>
-  )
-})
-
 export const routesConfig = [
   // Routes publiques
   {
     path: '/connexion',
-    element: <Connexion />,
+    element: <Login />,
     isProtected: false,
     meta: {
       title: 'Connexion - SGIC',
@@ -125,11 +70,10 @@ export const routesConfig = [
   },
   {
     path: '/inscription',
-    element: <Inscription />,
+    element: <Navigate to="/register" replace />,
     isProtected: false,
     meta: {
       title: 'Inscription - SGIC',
-      description: 'Page d\'inscription au système',
     },
   },
   {
@@ -228,30 +172,22 @@ export const routesConfig = [
           title: 'Modifier un rôle - SGIC',
         },
       },
-      // Rôles (nouveau système complet)
+      // Alias gestion-roles → pages rôles existantes
       {
         path: 'gestion-roles',
-        element: <GestionRoles />,
-        requiredPermission: 'roles.consulter',
-        meta: {
-          title: 'Gestion des Rôles - SGIC',
-        },
+        element: <Navigate to="/roles" replace />,
       },
       {
         path: 'gestion-roles/creer',
-        element: <CreerRoleNouveau />,
-        requiredPermission: 'roles.gerer',
-        meta: {
-          title: 'Créer un rôle - SGIC',
-        },
+        element: <Navigate to="/roles/creer" replace />,
       },
       {
         path: 'gestion-roles/modifier/:id',
-        element: <ModifierRoleNouveau />,
-        requiredPermission: 'roles.gerer',
-        meta: {
-          title: 'Modifier un rôle - SGIC',
-        },
+        element: <RoleModifierRedirect />,
+      },
+      {
+        path: 'photos-biometriques',
+        element: <Navigate to="/biometrie" replace />,
       },
       {
         path: 'assigner-role-utilisateur',
@@ -307,22 +243,8 @@ export const routesConfig = [
         },
       },
       {
-        path: 'photos-biometriques',
-        element: <PhotoBiometrique />,
-        requiredPermission: 'biometrie.view',
-        meta: {
-          title: 'Photos Biométriques - SGIC',
-          description: 'Gestion des photos d\'identification criminelle',
-        },
-      },
-      {
         path: 'biometrie-criminelle',
-        element: <BiometrieCriminelle />,
-        requiredPermission: 'biometrie.view',
-        meta: {
-          title: 'Biométrie Criminelle - SGIC',
-          description: 'Système professionnel Interpol/AFIS pour empreintes et photos',
-        },
+        element: <Navigate to="/biometrie" replace />,
       },
       {
         path: 'ajouter-photo-criminelle',
@@ -435,38 +357,6 @@ export const routesConfig = [
         meta: {
           title: 'Assignations d’enquêtes - SGIC',
           description: 'Suivi des missions et affectations des enquêteurs',
-        },
-      },
-      {
-        path: 'register-suspect',
-        element: <RegisterSuspect />,
-        requiredPermission: 'suspects.create',
-        meta: {
-          title: 'Enregistrer un suspect - SGIC',
-        },
-      },
-      {
-        path: 'evidence-management',
-        element: <EvidenceManagement />,
-        requiredPermission: 'evidence.manage',
-        meta: {
-          title: 'Gestion des preuves - SGIC',
-        },
-      },
-      {
-        path: 'analytics',
-        element: <Analytics />,
-        requiredPermission: 'analytics.view',
-        meta: {
-          title: 'Analyses statistiques - SGIC',
-        },
-      },
-      {
-        path: 'close-case/:uuid',
-        element: <CloseCase />,
-        requiredPermission: 'investigations.close',
-        meta: {
-          title: 'Clôturer une enquête - SGIC',
         },
       },
       {

@@ -21,7 +21,6 @@ try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
@@ -663,7 +662,7 @@ class TelechargerRapportPDFView(APIView):
             p.setFont("Helvetica", 8)
             p.setFillColor(colors.HexColor('#666666'))
             p.drawString(50, 50, f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}")
-            p.drawString(width - 200, 50, f"Page 1")
+            p.drawString(width - 200, 50, "Page 1")
             
             # Finaliser le PDF
             p.showPage()

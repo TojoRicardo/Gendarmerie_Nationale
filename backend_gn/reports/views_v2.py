@@ -64,7 +64,7 @@ def add_cors_headers_to_pdf_response(response, request):
     else:
         if settings.DEBUG:
             response['Access-Control-Allow-Origin'] = '*'
-            logger.info(f"CORS: Mode DEBUG - autorisation de toutes les origines (*)")
+            logger.info("CORS: Mode DEBUG - autorisation de toutes les origines (*)")
         else:
             if origin:
                 response['Access-Control-Allow-Origin'] = origin
@@ -138,6 +138,27 @@ class FicheCriminellePDFViewV2(APIView):
             )
             
             response = add_cors_headers_to_pdf_response(response, request)
+
+            try:
+                from audit.audit_service import record_pdf_dactyloscopique
+                enquete = EnqueteDownloadService.get_enquete_for_criminel(criminel)
+                delivery = 'zip' if enquete else 'pdf'
+                filename = None
+                disposition = response.get('Content-Disposition', '')
+                if 'filename=' in disposition:
+                    import re
+                    match = re.search(r'filename="?([^";]+)"?', disposition)
+                    if match:
+                        filename = match.group(1)
+                record_pdf_dactyloscopique(
+                    request,
+                    criminel,
+                    filename=filename,
+                    enquete_id=enquete.id if enquete else None,
+                    delivery=delivery,
+                )
+            except Exception as audit_err:
+                logger.warning(f"Erreur audit PDF dactyloscopique: {audit_err}")
             
             return response
             

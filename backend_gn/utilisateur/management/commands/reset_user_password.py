@@ -78,7 +78,7 @@ class Command(BaseCommand):
         if not options.get('password'):
             self.stdout.write(
                 self.style.WARNING(
-                    f'⚠️ IMPORTANT: Notez ce mot de passe, il ne sera plus affiché: {new_password}'
+                    f'[ATTENTION] IMPORTANT: Notez ce mot de passe, il ne sera plus affiché: {new_password}'
                 )
             )
 

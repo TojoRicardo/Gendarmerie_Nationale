@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
-import { MapPin, Calendar, UserSearch, Eye, Loader2, Plus } from "lucide-react";
+import { MapPin, Calendar, UserSearch, Eye, Loader2, Plus, ArrowLeft } from "lucide-react";
 import Button from "../components/commun/Button";
 
 export default function UPRList() {
@@ -65,6 +65,14 @@ export default function UPRList() {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition hover:text-gray-900 mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Retour
+      </button>
+
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -216,7 +224,7 @@ export default function UPRList() {
                 {/* Badge Archivé */}
                 {upr.is_archived && (
                   <div className="absolute bottom-2 left-2 bg-gray-600 text-white px-2 py-1 rounded-md text-xs font-semibold">
-                    📦 Archivé
+                    Archivé
                   </div>
                 )}
               </div>

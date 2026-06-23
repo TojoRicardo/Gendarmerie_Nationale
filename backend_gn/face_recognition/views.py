@@ -2,7 +2,6 @@
 Vues API REST pour le système de reconnaissance faciale avec ArcFace.
 """
 
-import uuid
 import time
 from django.utils import timezone
 from django.db.models import Avg
@@ -18,11 +17,7 @@ from .serializers import (
     PersonSerializer,
     PersonCreateSerializer,
     FaceEmbeddingSerializer,
-    FaceEmbeddingCreateSerializer,
-    FaceRecognitionLogSerializer,
-    RecognizeRequestSerializer,
-    VerifyRequestSerializer,
-    StatsResponseSerializer
+    FaceRecognitionLogSerializer
 )
 from .services import (
     extract_embedding_from_image,
@@ -205,7 +200,7 @@ class FaceEmbeddingViewSet(viewsets.ModelViewSet):
             image_file = request.FILES['image']
             
             # Valider le format d'image
-            if not image_file.content_type in ['image/jpeg', 'image/jpg', 'image/png']:
+            if image_file.content_type not in ['image/jpeg', 'image/jpg', 'image/png']:
                 return Response({
                     'success': False,
                     'message': 'Format d\'image non supporté. Utilisez JPEG ou PNG.',
@@ -350,7 +345,7 @@ class RecognizeView(viewsets.ViewSet):
                 detected_person = best_match['person']
                 
                 # Sauvegarder le log
-                log = save_recognition_log(
+                save_recognition_log(
                     embedding=query_embedding,
                     image_path=image_path,
                     detected_person=detected_person,
@@ -385,7 +380,7 @@ class RecognizeView(viewsets.ViewSet):
                 message = f'Personne reconnue: {detected_person.name}'
             else:
                 # Sauvegarder le log comme inconnu
-                log = save_recognition_log(
+                save_recognition_log(
                     embedding=query_embedding,
                     image_path=image_path,
                     detected_person=None,

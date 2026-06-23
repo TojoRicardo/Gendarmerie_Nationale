@@ -1,13 +1,13 @@
-import React from 'react'
+import { Component } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
-class ErrorBoundary extends React.Component {
+class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
     this.state = { hasError: false, error: null, errorInfo: null }
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(_error) {
     // Mettre à jour l'état pour afficher l'UI d'erreur
     return { hasError: true }
   }
@@ -62,7 +62,7 @@ class ErrorBoundary extends React.Component {
                 </button>
               </div>
 
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <details className="mt-6 text-left">
                   <summary className="cursor-pointer text-sm font-medium text-gray-700 mb-2">
                     Détails de l'erreur (mode développement)

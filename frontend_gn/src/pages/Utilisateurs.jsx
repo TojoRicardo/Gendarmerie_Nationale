@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ListeUtilisateurs from '../../components/utilisateurs/ListeUtilisateurs'
 import {
-  Users, TrendingUp, UserCheck, UserX, Activity, ShieldCheck, Plus
+  Users, TrendingUp, UserCheck, UserX, ShieldCheck
 } from 'lucide-react'
 import { useNotification } from '../context/NotificationContext';
 

@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, Trash2, Filter } from 'lucide-react';
 import ElementNotification from './ElementNotification';
-import Bouton from '../commun/Bouton';
 import SpinnerChargement from '../commun/SpinnerChargement';
 import notificationService from '../../src/services/notificationService';
 import { useToast } from '../../src/context/ToastContext';
 import { useNotification } from '../../src/context/NotificationContext';
 
 const ListeNotifications = () => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [filtre, setFiltre] = useState('toutes'); // toutes, non_lues, lues
@@ -50,14 +51,29 @@ const ListeNotifications = () => {
   const marquerCommeLue = async (id) => {
     try {
       await notificationService.markAsRead(id);
-      setNotifications(prev =>
-        prev.map(notif =>
+      setNotifications(prev => {
+        const updated = prev.map(notif =>
           notif.id === id ? { ...notif, lue: true } : notif
-        )
-      );
+        );
+        if (filtre === 'non_lues') {
+          return updated.filter(notif => !notif.lue);
+        }
+        return updated;
+      });
+      return true;
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
       toast.showError('Erreur lors du marquage de la notification');
+      return false;
+    }
+  };
+
+  const ouvrirNotification = async (notif) => {
+    if (!notif.lue) {
+      await marquerCommeLue(notif.id);
+    }
+    if (notif.lien) {
+      navigate(notif.lien);
     }
   };
 
@@ -198,15 +214,7 @@ const ListeNotifications = () => {
               notification={notification}
               onMarquerLue={marquerCommeLue}
               onSupprimer={supprimerNotification}
-              onClick={(notif) => {
-                if (!notif.lue) {
-                  marquerCommeLue(notif.id);
-                }
-                // Rediriger vers la ressource liée si disponible
-                if (notif.lien) {
-                  window.location.href = notif.lien;
-                }
-              }}
+              onClick={ouvrirNotification}
             />
           ))}
         </div>

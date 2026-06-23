@@ -8,14 +8,13 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from datetime import datetime, timedelta
+from django.db.models import Count
 from django.utils import timezone
 
 from .services import analyse_donnees_reelles, recherche_biometrique
 from .serializers import (
     MonthlyEvolutionRequestSerializer,
     DetailedAnalysisRequestSerializer,
-    GeospatialRequestSerializer,
-    RealtimeAnalysisRequestSerializer,
     PhotoSearchRequestSerializer,
 )
 from .utils import generer_graphique
@@ -317,7 +316,7 @@ class StatistiquesFichesCriminellesView(APIView):
         """
         Obtenir les statistiques globales.
         """
-        from criminel.models import CriminalFicheCriminelle, RefStatutFiche
+        from criminel.models import CriminalFicheCriminelle
         
         try:
             total_fiches = CriminalFicheCriminelle.objects.count()

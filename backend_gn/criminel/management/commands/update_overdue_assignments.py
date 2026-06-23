@@ -39,7 +39,7 @@ class Command(BaseCommand):
         
         self.stdout.write(
             self.style.SUCCESS(
-                f'\n🔍 Recherche des assignations avec échéance dépassée (date du jour: {today.strftime("%d/%m/%Y")})...\n'
+                f'\n Recherche des assignations avec échéance dépassée (date du jour: {today.strftime("%d/%m/%Y")})...\n'
             )
         )
         
@@ -47,7 +47,7 @@ class Command(BaseCommand):
             if assignment.due_date < today:
                 if dry_run:
                     self.stdout.write(
-                        f'  ⚠️  Assignation #{assignment.id} - Dossier {assignment.fiche.numero_fiche} '
+                        f'  [ATTENTION]  Assignation #{assignment.id} - Dossier {assignment.fiche.numero_fiche} '
                         f'(Échéance: {assignment.due_date.strftime("%d/%m/%Y")}) '
                         f'→ Statut serait changé en "Échéance dépassée"'
                     )
@@ -58,7 +58,7 @@ class Command(BaseCommand):
                     
                     self.stdout.write(
                         self.style.WARNING(
-                            f'  ✅ Assignation #{assignment.id} - Dossier {assignment.fiche.numero_fiche} '
+                            f'  [OK] Assignation #{assignment.id} - Dossier {assignment.fiche.numero_fiche} '
                             f'(Échéance: {assignment.due_date.strftime("%d/%m/%Y")}) '
                             f'→ Statut changé de "{old_status}" à "Échéance dépassée"'
                         )
@@ -81,7 +81,7 @@ class Command(BaseCommand):
                             titre=titre,
                             message=message,
                             type='warning',
-                            lien=f'/assignations'
+                            lien='/assignations'
                         )
                         
                         # Notifier aussi l'utilisateur qui a assigné
@@ -99,9 +99,9 @@ class Command(BaseCommand):
                                 titre=titre_supervisor,
                                 message=message_supervisor,
                                 type='warning',
-                                lien=f'/assignations'
+                                lien='/assignations'
                             )
-                    except Exception as e:
+                    except Exception:
                         logger.exception("Erreur lors de la création des notifications pour l'assignation #%s", assignment.id)
                     
                     updated_count += 1
@@ -111,7 +111,7 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'\n📊 Résumé (mode dry-run):\n'
+                    f'\n Résumé (mode dry-run):\n'
                     f'  • {updated_count} assignation(s) seraient mises à jour\n'
                     f'  • {skipped_count} assignation(s) avec échéance future\n'
                 )
@@ -119,7 +119,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'\n✅ Mise à jour terminée:\n'
+                    f'\n[OK] Mise à jour terminée:\n'
                     f'  • {updated_count} assignation(s) mise(s) à jour\n'
                     f'  • {skipped_count} assignation(s) avec échéance future\n'
                 )

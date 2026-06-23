@@ -242,7 +242,7 @@ def generate_html_with_links(blocks, output_file='diagrams/ouvrir_plantuml.html'
 </head>
 <body>
     <div class="container">
-        <h1>📊 Diagrammes PlantUML - SGIC</h1>
+        <h1>Diagrammes PlantUML - SGIC</h1>
         <p class="subtitle">Cliquez sur les boutons pour ouvrir chaque diagramme dans PlantUML en ligne</p>
         
         <div class="stats">
@@ -251,7 +251,7 @@ def generate_html_with_links(blocks, output_file='diagrams/ouvrir_plantuml.html'
         </div>
         
         <div class="instructions">
-            <h3>📝 Instructions :</h3>
+            <h3>Instructions :</h3>
             <ol>
                 <li>Cliquez sur <strong>"Ouvrir dans PlantUML"</strong> pour visualiser le diagramme</li>
                 <li>Dans PlantUML, vous pouvez :
@@ -270,20 +270,20 @@ def generate_html_with_links(blocks, output_file='diagrams/ouvrir_plantuml.html'
     for i, (title, code) in enumerate(blocks, 1):
         url = generate_plantuml_url(code)
         # Encoder pour JavaScript
-        code_js = code.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+        code.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
         
         html_content += f"""
         <div class="diagram-card">
             <div class="diagram-title">{i}. {title}</div>
             <div class="button-group">
                 <a href="{url}" target="_blank" class="btn btn-primary">
-                    🌐 Ouvrir dans PlantUML
+                    Ouvrir dans PlantUML
                 </a>
                 <button onclick="copyCode({i})" class="btn btn-secondary">
-                    📋 Copier le code
+                    Copier le code
                 </button>
                 <button onclick="downloadAsPNG({i})" class="btn btn-success">
-                    💾 Télécharger PNG
+                    Télécharger PNG
                 </button>
             </div>
             <details class="code-preview">
@@ -379,10 +379,10 @@ def main():
     print("=" * 80)
     print(f"\n{len(blocks)} diagramme(s) traite(s)")
     print(f"\nFichier genere : {html_file}")
-    print(f"\nPour utiliser :")
+    print("\nPour utiliser :")
     print(f"   1. Ouvrez '{html_file}' dans votre navigateur")
-    print(f"   2. Cliquez sur 'Ouvrir dans PlantUML' pour chaque diagramme")
-    print(f"   3. Dans PlantUML, telechargez en PNG ou SVG")
+    print("   2. Cliquez sur 'Ouvrir dans PlantUML' pour chaque diagramme")
+    print("   3. Dans PlantUML, telechargez en PNG ou SVG")
 
 if __name__ == '__main__':
     main()

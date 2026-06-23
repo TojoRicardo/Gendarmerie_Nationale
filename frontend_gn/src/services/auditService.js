@@ -38,7 +38,7 @@ export const getAuditEntries = async (params = {}) => {
   if (params.periode) queryParams.append('periode', params.periode) // aujourdhui, 7_jours, 30_jours
   if (params.reussi !== undefined) queryParams.append('reussi', params.reussi)
   if (params.search) queryParams.append('search', params.search)
-  if (params.ordering) queryParams.append('ordering', params.ordering)
+  queryParams.append('ordering', params.ordering || '-timestamp')
   
   const url = `${AUDIT_API_BASE}/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
   

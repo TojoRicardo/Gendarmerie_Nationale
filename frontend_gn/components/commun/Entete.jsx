@@ -1,24 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Menu, LogOut, Shield, Bell, X, Check, AlertCircle, Info, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../src/context/AuthContext';
 import { MESSAGES } from '../../src/utils/notifications';
 import { useNotification } from '../../src/context/NotificationContext';
 import { jwtDecode } from "jwt-decode";
-import { getAuthToken } from '../../src/utils/storage';
+import { getAuthToken, clearAuthData } from '../../src/utils/sessionStorage';
 import { getUserById, updateUser } from '../../src/services/authService';
+import { resolveMediaUrl } from '../../src/utils/mediaUrl';
 import notificationService from '../../src/services/notificationService';
 
 const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
   const token = getAuthToken();
   const navigate = useNavigate();
-  const { utilisateur, deconnexion } = useAuth();
+  const { utilisateur } = useAuth();
   const notification = useNotification();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const [user, setUser] = useState(null)
   const [notifications, setNotifications] = useState([]);
+
+  const profilePhotoUrl = resolveMediaUrl(user?.photo_profil || utilisateur?.photo_profil)
+  const profileInitials = `${user?.nom?.charAt(0) || utilisateur?.nom?.charAt(0) || ''}${user?.prenom?.charAt(0) || utilisateur?.prenom?.charAt(0) || ''}`
+
+  const renderProfileAvatar = (sizeClass = 'w-10 h-10', iconSize = 20) => (
+    profilePhotoUrl ? (
+      <img
+        src={profilePhotoUrl}
+        alt="Photo de profil"
+        className={`${sizeClass} rounded-full object-cover border-2 border-gray-600/50`}
+      />
+    ) : (
+      <div className={`${sizeClass} rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white font-semibold border border-gray-600/50`}>
+        {profileInitials ? (
+          <span className="text-sm">{profileInitials}</span>
+        ) : (
+          <User size={iconSize} />
+        )}
+      </div>
+    )
+  )
 
   useEffect(() => {
     const fetchUserAuth = async () => {
@@ -56,7 +78,7 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
           console.error("Erreur lors de la récupération de l'utilisateur :", error);
           // Si le token est invalide, on peut rediriger vers la page de connexion
           if (error.message?.includes('Invalid token') || error.response?.status === 401) {
-            localStorage.clear();
+            clearAuthData();
             navigate('/connexion');
           }
         }
@@ -65,7 +87,7 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
     };
 
     fetchUserAuth();
-  }, [token, navigate])
+  }, [token, navigate, utilisateur])
 
   useEffect(() => {
     if (utilisateur && !user) {
@@ -130,18 +152,12 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
     const notif = notifications.find(n => n.id === id);
 
     try {
-      // Marquer comme lu via l'API
       await notificationService.markAsRead(id);
-      
-      // Mettre à jour l'état local
-      setNotifications(notifications.map(n =>
-        n.id === id ? { ...n, lue: true } : n
-      ));
 
-      // Fermer le dropdown
+      // Retirer de la liste (on n'affiche que les non lues dans le dropdown)
+      setNotifications(prev => prev.filter(n => n.id !== id));
       setShowNotifications(false);
 
-      // Naviguer vers la page correspondante avec les données de la notification
       if (notif?.lien) {
         navigate(notif.lien, {
           state: {
@@ -159,7 +175,7 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
   const marquerToutCommeLu = async () => {
     try {
       await notificationService.markAllAsRead();
-      setNotifications(notifications.map(notif => ({ ...notif, lue: true })));
+      setNotifications([]);
     } catch (error) {
       console.error('Erreur lors du marquage de toutes les notifications:', error);
     }
@@ -168,7 +184,7 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
   const supprimerNotification = async (id) => {
     try {
       await notificationService.deleteNotification(id);
-      setNotifications(notifications.filter(notif => notif.id !== id));
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
     }
@@ -400,10 +416,10 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
             <div className="relative">
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="p-2.5 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 transition-all duration-200 shadow-lg border border-gray-600/50 hover:scale-105"
+                className="p-1 rounded-xl hover:scale-105 transition-all duration-200 shadow-lg"
                 title="Mon profil"
               >
-                <User size={20} />
+                {renderProfileAvatar('w-10 h-10', 20)}
               </button>
 
               {/* Dropdown Menu Premium */}
@@ -413,9 +429,21 @@ const Entete = ({ onToggleSidebar, onToggleCollapsed }) => {
                   <div className="p-5 bg-gradient-to-br from-gendarme-blue via-gendarme-blue-light to-gendarme-light text-white">
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
-                        <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/30">
-                          <User className="text-white" size={28} />
-                        </div>
+                        {profilePhotoUrl ? (
+                          <img
+                            src={profilePhotoUrl}
+                            alt="Photo de profil"
+                            className="w-14 h-14 rounded-full object-cover shadow-xl border-2 border-white/30"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-xl border-2 border-white/30">
+                            {profileInitials ? (
+                              <span className="text-white font-bold text-lg">{profileInitials}</span>
+                            ) : (
+                              <User className="text-white" size={28} />
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-black text-base truncate">

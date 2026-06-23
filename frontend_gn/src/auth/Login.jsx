@@ -10,14 +10,14 @@
  * - Sécurité renforcée
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, AlertCircle, User, ArrowRight, Loader2, Mail } from 'lucide-react'
+import { Eye, EyeOff, Lock, AlertCircle, User, ArrowRight, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getRoleRedirect } from '../utils/roleRedirection'
-import { login as authServiceLogin } from './authService'
+import { login as authServiceLogin } from '../services/authService'
 import PinVerification from '../components/pin/PinVerification'
-import { saveAuthToken, saveUserData, saveRefreshToken } from '../utils/sessionStorage'
+import { saveAuthToken, saveUserData, saveRefreshToken, getUserData, getRefreshToken } from '../utils/sessionStorage'
 import { gsap } from 'gsap'
 
 const Login = () => {
@@ -30,7 +30,7 @@ const Login = () => {
   // États pour le PIN après connexion
   const [pinRequired, setPinRequired] = useState(false)
   const [tempToken, setTempToken] = useState('')
-  const [pinValue, setPinValue] = useState('')
+  const [, setPinValue] = useState('')
   
   // États de validation
   const [errors, setErrors] = useState({})
@@ -235,6 +235,12 @@ const Login = () => {
 
     const result = await authServiceLogin(credentials)
 
+    if (result?.pin_required) {
+      return {
+        pin_required: true,
+        temp_token: result.temp_token,
+      }
+    }
 
     if (!result.success || !result.user) {
       throw new Error(result.message || 'Données utilisateur non reçues du serveur')
@@ -322,17 +328,18 @@ const Login = () => {
 
 
       // Récupérer les données utilisateur
-      const userData = result?.utilisateur || JSON.parse(localStorage.getItem('user_data') || '{}')
+      const userData = result?.utilisateur || result?.user || getUserData() || {}
       
       // Sauvegarder les tokens et données utilisateur
       if (result?.token) {
         saveAuthToken(result.token)
       }
-      if (userData) {
+      if (userData && Object.keys(userData).length > 0) {
         saveUserData(userData)
       }
-      if (result?.refresh_token) {
-        saveRefreshToken(result.refresh_token)
+      const refreshToken = result?.refresh || result?.refresh_token || getRefreshToken()
+      if (refreshToken) {
+        saveRefreshToken(refreshToken)
       }
       
       // Mettre à jour immédiatement le contexte AuthContext
@@ -633,10 +640,10 @@ return (
                   }}
                 >
                   {text.split('\n').map((line, i) => (
-                    <React.Fragment key={i}>
+                    <Fragment key={i}>
                       {line}
                       {i < text.split('\n').length - 1 && ' '}
-                    </React.Fragment>
+                    </Fragment>
                   ))}
                 </span>
               ))}

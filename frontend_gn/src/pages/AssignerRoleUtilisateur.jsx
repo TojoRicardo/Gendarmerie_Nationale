@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, User, ShieldCheck, Check, X } from 'lucide-react'
+import { ArrowLeft, User, ShieldCheck, Check } from 'lucide-react'
 import { useNotification } from '../context/NotificationContext'
 import { getUsers, updateUser, fetchRoles, fetchPermissions } from '../services/authService'
 import PermissionCategory from '../components/roles/PermissionCategory'
-import PermissionCheckbox from '../components/roles/PermissionCheckbox'
 
 const AssignerRoleUtilisateur = () => {
   const navigate = useNavigate()

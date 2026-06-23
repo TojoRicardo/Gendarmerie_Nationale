@@ -4,29 +4,37 @@ Vues pour le Journal d'Audit
 
 import logging
 from datetime import datetime, timedelta
+from functools import reduce
+from operator import or_
 from django.utils import timezone
-from django.db.models import Q, Count, Sum, Case, When, IntegerField
-from django.db.models.functions import TruncDate
+from django.db.models import Q, Count
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 
-from .models import AuditLog, JournalAudit, JournalAuditNarratif  # JournalAudit est un alias
+from .models import AuditLog, JournalAuditNarratif  # JournalAudit est un alias
 from .serializers import (
     AuditLogSerializer,
     AuditLogCreateSerializer,
     AuditLogStatistiquesSerializer,
-    # Alias pour compatibilité
-    JournalAuditSerializer,
-    JournalAuditCreateSerializer,
-    JournalAuditStatistiquesSerializer,
     JournalAuditNarratifSerializer,
     JournalAuditNarratifListSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _build_audit_search_query(terme: str) -> Q:
+    return reduce(or_, [
+        Q(description__icontains=terme),
+        Q(resource_type__icontains=terme),
+        Q(user__username__icontains=terme),
+        Q(action__icontains=terme),
+        Q(ip_address__icontains=terme),
+        Q(narrative_text__icontains=terme),
+    ])
 
 
 class JournalAuditPagination(PageNumberPagination):
@@ -160,7 +168,8 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
             reussi_bool = reussi.lower() == 'true'
             queryset = queryset.filter(reussi=reussi_bool)
         
-        ordering = self.request.query_params.get('ordering', '-timestamp')
+        ordering_raw = self.request.query_params.get('ordering', '-timestamp')
+        ordering = ordering_raw[0] if isinstance(ordering_raw, list) else (ordering_raw or '-timestamp')
         # Mapper date_action vers timestamp pour compatibilité
         if 'date_action' in ordering:
             ordering = ordering.replace('date_action', 'timestamp')
@@ -207,8 +216,7 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 # Utiliser une approche SQL pour exclure les navigations dupliquées
                 # On exclut les navigations qui ont une navigation plus récente (dans les 5 secondes)
                 # avec les mêmes user_id, frontend_route et ip_address
-                from django.db.models import Q, OuterRef, Exists, F
-                from django.utils import timezone
+                from django.db.models import Q, OuterRef, Exists
                 from datetime import timedelta
                 
                 # Sous-requête pour trouver les navigations dupliquées à exclure
@@ -266,7 +274,7 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
         try:
             route = request.data.get('route', '')
             screen_name = request.data.get('screen_name', '')
-            action = request.data.get('action', 'VIEW')
+            request.data.get('action', 'VIEW')
             
             if not route:
                 return Response(
@@ -427,7 +435,6 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
         Liste des sessions avec toutes les actions groupées dans chaque session
         """
         try:
-            from .models import UserSession
             from .serializers import SessionAuditSerializer
             from collections import defaultdict
             
@@ -482,49 +489,73 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 if not session_logs:
                     continue
                 
-                # Trier les logs de la session par timestamp
-                sorted_logs = sorted(session_logs, key=lambda x: x.timestamp if x.timestamp else timezone.now())
+                # Trier les logs de la session : action la plus récente en premier
+                sorted_logs = sorted(
+                    session_logs,
+                    key=lambda x: x.timestamp if x.timestamp else timezone.now(),
+                    reverse=True,
+                )
                 
-                first_log = sorted_logs[0]
-                last_log = sorted_logs[-1]
+                most_recent_log = sorted_logs[0]
+                oldest_log = sorted_logs[-1]
+                visible_logs = [log for log in sorted_logs if log.action != 'NAVIGATION']
                 
                 # Récupérer la UserSession si disponible
                 user_session = None
-                if hasattr(first_log, 'session') and first_log.session:
-                    user_session = first_log.session
+                if hasattr(most_recent_log, 'session') and most_recent_log.session:
+                    user_session = most_recent_log.session
                 
                 # Calculer la durée
                 duration = None
                 if user_session and user_session.start_time:
                     if user_session.end_time:
                         duration = int((user_session.end_time - user_session.start_time).total_seconds() / 60)
-                    elif last_log.timestamp:
-                        duration = int((last_log.timestamp - user_session.start_time).total_seconds() / 60)
-                elif first_log.timestamp and last_log.timestamp:
-                    duration = int((last_log.timestamp - first_log.timestamp).total_seconds() / 60)
+                    elif most_recent_log.timestamp:
+                        duration = int((most_recent_log.timestamp - user_session.start_time).total_seconds() / 60)
+                elif oldest_log.timestamp and most_recent_log.timestamp:
+                    duration = int((most_recent_log.timestamp - oldest_log.timestamp).total_seconds() / 60)
                 
-                # Utiliser les informations de UserSession si disponibles
-                start_time = user_session.start_time if user_session and user_session.start_time else first_log.timestamp
-                end_time = user_session.end_time if user_session and user_session.end_time else last_log.timestamp
+                start_time = user_session.start_time if user_session and user_session.start_time else oldest_log.timestamp
+                end_time = user_session.end_time if user_session and user_session.end_time else most_recent_log.timestamp
                 
                 session_data = {
                     'session_id': session_key,
-                    'user': first_log.user,
-                    'user_id': first_log.user_id,
-                    'user_role': first_log.user_role,
-                    'ip_address': user_session.ip_address if user_session else first_log.ip_address,
-                    'browser': first_log.browser,
-                    'os': first_log.os,
+                    'user': most_recent_log.user,
+                    'user_id': most_recent_log.user_id,
+                    'user_role': most_recent_log.user_role,
+                    'ip_address': user_session.ip_address if user_session else most_recent_log.ip_address,
+                    'browser': most_recent_log.browser,
+                    'os': most_recent_log.os,
                     'start_time': start_time,
                     'end_time': end_time,
                     'duration_minutes': duration,
-                    'actions_count': len(sorted_logs),
-                    'actions': sorted_logs,  # Toutes les actions de la session
+                    'actions_count': len(visible_logs),
+                    'actions_count_total': len(sorted_logs),
+                    'actions': sorted_logs,
                 }
                 
                 sessions_list.append(session_data)
             
-            sessions_list.sort(key=lambda x: x['start_time'] if x['start_time'] else timezone.now(), reverse=True)
+            def _session_latest_activity(session_data):
+                """Date de la dernière activité (pour tri décroissant)."""
+                actions = session_data.get('actions') or []
+                action_times = [
+                    action.timestamp for action in actions
+                    if getattr(action, 'timestamp', None)
+                ]
+                if action_times:
+                    return max(action_times)
+                return (
+                    session_data.get('end_time')
+                    or session_data.get('start_time')
+                    or timezone.now().replace(year=1970)
+                )
+
+            sessions_list.sort(key=_session_latest_activity, reverse=True)
+
+            total_actions = queryset.count()
+            visible_actions_count = queryset.exclude(action='NAVIGATION').count()
+            navigation_count = total_actions - visible_actions_count
             
             # Pagination
             page = int(request.query_params.get('page', 1))
@@ -540,6 +571,10 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'count': len(sessions_list),
+                'sessions_count': len(sessions_list),
+                'total_actions': total_actions,
+                'visible_actions_count': visible_actions_count,
+                'navigation_count': navigation_count,
                 'next': f"?page={page + 1}" if end < len(sessions_list) else None,
                 'previous': f"?page={page - 1}" if page > 1 else None,
                 'results': serializer.data,
@@ -597,15 +632,20 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
         
         # Total général
         total_actions = base_queryset.count()
+        total_actions_visibles = base_queryset.exclude(action='NAVIGATION').count()
+        navigation_actions = total_actions - total_actions_visibles
         
         # Actions par période
         actions_aujourdhui = base_queryset.filter(timestamp__date=aujourdhui).count()
+        actions_aujourdhui_visibles = base_queryset.filter(timestamp__date=aujourdhui).exclude(action='NAVIGATION').count()
         actions_7_jours = base_queryset.filter(timestamp__gte=date_7_jours).count()
+        actions_7_jours_visibles = base_queryset.filter(timestamp__gte=date_7_jours).exclude(action='NAVIGATION').count()
         actions_30_jours = base_queryset.filter(timestamp__gte=date_30_jours).count()
+        actions_30_jours_visibles = base_queryset.filter(timestamp__gte=date_30_jours).exclude(action='NAVIGATION').count()
         
-        # Répartition par action
+        # Répartition par action (hors navigations répétitives pour lisibilité)
         par_action = dict(
-            base_queryset.values('action')
+            base_queryset.exclude(action='NAVIGATION').values('action')
             .annotate(count=Count('id'))
             .values_list('action', 'count')
         )
@@ -635,9 +675,14 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
         
         data = {
             'total_actions': total_actions,
+            'total_actions_visibles': total_actions_visibles,
+            'navigation_actions': navigation_actions,
             'actions_aujourdhui': actions_aujourdhui,
+            'actions_aujourdhui_visibles': actions_aujourdhui_visibles,
             'actions_7_jours': actions_7_jours,
+            'actions_7_jours_visibles': actions_7_jours_visibles,
             'actions_30_jours': actions_30_jours,
+            'actions_30_jours_visibles': actions_30_jours_visibles,
             'par_action': par_action,
             'par_ressource': par_ressource,
             'par_utilisateur': par_utilisateur,
@@ -673,14 +718,7 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
             
             def filtered_get_queryset():
                 queryset = original_get_queryset()
-                return queryset.filter(
-                    Q(description__icontains=terme) |
-                    Q(resource_type__icontains=terme) |
-                    Q(user__username__icontains=terme) |
-                    Q(action__icontains=terme) |
-                    Q(ip_address__icontains=terme) |
-                    Q(narrative_text__icontains=terme)
-                )
+                return queryset.filter(_build_audit_search_query(terme))
             
             # Remplacer temporairement get_queryset
             self.get_queryset = filtered_get_queryset
@@ -693,14 +731,7 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 self.get_queryset = original_get_queryset
         
         # Recherche normale sans groupement
-        queryset = self.get_queryset().filter(
-            Q(description__icontains=terme) |
-            Q(resource_type__icontains=terme) |
-            Q(user__username__icontains=terme) |
-            Q(action__icontains=terme) |
-            Q(ip_address__icontains=terme) |
-            Q(narrative_text__icontains=terme)
-        )
+        queryset = self.get_queryset().filter(_build_audit_search_query(terme))
         
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -928,11 +959,11 @@ class JournalAuditViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
         try:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
+            user = UserModel.objects.get(id=user_id)
+        except UserModel.DoesNotExist:
             return Response(
                 {'error': 'Utilisateur non trouvé'},
                 status=status.HTTP_404_NOT_FOUND

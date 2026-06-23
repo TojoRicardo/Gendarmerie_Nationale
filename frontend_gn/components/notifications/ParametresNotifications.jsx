@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, Bell, Mail, MessageSquare } from 'lucide-react';
 import Bouton from '../commun/Bouton';
 import SpinnerChargement from '../commun/SpinnerChargement';
+import { getAuthToken } from '../../src/utils/sessionStorage';
 
 const ParametresNotifications = () => {
   const [parametres, setParametres] = useState({
@@ -38,7 +39,7 @@ const ParametresNotifications = () => {
     try {
       const response = await fetch('/api/notifications/parametres', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getAuthToken()}`,
         },
       });
 
@@ -71,7 +72,7 @@ const ParametresNotifications = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getAuthToken()}`,
         },
         body: JSON.stringify(parametres),
       });

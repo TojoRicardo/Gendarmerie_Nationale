@@ -3,8 +3,7 @@ Serializers pour le module de versement des dossiers d'enquête
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from criminel.models import CriminalFicheCriminelle
-from .models import Enquete, TypeEnquete
+from .models import Enquete
 from .models_dossier import (
     PersonneEnquete,
     InfractionEnquete,

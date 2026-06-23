@@ -146,7 +146,7 @@ def main():
                         try:
                             current_port = int(arg.split(':')[-1])
                             break
-                        except:
+                        except Exception:
                             pass
                 
                 # Trouver un nouveau port

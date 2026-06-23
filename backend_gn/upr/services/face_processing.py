@@ -12,7 +12,7 @@ Gère les erreurs (pas de visage, plusieurs visages, qualité faible).
 import logging
 import numpy as np
 from typing import Optional, Dict, Any, Union, List
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
@@ -49,6 +49,47 @@ UploadedImage = Union[
 ]
 
 
+def prepare_face_image(image: UploadedImage) -> Image.Image:
+    """
+    Normalise une image pour la détection faciale :
+    correction EXIF, RGB, agrandissement des miniatures.
+    """
+    if isinstance(image, Image.Image):
+        img = image.copy()
+    elif isinstance(image, (InMemoryUploadedFile, TemporaryUploadedFile)):
+        image.seek(0)
+        data = image.read()
+        image.seek(0)
+        img = Image.open(io.BytesIO(data))
+    elif isinstance(image, bytes):
+        img = Image.open(io.BytesIO(image))
+    elif isinstance(image, str):
+        img = Image.open(image)
+    elif isinstance(image, np.ndarray):
+        if image.ndim == 3 and image.shape[2] >= 3:
+            img = Image.fromarray(image[:, :, :3].astype(np.uint8))
+        else:
+            raise ValueError("Tableau numpy invalide pour une image")
+    else:
+        from django.core.files.base import File
+        if isinstance(image, File):
+            image.seek(0)
+            data = image.read()
+            image.seek(0)
+            img = Image.open(io.BytesIO(data))
+        else:
+            raise TypeError(f"Type d'image non supporté: {type(image)}")
+
+    img = ImageOps.exif_transpose(img)
+    img = img.convert('RGB')
+    w, h = img.size
+    min_dim = min(w, h)
+    if min_dim < 480:
+        scale = 480 / min_dim
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+    return img
+
+
 def extract_face_data(image: UploadedImage) -> Dict[str, Any]:
     """
     Extrait toutes les données faciales d'une image.
@@ -79,68 +120,69 @@ def extract_face_data(image: UploadedImage) -> Dict[str, Any]:
     }
     
     try:
-        # 1. Extraction des landmarks 106 points
-        logger.info("Début extraction landmarks 106 points...")
-        landmarks_result = detect_106_landmarks(image)
-        
-        if not landmarks_result.get("success", False):
-            error_msg = landmarks_result.get("error", "Échec extraction landmarks")
-            result["error"] = error_msg
-            logger.warning(f"Échec extraction landmarks: {error_msg}")
-            
-            # Si plusieurs visages détectés, informer l'utilisateur
-            if "Plusieurs visages" in error_msg or "plusieurs visages" in error_msg.lower():
-                result["error"] = f"{error_msg} Le système utilisera automatiquement le visage le plus grand."
-                logger.info("Tentative avec le visage le plus grand...")
-            
-            return result
-        
-        landmarks = landmarks_result.get("landmarks", [])
-        bbox = landmarks_result.get("bbox")
-        confidence = landmarks_result.get("confidence")
-        
-        if len(landmarks) != 106:
-            result["error"] = f"Nombre de landmarks incorrect: {len(landmarks)} au lieu de 106"
-            logger.warning(result["error"])
-            return result
-        
-        logger.info(f"Landmarks 106 points extraits avec succès (confiance: {confidence})")
-        result["landmarks"] = landmarks
-        result["bbox"] = bbox
-        result["confidence"] = confidence
-        
-        # 2. Extraction de l'embedding ArcFace 512D
-        logger.info("Début extraction embedding ArcFace 512D...")
+        prepared = prepare_face_image(image)
         arcface_service = get_arcface_service()
-        
+
         if arcface_service is None or not arcface_service.available:
             result["error"] = "Service ArcFace non disponible"
             logger.error(result["error"])
             return result
-        
-        # Encoder l'image pour obtenir l'embedding
-        embedding = arcface_service.encode_image(image)
-        
-        if embedding is None:
-            result["error"] = "Aucun visage détecté pour l'extraction d'embedding"
-            logger.warning(result["error"])
+
+        # 1. Extraction ArcFace en priorité (plus fiable que landmarks 106 seuls)
+        logger.info("Extraction embedding ArcFace (prioritaire)...")
+        faces = arcface_service.encode_faces(image=prepared, limit=1)
+
+        if faces:
+            face = faces[0]
+            embedding = face.embedding
+            embedding_list = embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding)
+
+            if len(embedding_list) == 512:
+                result["embedding"] = embedding_list
+                result["bbox"] = list(face.bbox) if face.bbox else None
+                result["confidence"] = float(face.confidence) if face.confidence else None
+                result["success"] = True
+                logger.info("Embedding ArcFace extrait avec succès")
+
+                if face.landmarks is not None:
+                    lm = np.asarray(face.landmarks, dtype=np.float32)
+                    if lm.ndim == 2:
+                        result["landmarks"] = lm.tolist()
+
+        if result["success"]:
             return result
-        
-        # Convertir numpy array en liste de floats
-        if isinstance(embedding, np.ndarray):
-            embedding_list = embedding.tolist()
-        else:
-            embedding_list = list(embedding)
-        
-        if len(embedding_list) != 512:
-            result["error"] = f"Dimension d'embedding incorrecte: {len(embedding_list)} au lieu de 512"
-            logger.warning(result["error"])
+
+        # 2. Fallback landmarks 106
+        logger.info("Fallback extraction landmarks 106 points...")
+        landmarks_result: Dict[str, Any] = {"success": False, "error": "Aucun visage détecté dans l'image."}
+        try:
+            landmarks_result = detect_106_landmarks(prepared)
+        except Exception as lm_exc:
+            logger.warning("Fallback landmarks échoué: %s", lm_exc)
+            landmarks_result = {"success": False, "error": str(lm_exc)}
+
+        if landmarks_result.get("success", False):
+            landmarks = landmarks_result.get("landmarks", [])
+            if len(landmarks) == 106:
+                result["landmarks"] = landmarks
+                result["bbox"] = landmarks_result.get("bbox")
+                result["confidence"] = landmarks_result.get("confidence")
+
+        # 3. Dernière tentative encode sur image préparée
+        if not result.get("embedding"):
+            embedding = arcface_service.encode_image(prepared)
+            if embedding is not None:
+                embedding_list = embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding)
+                if len(embedding_list) == 512:
+                    result["embedding"] = embedding_list
+                    result["success"] = True
+                    logger.info("Embedding ArcFace extrait via fallback encode_image")
+
+        if result["success"]:
             return result
-        
-        logger.info(f"Embedding ArcFace 512D extrait avec succès")
-        result["embedding"] = embedding_list
-        result["success"] = True
-        
+
+        result["error"] = landmarks_result.get("error", "Aucun visage détecté dans l'image.")
+        logger.warning(result["error"])
         return result
         
     except ValueError as e:

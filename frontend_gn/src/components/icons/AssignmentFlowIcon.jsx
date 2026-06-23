@@ -1,5 +1,3 @@
-import React from 'react'
-
 /**
  * Icône premium pour l’état vide des assignations.
  * Représente une feuille de route stylisée avec validation.

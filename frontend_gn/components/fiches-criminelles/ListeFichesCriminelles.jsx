@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, FileText, Edit2, Trash2, Archive, RotateCcw, Eye, MoreVertical, ArchiveRestore } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, Filter, FileText, Edit2, Trash2, Archive, RotateCcw, Eye, ArchiveRestore } from 'lucide-react';
 import CarteFicheCriminelle from './CarteFicheCriminelle';
 import Tableau from '../commun/Tableau';
 import Pagination from '../commun/Pagination';
-import Bouton from '../commun/Bouton';
 import ChampTexte from '../commun/ChampTexte';
 import Select from '../commun/Select';
 import SpinnerChargement from '../commun/SpinnerChargement';
@@ -63,11 +62,7 @@ const ListeFichesCriminelles = ({ onCreer, onModifier, onSupprimer, onDesarchive
     setPageActuelle(1);
   }, [filtreStatut, filtreNiveauDanger]);
 
-  useEffect(() => {
-    chargerFiches();
-  }, [pageActuelle, rechercheDebounced, filtreStatut, filtreNiveauDanger, vueActuelle]);
-
-  const chargerFiches = async () => {
+  const chargerFiches = useCallback(async () => {
     setChargement(true);
     try {
       let response;
@@ -129,7 +124,11 @@ const ListeFichesCriminelles = ({ onCreer, onModifier, onSupprimer, onDesarchive
     } finally {
       setChargement(false);
     }
-  };
+  }, [pageActuelle, rechercheDebounced, filtreStatut, filtreNiveauDanger, vueActuelle, isEnqueteurPrincipal, elementsParPage]);
+
+  useEffect(() => {
+    chargerFiches();
+  }, [chargerFiches]);
 
   const colonnes = [
     { id: 'numeroDossier', label: 'N° Dossier', sortable: true },

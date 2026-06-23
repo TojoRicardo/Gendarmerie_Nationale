@@ -5,7 +5,7 @@ Ce module utilise InsightFace (buffalo_l) avec le module landmark_2d_106.
 
 import logging
 import threading
-from typing import List, Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 import io

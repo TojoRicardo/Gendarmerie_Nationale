@@ -1,10 +1,9 @@
-import React from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Brain, Target } from 'lucide-react';
 
 /**
  * Composant pour afficher les insights et recommandations pour l'Analyste
  */
-const AnalysteInsights = ({ stats }) => {
+const AnalysteInsights = () => {
   // Générer des insights basés sur les statistiques
   const insights = [
     {

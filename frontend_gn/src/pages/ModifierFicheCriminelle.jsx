@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FileText, ArrowLeft, Loader2 } from 'lucide-react'
 import { useNotification } from '../context/NotificationContext'
 import * as criminalFilesService from '../services/criminalFilesService'
 import FormulaireFicheComplete from '../../components/fiches-criminelles/FormulaireFicheComplete'
+import { buildCriminalFilePayload } from '../utils/criminalFileFormUtils'
 
 const ModifierFicheCriminelle = () => {
   const navigate = useNavigate()
@@ -34,54 +35,11 @@ const ModifierFicheCriminelle = () => {
     if (id) {
       chargerFiche()
     }
-  }, [id, navigate])
+  }, [id, navigate, notification])
 
   const handleSauvegarder = async (formData) => {
     try {
-      // Nettoyer et formater les données avant envoi
-      const cleanedData = {
-        // Informations générales (obligatoires)
-        nom: formData.nom?.trim() || '',
-        prenom: formData.prenom?.trim() || '',
-        sexe: formData.sexe || 'H',
-        
-        // Informations optionnelles - Envoyer les chaînes vides plutôt que null
-        surnom: formData.surnom?.trim() || '',
-        date_naissance: formData.date_naissance && formData.date_naissance.trim() !== '' ? formData.date_naissance : null,
-        lieu_naissance: formData.lieu_naissance?.trim() || '',
-        nationalite: formData.nationalite?.trim() || '',
-        cin: formData.cin ? formData.cin.replace(/\s/g, '') : '',
-        
-        // Description physique
-        corpulence: formData.corpulence || '',
-        cheveux: formData.cheveux || '',
-        visage: formData.visage || '',
-        barbe: formData.barbe || '',
-        marques_particulieres: formData.marques_particulieres?.trim() || '',
-        
-        // Filiation
-        nom_pere: formData.nom_pere?.trim() || '',
-        nom_mere: formData.nom_mere?.trim() || '',
-        
-        // Coordonnées
-        adresse: formData.adresse?.trim() || '',
-        contact: formData.contact?.trim() || '',
-        
-        // Informations professionnelles
-        profession: formData.profession?.trim() || '',
-        service_militaire: formData.service_militaire?.trim() || '',
-        
-        // Informations judiciaires
-        motif_arrestation: formData.motif_arrestation?.trim() || '',
-        date_arrestation: formData.date_arrestation && formData.date_arrestation.trim() !== '' ? formData.date_arrestation : null,
-        province: formData.province?.trim() || '',
-        lieu_arrestation: formData.lieu_arrestation?.trim() || '',
-        unite_saisie: formData.unite_saisie?.trim() || '',
-        reference_pv: formData.reference_pv?.trim() || '',
-        suite_judiciaire: formData.suite_judiciaire?.trim() || '',
-        peine_encourue: formData.peine_encourue?.trim() || '',
-        antecedent_judiciaire: formData.antecedent_judiciaire?.trim() || '',
-      }
+      const cleanedData = buildCriminalFilePayload(formData)
 
       // Validation des champs obligatoires
       if (!cleanedData.nom || !cleanedData.prenom) {
@@ -97,9 +55,9 @@ const ModifierFicheCriminelle = () => {
         cleanedData.infractions_data = formData.infractions
       }
 
-      console.log('📤 Mise à jour de la fiche:', id, cleanedData)
+      console.log('Mise à jour de la fiche:', id, cleanedData)
       const result = await criminalFilesService.updateCriminalFile(id, cleanedData)
-      console.log('✅ Réponse de l\'API:', result)
+      console.log('[OK] Réponse de l\'API:', result)
       
       // Message de succès amélioré avec informations détaillées
       notification.showSuccess({
@@ -112,8 +70,8 @@ const ModifierFicheCriminelle = () => {
         navigate(`/fiches-criminelles/voir/${id}`)
       }, 1500)
     } catch (error) {
-      console.error('❌ Erreur modification:', error)
-      console.error('❌ Réponse erreur:', error.response?.data)
+      console.error('[ERREUR] Erreur modification:', error)
+      console.error('[ERREUR] Réponse erreur:', error.response?.data)
       
       let errorMessage = 'Erreur lors de la modification de la fiche'
       let errorTitle = 'Erreur de modification'

@@ -3,7 +3,7 @@
  * Déconnecte automatiquement après 20 minutes d'inactivité
  */
 
-import React, { useState, useCallback, memo } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useInactivityTimeout from '../hooks/useInactivityTimeout'
 import InactivityWarningModal from './InactivityWarningModal'

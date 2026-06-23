@@ -3,7 +3,7 @@ Management command pour créer une notification de test pour les administrateurs
 Usage: python manage.py creer_notif_admin
 """
 from django.core.management.base import BaseCommand
-from notification.utils import creer_notification_pour_role, creer_notification
+from notification.utils import creer_notification_pour_role
 from notification.models import Notification
 from utilisateur.models import UtilisateurModel
 

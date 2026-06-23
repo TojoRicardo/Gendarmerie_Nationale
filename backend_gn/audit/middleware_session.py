@@ -2,7 +2,6 @@
 Middleware pour gérer les sessions utilisateur avec horodatage.
 """
 
-from django.utils import timezone
 from .models import UserSession
 from .user_agent_parser import get_ip_from_request
 from .narrative_audit_service import initialiser_journal_narratif

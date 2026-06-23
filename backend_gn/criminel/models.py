@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 import os
 import uuid
 
@@ -7,7 +7,6 @@ from django.db import models
 from django.db.models import Q
 from django.utils.text import slugify
 from django.core.validators import MinValueValidator, MaxValueValidator
-from .validators import validate_biometric_photo, validate_fingerprint_image, validate_palmprint_image
 
 
 def upload_photo_criminel(instance, filename):
@@ -226,12 +225,21 @@ class CriminalFicheCriminelle(models.Model):
         help_text="Poids en kilogrammes",
         validators=[MinValueValidator(20), MaxValueValidator(300)]
     )
+    EYE_COLOR_CHOICES = [
+        ('brun', 'Brun'),
+        ('noir', 'Noir'),
+        ('bleu', 'Bleu'),
+        ('vert', 'Vert'),
+        ('gris', 'Gris'),
+        ('noisette', 'Noisette'),
+        ('ambre', 'Ambre'),
+    ]
     eye_color = models.CharField(
-        max_length=50, 
+        max_length=50,
+        choices=EYE_COLOR_CHOICES,
         blank=True, 
         null=True, 
         verbose_name="Couleur des yeux",
-        help_text="Ex: Brun, Bleu, Vert, Noir"
     )
     hair_color = models.CharField(
         max_length=50, 
@@ -777,6 +785,9 @@ class CriminalFicheCriminelle(models.Model):
             models.Index(fields=['numero_fiche']),
             models.Index(fields=['nom', 'prenom']),
             models.Index(fields=['-date_creation']),
+            models.Index(fields=['is_archived']),
+            models.Index(fields=['statut_fiche']),
+            models.Index(fields=['niveau_danger']),
         ]
 
     def __str__(self) -> str:
@@ -792,7 +803,6 @@ class CriminalFicheCriminelle(models.Model):
         Vérifie l'unicité pour éviter les doublons en cas de création simultanée
         """
         from django.db import transaction
-        from django.db.models import Max
         annee_actuelle = datetime.now().year
         
         # Chercher toutes les fiches de cette année avec le format XXX-CIE/2-RJ
@@ -891,10 +901,8 @@ class CriminalFicheCriminelle(models.Model):
                         self.save(update_fields=['statut_fiche', 'date_modification'])
                     return
             
-            # Vérifier les infractions
-            infractions = self.infractions.all()  # type: ignore
+            infractions = self.infractions.select_related('statut_affaire').all()  # type: ignore
             if infractions.exists():
-                # Vérifier si toutes les infractions sont clôturées
                 statut_cloture = RefStatutAffaire.objects.filter(code='cloture').first()  # type: ignore
                 if statut_cloture:
                     toutes_cloturees = all(
@@ -1140,6 +1148,12 @@ class InvestigationAssignment(models.Model):
     """
     Assignation d'une enquête à un enquêteur.
     """
+    PRIORITY_CHOICES = [
+        ('faible', 'Faible'),
+        ('normale', 'Normale'),
+        ('elevee', 'Élevée'),
+        ('urgente', 'Urgente'),
+    ]
 
     fiche = models.ForeignKey(
         CriminalFicheCriminelle,
@@ -1152,13 +1166,13 @@ class InvestigationAssignment(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="+",
+        related_name="assignations_recues",
         verbose_name="Enquêteur assigné",
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        related_name="+",
+        related_name="assignations_creees",
         verbose_name="Assigné par",
         null=True,
         blank=True,
@@ -1172,10 +1186,9 @@ class InvestigationAssignment(models.Model):
     )
     priority = models.CharField(
         max_length=20,
-        blank=True,
-        null=True,
+        choices=PRIORITY_CHOICES,
+        default='normale',
         verbose_name="Priorité",
-        help_text="Optionnel : faible, normale, élevée…",
     )
     assignment_date = models.DateTimeField(
         auto_now_add=True, verbose_name="Date d'assignation"
@@ -1198,6 +1211,7 @@ class InvestigationAssignment(models.Model):
             models.Index(fields=("status",)),
             models.Index(fields=("assigned_investigator", "status")),
             models.Index(fields=("fiche", "assignment_date")),
+            models.Index(fields=("due_date",)),
         ]
 
     def __str__(self) -> str:

@@ -3,7 +3,6 @@ Services pour les courbes statistiques (courbes évolutives).
 """
 
 import pandas as pd
-from django.utils import timezone
 
 from sgic_statistics.models import CriminalCase
 

@@ -4,8 +4,10 @@ Middleware pour capturer automatiquement toutes les actions pour l'audit profess
 
 import threading
 import logging
+from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 from .utils import log_action, _extract_resource_type_from_endpoint, _extract_resource_id_from_endpoint
+from .audit_service import resolve_module, format_audit_line, get_user_display_name, ACTION_LABELS
 import json
 
 logger = logging.getLogger(__name__)
@@ -113,13 +115,19 @@ class AuditMiddleware(MiddlewareMixin):
             '/favicon.ico',
             '/robots.txt',
             '/admin/static/',
-            '/api/auth/refresh/',  # Refresh token (trop fréquent)
-            '/api/auth/token/refresh/',  # Refresh token alternatif
-            '/api/audit/log-navigation/',  # Les navigations sont loguées par le frontend
+            '/api/auth/refresh/',
+            '/api/auth/token/refresh/',
+            '/api/audit/log-navigation/',
+            '/api/utilisateur/login/',
+            '/api/utilisateur/logout/',
+            '/api/reports/fiche-criminelle-pdf',
         ]
         
         should_log = True
         path = request.path
+
+        if getattr(request, '_audit_pdf_logged', False):
+            should_log = False
         
         # Vérifier si le chemin doit être ignoré
         for ignored in ignored_paths:
@@ -169,7 +177,6 @@ class AuditMiddleware(MiddlewareMixin):
                         # Essayer de lire le body JSON
                         if hasattr(request, 'body') and request.body:
                             try:
-                                import json
                                 body_data = json.loads(request.body.decode('utf-8'))
                                 # Filtrer les données sensibles (mots de passe, tokens)
                                 if isinstance(body_data, dict):
@@ -211,25 +218,49 @@ class AuditMiddleware(MiddlewareMixin):
                     }
                 }
                 
-                # Pour CREATE/UPDATE/DELETE, ne pas logger ici car les signals le feront avec plus de détails
-                # On logue seulement VIEW, SEARCH, DOWNLOAD, UPLOAD avec les détails supplémentaires
+                # Pour CREATE/UPDATE/DELETE, laisser les signals gérer avec before/after
                 if action in ['VIEW', 'SEARCH', 'DOWNLOAD', 'UPLOAD']:
+                    module_name = resolve_module(None, path, resource_type)
+                    action_label = ACTION_LABELS.get(action, action)
+                    query_hint = ''
+                    if query_params:
+                        q = query_params.get('q') or query_params.get('search') or query_params.get('query')
+                        if q:
+                            query_hint = f" | Requête: {q[0] if isinstance(q, list) else q}"
+                    resource_hint = f"{resource_type} #{resource_id}" if resource_id else (resource_type or path)
+                    details = f"{resource_hint}{query_hint}"
+                    user_name = get_user_display_name(user) if user and user.is_authenticated else 'Système'
+                    standard_line = format_audit_line(
+                        timezone.now(),
+                        user_name,
+                        action_label,
+                        module_name,
+                        details,
+                    )
+                    audit_payload = {
+                        '_audit': {
+                            'module': module_name,
+                            'details': details,
+                            'standard_line': standard_line,
+                        },
+                        **additional_data,
+                    }
                     log_action(
                         request=request,
                         user=user if user and user.is_authenticated else None,
                         action=action,
                         resource_type=resource_type,
                         resource_id=resource_id,
-                        data_after=additional_data,  # Stocker les détails dans data_after pour VIEW
+                        data_after=audit_payload,
+                        additional_info=standard_line,
                     )
-                # Pour CREATE/UPDATE/DELETE, on laisse les signals gérer avec before/after
             except Exception as e:
                 # Ne pas bloquer la requête en cas d'erreur d'audit
                 logger.error(f"Erreur lors de l'enregistrement automatique d'audit: {e}", exc_info=True)
         
         try:
             response = self.get_response(request)
-            
+
             # Capturer les erreurs HTTP importantes pour l'audit
             if response.status_code in [403, 404, 500]:
                 try:
@@ -239,7 +270,7 @@ class AuditMiddleware(MiddlewareMixin):
                         500: 'ERROR_500',
                     }
                     action = error_action_map.get(response.status_code, 'ACCESS_DENIED')
-                    
+
                     # Logger l'erreur seulement si l'utilisateur est authentifié
                     if user and user.is_authenticated:
                         log_action(
@@ -254,10 +285,9 @@ class AuditMiddleware(MiddlewareMixin):
                 except Exception as e:
                     # Ne pas bloquer la réponse en cas d'erreur d'audit
                     logger.debug(f"Erreur lors de l'enregistrement de l'erreur HTTP: {e}")
-            
+
+            return response
         finally:
             # Nettoyer après la requête
             _thread_locals.user = None
             _thread_locals.request = None
-        
-        return response

@@ -1,21 +1,19 @@
 ﻿import logging
 import os
 import zipfile
-import tempfile
 from io import BytesIO
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import Q, Count, Avg
+from django.db.models import Count, Avg
 from django.http import HttpResponse
-from django.conf import settings
 from typing import List, Tuple
 from django.shortcuts import get_object_or_404
-from .models import Biometrie, BiometriePhoto, BiometrieEmpreinte, BiometrieScanResultat, BiometrieHistorique
+from .models import Biometrie, BiometriePhoto, BiometrieEmpreinte, BiometriePaume, BiometrieScanResultat, BiometrieHistorique
 from .serializers import (
     BiometrieSerializer,
     BiometrieEnregistrementSerializer,
@@ -24,12 +22,13 @@ from .serializers import (
     BiometrieEmpreinteSerializer,
     BiometriePhotoCreateSerializer,
     BiometrieEmpreinteCreateSerializer,
+    BiometriePaumeSerializer,
+    BiometriePaumeCreateSerializer,
     BiometrieScanResultatSerializer,
     BiometrieScanResultatCreateSerializer,
     BiometrieStatistiquesSerializer,
     BiometrieHistoriqueSerializer,
     ReconnaissanceFacialeUploadSerializer,
-    ReconnaissanceFacialeResultatSerializer,
     ComparaisonCriminelSerializer,
     MiseAJourEncodagesSerializer,
     SuppressionSecuriseSerializer
@@ -40,7 +39,6 @@ from .face_recognition_service import ArcFaceRecognitionService
 from .face_106 import detect_106_landmarks
 from .pipeline import enrollement_pipeline, save_enrollement_to_biometrie, save_enrollement_to_biometrie_photo
 from criminel.models import CriminalFicheCriminelle
-from .permissions import BiometriePermissions
 import json
 import base64
 
@@ -595,6 +593,7 @@ class BiometrieEmpreinteViewSet(viewsets.ModelViewSet):
     """
     queryset = BiometrieEmpreinte.objects.all()
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -620,54 +619,143 @@ class BiometrieEmpreinteViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save(enregistre_par=self.request.user)
-    
+
+    @action(detail=False, methods=['post'], url_path='upload-lot')
+    def upload_lot(self, request):
+        """
+        Upload multiple empreintes/paumes en une requête multipart.
+        Champs attendus : criminel (id), fichiers nommés par doigt/paume (ex: pouce_droit, paume_gauche).
+        """
+        criminel_id = request.data.get('criminel') or request.data.get('suspectId')
+        if not criminel_id:
+            return Response({'erreur': 'criminel requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        doigts_valides = {c[0] for c in BiometrieEmpreinte.DOIGT_CHOICES}
+        paumes_valides = {c[0] for c in BiometriePaume.PAUME_CHOICES}
+        pouce_seul_map = {
+            'pouce_seul_gauche': 'pouce_gauche',
+            'pouce_seul_droit': 'pouce_droit',
+        }
+
+        crees = []
+        erreurs = []
+
+        for key, fichier in request.FILES.items():
+            try:
+                if key in paumes_valides:
+                    obj, _ = BiometriePaume.objects.update_or_create(
+                        criminel_id=criminel_id,
+                        paume=key,
+                        defaults={
+                            'image': fichier,
+                            'enregistre_par': request.user,
+                            'est_active': True,
+                            'qualite': int(request.data.get('qualite', 85)),
+                        },
+                    )
+                    crees.append({'type': 'paume', 'id': obj.id, 'paume': key})
+                else:
+                    doigt = pouce_seul_map.get(key, key)
+                    if doigt not in doigts_valides:
+                        erreurs.append({key: f'Type non reconnu: {key}'})
+                        continue
+                    obj, _ = BiometrieEmpreinte.objects.update_or_create(
+                        criminel_id=criminel_id,
+                        doigt=doigt,
+                        defaults={
+                            'image': fichier,
+                            'enregistre_par': request.user,
+                            'est_active': True,
+                            'qualite': int(request.data.get('qualite', 85)),
+                        },
+                    )
+                    crees.append({'type': 'empreinte', 'id': obj.id, 'doigt': doigt})
+            except Exception as exc:
+                erreurs.append({key: str(exc)})
+
+        if not crees:
+            return Response(
+                {'erreur': 'Aucune empreinte enregistrée', 'details': erreurs},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from criminel.models import CriminalFicheCriminelle
+            from audit.audit_service import record_audit
+            criminel = CriminalFicheCriminelle.objects.filter(pk=criminel_id).first()
+            if criminel:
+                suspect = f"{criminel.nom or ''} {criminel.prenom or ''}".strip() or 'Non renseigné'
+                record_audit(
+                    request=request,
+                    action='UPLOAD',
+                    action_label='Ajout empreintes digitales',
+                    module='Biométrie',
+                    resource_type='Empreinte digitale',
+                    resource_id=criminel_id,
+                    details=(
+                        f"{len(crees)} empreinte(s) enregistrée(s) | "
+                        f"Dossier #{criminel_id} | Suspect: {suspect}"
+                    ),
+                    obj=criminel,
+                    skip_dedupe=True,
+                )
+        except Exception as audit_exc:
+            logger.debug("Audit upload empreintes ignoré: %s", audit_exc)
+
+        return Response({
+            'success': True,
+            'count': len(crees),
+            'crees': crees,
+            'erreurs': erreurs,
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=False, methods=['get'])
     def par_criminel(self, request):
         """Récupérer toutes les empreintes d'un criminel"""
         criminel_id = request.query_params.get('criminel_id')
         if not criminel_id:
             return Response(
-                {'error': 'criminel_id requis'}, 
+                {'error': 'criminel_id requis'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         empreintes = self.get_queryset().filter(criminel_id=criminel_id)
         serializer = self.get_serializer(empreintes, many=True)
         return Response(serializer.data)
-    
+
     @action(detail=True, methods=['delete'])
     def supprimer(self, request, pk=None):
         """Supprimer une empreinte digitale"""
         empreinte = self.get_object()
         empreinte.delete()
         return Response({'status': 'Empreinte supprimée avec succès'}, status=status.HTTP_204_NO_CONTENT)
-    
+
     @action(detail=True, methods=['post'])
     def activer(self, request, pk=None):
         """Activer une empreinte digitale"""
         empreinte = self.get_object()
         empreinte.est_active = True
         empreinte.save()
-        
+
         serializer = self.get_serializer(empreinte)
         return Response({
             'status': 'Empreinte activée',
             'data': serializer.data
         })
-    
+
     @action(detail=True, methods=['post'])
     def desactiver(self, request, pk=None):
         """Désactiver une empreinte digitale"""
         empreinte = self.get_object()
         empreinte.est_active = False
         empreinte.save()
-        
+
         serializer = self.get_serializer(empreinte)
         return Response({
             'status': 'Empreinte désactivée',
             'data': serializer.data
         })
-    
+
     @action(detail=False, methods=['get'])
     def statistiques_main(self, request):
         """Statistiques par main (droite/gauche)"""
@@ -677,42 +765,30 @@ class BiometrieEmpreinteViewSet(viewsets.ModelViewSet):
         empreintes_gauche = BiometrieEmpreinte.objects.filter(
             doigt__contains='gauche'
         ).count()
-        
+
         return Response({
             'empreintes_main_droite': empreintes_droite,
             'empreintes_main_gauche': empreintes_gauche,
             'total': empreintes_droite + empreintes_gauche
         })
-    
+
     @action(detail=True, methods=['get'])
     def telecharger(self, request, pk=None):
         """
         Télécharge un fichier dactyloscopique avec son dossier d'enquête.
-        
-        Structure de l'archive ZIP:
-        enquete_<id_enquete>/
-        └── dactyloscopie/
-            └── <nom_fichier>
-        
-        Le fichier n'est jamais téléchargé seul, toujours avec son dossier d'enquête.
-        
         Endpoint: GET /api/biometrie/empreintes/<id>/telecharger/
         """
         from enquete.models import Enquete
         from enquete.views import _user_can_supervise, _get_assignment
-        from rest_framework.exceptions import PermissionDenied
-        
-        # Récupérer l'empreinte
+
         empreinte = self.get_object()
-        
-        # Vérifier que le fichier existe
+
         if not empreinte.image:
             return Response(
                 {'erreur': 'Aucun fichier associé à cette empreinte'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Récupérer le chemin du fichier
+
         try:
             file_path = empreinte.image.path
         except ValueError:
@@ -720,104 +796,104 @@ class BiometrieEmpreinteViewSet(viewsets.ModelViewSet):
                 {'erreur': 'Erreur lors de l\'accès au fichier'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         if not os.path.exists(file_path):
             return Response(
                 {'erreur': 'Fichier non trouvé sur le disque'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Trouver l'enquête associée au criminel
-        # Utiliser la plus récente enquête active pour ce criminel
+
         enquete = Enquete.objects.filter(
             dossier=empreinte.criminel
         ).order_by('-date_enregistrement').first()
-        
+
         if not enquete:
             return Response(
                 {'erreur': 'Aucune enquête associée à ce fichier dactyloscopique'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Vérifier les permissions d'accès à l'enquête
-        # Utiliser la même logique que les vues d'enquête
+
         user = request.user
         if not user.is_authenticated:
             return Response(
                 {'erreur': 'Authentification requise'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-        
-        # Vérifier l'accès à l'enquête (superviseur ou assignation)
+
         try:
-            # Si l'utilisateur est superviseur, il a accès
-            if _user_can_supervise(user) or user.is_superuser:
-                pass  # Accès autorisé
-            else:
-                # Vérifier l'assignation pour le dossier
+            if not (_user_can_supervise(user) or user.is_superuser):
                 _get_assignment(
                     user,
                     empreinte.criminel,
-                    require_confirmed=False,  # Permettre même les assignations en attente
+                    require_confirmed=False,
                     allow_supervisor_override=True
                 )
-        except Exception as e:
-            # Si _get_assignment lève une exception, c'est que l'utilisateur n'a pas accès
+        except Exception:
             return Response(
                 {'erreur': 'Vous n\'avez pas accès à cette enquête'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        # Vérifier que le fichier appartient bien à l'enquête (via le criminel)
+
         if empreinte.criminel != enquete.dossier:
             return Response(
                 {'erreur': 'Le fichier n\'appartient pas à cette enquête'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Créer l'archive ZIP en mémoire
+
         zip_buffer = BytesIO()
-        
+
         try:
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # Nom du fichier d'origine
                 original_filename = os.path.basename(empreinte.image.name)
-                
-                # Structure: enquete_<id_enquete>/dactyloscopie/<nom_fichier>
                 zip_path = f"enquete_{enquete.id}/dactyloscopie/{original_filename}"
-                
-                # Ajouter le fichier à l'archive
                 zip_file.write(file_path, zip_path)
-            
-            # Préparer la réponse HTTP
+
             zip_buffer.seek(0)
             response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-            
-            # Nom de l'archive: enquete_<id_enquete>_dactyloscopie.zip
             zip_filename = f"enquete_{enquete.id}_dactyloscopie.zip"
             response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
-            
-            # Ajouter les headers CORS si nécessaire
+
             origin = request.META.get('HTTP_ORIGIN', '')
             if origin:
                 response['Access-Control-Allow-Origin'] = origin
                 response['Access-Control-Allow-Credentials'] = 'true'
                 response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
                 response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            
+
             logger.info(
                 f"Téléchargement fichier dactyloscopique #{empreinte.id} "
                 f"avec enquête #{enquete.id} par utilisateur {user.username}"
             )
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Erreur lors de la création de l'archive ZIP: {e}", exc_info=True)
             return Response(
                 {'erreur': f'Erreur lors de la création de l\'archive: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class BiometriePaumeViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les empreintes palmaires."""
+    queryset = BiometriePaume.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return BiometriePaumeCreateSerializer
+        return BiometriePaumeSerializer
+
+    def get_queryset(self):
+        queryset = BiometriePaume.objects.select_related('criminel', 'enregistre_par')
+        criminel_id = self.request.query_params.get('criminel')
+        if criminel_id:
+            queryset = queryset.filter(criminel_id=criminel_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(enregistre_par=self.request.user)
 
 
 class BiometrieScanResultatViewSet(viewsets.ModelViewSet):

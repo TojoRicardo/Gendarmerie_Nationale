@@ -185,8 +185,18 @@ class CriminalFicheCriminelleSerializer(serializers.ModelSerializer):
             'surnom', 'date_naissance', 'lieu_naissance', 'nationalite', 'cin',
             'corpulence', 'cheveux', 'visage', 'barbe', 'marques_particulieres',
             'nom_pere', 'nom_mere', 'adresse', 'contact', 'profession', 'service_militaire',
-            'motif_arrestation', 'date_arrestation', 'province', 'lieu_arrestation', 'unite_saisie',
-            'reference_pv', 'suite_judiciaire', 'peine_encourue', 'antecedent_judiciaire'
+            'motif_arrestation', 'date_arrestation', 'province', 'region', 'district',
+            'lieu_arrestation', 'unite_saisie',
+            'reference_pv', 'suite_judiciaire', 'peine_encourue', 'antecedent_judiciaire',
+            'statut_matrimonial', 'spouse', 'partenaire_affectif', 'children', 'personnes_proches',
+            'dependants', 'facebook', 'instagram', 'tiktok', 'twitter_x', 'whatsapp', 'telegram',
+            'email', 'autres_reseaux', 'frequentations_connues', 'endroits_frequentes',
+            'anciennes_adresses', 'adresses_secondaires', 'lieux_visites_frequemment',
+            'vehicules_associes', 'plaques_immatriculation', 'permis_conduire', 'trajets_habituels',
+            'emplois_precedents', 'sources_revenus', 'entreprises_associees', 'comptes_bancaires',
+            'biens_proprietes', 'dettes_importantes', 'transactions_suspectes',
+            'famille_proche', 'amis_proches', 'relations_risque', 'suspects_associes',
+            'membres_reseau_criminel', 'complices_potentiels', 'contacts_recurrents',
         ]
         
         for champ in champs_optionnels:

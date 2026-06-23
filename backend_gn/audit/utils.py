@@ -4,10 +4,8 @@ Utilitaires pour le Journal d'Audit Professionnel
 
 from .models import AuditLog
 from .user_agent_parser import parse_user_agent, get_ip_from_request
-from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -37,71 +35,26 @@ def log_action_simple(action, obj=None, additional_info=None):
             ...
     """
     try:
-        # Import local pour éviter les imports circulaires
-        from .middleware import get_current_user, get_role
-        
+        from .middleware import get_current_user, get_current_request
+        from .audit_service import record_audit
+
         user = get_current_user()
         if user is None or not user.is_authenticated:
             return None
-        
-        # Déterminer le content_type et object_id si un objet est fourni
-        content_type = None
-        object_id = None
-        if obj:
-            content_type = ContentType.objects.get_for_model(obj)
-            object_id = obj.pk
-        
-        # Récupérer la requête pour IP, User-Agent, endpoint, méthode HTTP
+
         request = get_current_request()
-        endpoint = None
-        method = None
-        ip_address = None
-        user_agent = None
-        browser = None
-        os = None
-        
-        if request:
-            endpoint = request.path
-            method = request.method
-            ip_address = get_ip_from_request(request)
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
-            if user_agent:
-                try:
-                    ua_info = parse_user_agent(user_agent)
-                    browser = ua_info.get('navigateur')
-                    os = ua_info.get('systeme')
-                except Exception:
-                    pass
-        
-        # Déterminer resource_type depuis l'objet ou l'endpoint
-        resource_type = None
-        resource_id = None
-        if obj:
-            resource_type = obj.__class__.__name__
-            resource_id = str(obj.pk) if hasattr(obj, 'pk') else None
-        elif endpoint:
-            resource_type = _extract_resource_type_from_endpoint(endpoint)
-            resource_id = _extract_resource_id_from_endpoint(endpoint)
-        
-        # Créer l'entrée d'audit
-        audit_entry = AuditLog.objects.create(
+        resource_type = obj.__class__.__name__ if obj else None
+        resource_id = obj.pk if obj and hasattr(obj, 'pk') else None
+
+        return record_audit(
+            request=request,
             user=user,
-            user_role=get_role(user),
             action=action,
-            content_type=content_type,
-            object_id=object_id,
             resource_type=resource_type,
             resource_id=resource_id,
-            endpoint=endpoint,
-            method=method,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            browser=browser,
-            os=os,
-            additional_info=str(additional_info) if additional_info else None
+            details=str(additional_info) if additional_info else None,
+            obj=obj,
         )
-        
-        return audit_entry
         
     except Exception as e:
         logger.error(f"Erreur lors de l'enregistrement de l'action d'audit: {e}", exc_info=True)
@@ -127,7 +80,8 @@ def log_action(
     data_after=None,
     user_role=None,
     reussi=True,
-    message_erreur=None
+    message_erreur=None,
+    allow_anonymous=False,
 ):
     """
     Enregistre une action dans le journal d'audit professionnel.
@@ -159,7 +113,7 @@ def log_action(
     return log_action_detailed(
         request=request,
         user=user,
-        action=action,
+        action=action or 'VIEW',
         resource_type=resource_type,
         resource_id=resource_id,
         endpoint=endpoint,
@@ -192,7 +146,9 @@ def log_action_detailed(
     data_after=None,
     user_role=None,
     reussi=True,
-    message_erreur=None
+    message_erreur=None,
+    additional_info=None,
+    allow_anonymous=False,
 ):
     """
     Enregistre une action dans le journal d'audit professionnel.
@@ -265,14 +221,13 @@ def log_action_detailed(
                         user = thread_user
         
         # Vérifier que l'utilisateur est valide avant de créer le log
-        if not user:
-            logger.debug("Aucun utilisateur authentifié pour créer un log d'audit")
-            return None
-        
-        # Vérifier une dernière fois que ce n'est pas AnonymousUser
         from django.contrib.auth.models import AnonymousUser
         if isinstance(user, AnonymousUser):
-            logger.debug("Tentative de créer un log d'audit avec AnonymousUser - ignoré")
+            user = None
+
+        anonymous_allowed = allow_anonymous or action in ('FAILED_LOGIN',)
+        if not user and not anonymous_allowed:
+            logger.debug("Aucun utilisateur authentifié pour créer un log d'audit")
             return None
         
         # Extraire le rôle de l'utilisateur avec la fonction améliorée
@@ -316,14 +271,13 @@ def log_action_detailed(
             user_agent=user_agent,
             browser=browser,
             os=os,
-            # Nouveau format unifié
             before=before_normalized,
             after=after_normalized,
-            # Compatibilité avec ancien format
             changes_before=before_normalized,
             changes_after=after_normalized,
             data_before=before_normalized,
             data_after=after_normalized,
+            additional_info=additional_info,
             reussi=reussi,
             message_erreur=message_erreur,
             timestamp=timezone.now()

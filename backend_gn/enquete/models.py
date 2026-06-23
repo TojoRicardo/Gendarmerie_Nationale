@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from django.conf import settings
@@ -6,7 +7,12 @@ from django.db import models
 from django.utils import timezone
 
 from criminel.models import CriminalFicheCriminelle
-from .validators import validate_preuve_file_size, validate_preuve_file_type
+from .validators import (
+    validate_preuve_file_size,
+    validate_preuve_file_type,
+    validate_document_file_size,
+    validate_document_file_type,
+)
 
 
 def preuve_upload_path(instance, filename):
@@ -233,8 +239,17 @@ class Enquete(models.Model):
         null=True,
         verbose_name="Contact du dénonciateur"
     )
+    SOURCE_DENONCIATION_CHOICES = [
+        ('anonyme', 'Anonyme'),
+        ('telephone', 'Téléphone'),
+        ('courrier', 'Courrier'),
+        ('en_personne', 'En personne'),
+        ('en_ligne', 'En ligne'),
+        ('autre', 'Autre'),
+    ]
     source_denonciation = models.CharField(
         max_length=100,
+        choices=SOURCE_DENONCIATION_CHOICES,
         blank=True,
         null=True,
         verbose_name="Source de la dénonciation"
@@ -300,7 +315,6 @@ class Enquete(models.Model):
     @staticmethod
     def generer_numero_enquete():
         """Génère un numéro d'enquête unique"""
-        from django.db import transaction
         annee = timezone.now().year
         prefixe = f"ENQ-{annee}-"
         
@@ -342,6 +356,16 @@ class EnqueteCriminel(models.Model):
     Modèle de relation many-to-many entre Enquête et Criminel (FicheCriminelle)
     Permet de lier plusieurs criminels à une enquête et vice versa
     """
+    ROLE_CHOICES = [
+        ('suspect', 'Suspect'),
+        ('complice', 'Complice'),
+        ('temoin', 'Témoin'),
+        ('victime', 'Victime'),
+        ('informateur', 'Informateur'),
+        ('mis_en_cause', 'Mis en cause'),
+        ('autre', 'Autre'),
+    ]
+
     enquete = models.ForeignKey(
         Enquete,
         on_delete=models.CASCADE,
@@ -356,10 +380,10 @@ class EnqueteCriminel(models.Model):
     )
     role = models.CharField(
         max_length=100,
-        blank=True,
-        null=True,
+        choices=ROLE_CHOICES,
+        default='suspect',
         verbose_name="Rôle",
-        help_text="Rôle du criminel dans l'enquête (ex: suspect, témoin, victime)"
+        help_text="Rôle du criminel dans l'enquête"
     )
     date_ajout = models.DateTimeField(
         auto_now_add=True,
@@ -557,4 +581,124 @@ class Avancement(models.Model):
 
     def __str__(self):
         return f"Avancement {self.pourcentage}% - {self.dossier}"
+
+
+def document_enquete_upload_path(instance, filename):
+    cat = instance.categorie or 'general'
+    return f"enquetes/documents/{cat}/{filename}"
+
+
+class DocumentEnquete(models.Model):
+    """Documents joints classes par categorie d'enquete"""
+
+    CATEGORIE_CHOICES = [
+        ('judiciaire', 'Enquete judiciaire'),
+        ('criminelle', 'Enquete criminelle'),
+        ('criminologique', 'Enquete criminologique'),
+        ('numerique', 'Enquete numerique'),
+        ('renseignement', 'Enquete de renseignement'),
+        ('terrain', 'Enquete de terrain'),
+        ('scientifique', 'Enquete scientifique'),
+        ('financiere', 'Enquete financiere'),
+        ('mixte', 'Enquete mixte'),
+    ]
+
+    TYPE_DOCUMENT_CHOICES = [
+        ('excel', 'Excel'),
+        ('word', 'Word'),
+        ('pdf', 'PDF'),
+        ('powerpoint', 'PowerPoint'),
+        ('image', 'Image'),
+        ('csv', 'CSV / Tableur'),
+        ('archive', 'Archive (ZIP/RAR)'),
+        ('autre', 'Autre'),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    categorie = models.CharField(
+        max_length=30,
+        choices=CATEGORIE_CHOICES,
+        default='mixte',
+        verbose_name="Categorie",
+        db_index=True,
+    )
+    enquete = models.ForeignKey(
+        Enquete,
+        on_delete=models.CASCADE,
+        related_name='documents',
+        verbose_name="Enquete",
+        null=True,
+        blank=True,
+    )
+    nom = models.CharField(
+        max_length=255,
+        verbose_name="Nom du document",
+    )
+    type_document = models.CharField(
+        max_length=20,
+        choices=TYPE_DOCUMENT_CHOICES,
+        default='autre',
+        verbose_name="Type de document",
+    )
+    fichier = models.FileField(
+        upload_to=document_enquete_upload_path,
+        validators=[validate_document_file_size, validate_document_file_type],
+        verbose_name="Fichier",
+    )
+    taille_fichier = models.BigIntegerField(
+        default=0,
+        verbose_name="Taille (octets)",
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+    )
+    ajoute_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        verbose_name="Ajoute par",
+    )
+    date_ajout = models.DateTimeField(auto_now_add=True)
+    date_modification = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'enquete_document'
+        verbose_name = "Document d'enquete"
+        verbose_name_plural = "Documents d'enquete"
+        ordering = ['-date_ajout']
+        indexes = [
+            models.Index(fields=['categorie', '-date_ajout']),
+            models.Index(fields=['type_document']),
+        ]
+
+    EXTENSION_TYPE_MAP = {
+        '.xls': 'excel', '.xlsx': 'excel',
+        '.doc': 'word', '.docx': 'word',
+        '.pdf': 'pdf',
+        '.ppt': 'powerpoint', '.pptx': 'powerpoint',
+        '.jpg': 'image', '.jpeg': 'image', '.png': 'image',
+        '.gif': 'image', '.bmp': 'image', '.webp': 'image',
+        '.csv': 'csv', '.ods': 'csv', '.odt': 'word', '.odp': 'powerpoint',
+        '.zip': 'archive', '.rar': 'archive', '.7z': 'archive',
+    }
+
+    def save(self, *args, **kwargs):
+        if self.fichier and hasattr(self.fichier, 'size'):
+            self.taille_fichier = self.fichier.size
+
+        if self.fichier and self.type_document == 'autre':
+            ext = os.path.splitext(self.fichier.name)[1].lower()
+            self.type_document = self.EXTENSION_TYPE_MAP.get(ext, 'autre')
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.nom} ({self.get_categorie_display()})"
 

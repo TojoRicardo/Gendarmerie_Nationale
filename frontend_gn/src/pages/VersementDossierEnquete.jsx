@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   Save,
   Loader2,
-  AlertCircle,
   Plus,
   Trash2,
   FileText,
@@ -13,8 +12,6 @@ import {
   Shield,
   FileCheck,
   Activity,
-  Clock,
-  CheckCircle,
 } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { verserDossierEnquete } from '../services/dossierEnqueteService'
@@ -53,7 +50,7 @@ const VersementDossierEnquete = () => {
 
   const [errors, setErrors] = useState({})
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadTypesEnquete()
   }, [])
 
@@ -145,9 +142,9 @@ const VersementDossierEnquete = () => {
     setLoading(true)
 
     try {
-      const data = await verserDossierEnquete(form)
+      await verserDossierEnquete(form)
       showSuccess("Dossier d'enquête versé avec succès")
-      navigate(`/enquetes/${data.id || data.uuid}`)
+      navigate('/enquete')
     } catch (error) {
       console.error('Erreur versement dossier:', error)
       const errorMessage =

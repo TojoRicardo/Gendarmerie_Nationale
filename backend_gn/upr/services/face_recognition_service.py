@@ -14,7 +14,7 @@ et précise. Les encodings sont stockés en base de données pour comparaison ul
 import logging
 import os
 import uuid
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 import cv2
@@ -132,7 +132,7 @@ def extract_face_encoding(image: np.ndarray) -> Optional[np.ndarray]:
             logger.error(f"Dimension d'encoding incorrecte: {len(encoding)} au lieu de 128")
             return None
         
-        logger.info(f"Encoding facial extrait avec succès (128 dimensions)")
+        logger.info("Encoding facial extrait avec succès (128 dimensions)")
         return encoding
         
     except Exception as e:

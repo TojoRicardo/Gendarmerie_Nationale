@@ -15,7 +15,8 @@ from pathlib import Path
 from datetime import timedelta
 import os
 import logging
-import base64
+
+from celery.schedules import crontab
 
 # Charger les variables d'environnement depuis .env si disponible
 try:
@@ -141,7 +142,7 @@ WSGI_APPLICATION = 'backend_gn.wsgi.application'
 # Encoder les paramètres de connexion pour éviter les erreurs d'encodage UTF-8
 _db_name = safe_encode(os.environ.get('DB_NAME', 'Gendarmerie_Nationale_db'))
 _db_user = safe_encode(os.environ.get('DB_USER', 'postgres'))
-_db_password = safe_encode(os.environ.get('DB_PASSWORD', '    '))
+_db_password = safe_encode(os.environ.get('DB_PASSWORD', 'Toliara601'))
 _db_host = safe_encode(os.environ.get('DB_HOST', 'localhost'))
 _db_port = os.environ.get('DB_PORT', '5432')
 
@@ -206,7 +207,7 @@ AUTH_USER_MODEL = 'utilisateur.UtilisateurModel'
 # REST Framework configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'utilisateur.authentication.SGICJWTAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -308,7 +309,6 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_ENABLED = os.environ.get('CELERY_ENABLED', 'True') == 'True'
 
 # Celery Beat Schedule - Planification automatique des rapports
-from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
     # Vérifier toutes les heures les planifications de rapports
     'check-automatic-reports': {

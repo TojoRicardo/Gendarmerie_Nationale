@@ -12,7 +12,6 @@ except ImportError:
     print(" Packages IA non installés. Installez-les avec: pip install -r requirements.txt")
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from django.db.models import Count, Q
 
 
 class PatternCorrelationService:
@@ -156,7 +155,7 @@ class PatternCorrelationService:
                 return {'success': False, 'error': 'Aucun lieu enregistré'}
             
             # Compter les occurrences par lieu
-            lieux_counts = Counter([l['lieu'] for l in lieux])
+            lieux_counts = Counter([entry['lieu'] for entry in lieux])
             
             # Top 10 zones à risque
             zones_risque = []

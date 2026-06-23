@@ -3,7 +3,7 @@ Configuration admin pour le Journal d'Audit Professionnel
 """
 
 from django.contrib import admin
-from .models import AuditLog, JournalAudit  # JournalAudit est un alias
+from .models import AuditLog  # JournalAudit est un alias
 
 
 @admin.register(AuditLog)

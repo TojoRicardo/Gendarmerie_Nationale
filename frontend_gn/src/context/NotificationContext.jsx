@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import ModalConfirmation from '../components/commun/ModalConfirmation';
 
 const NotificationContext = createContext();
@@ -153,7 +153,7 @@ export const NotificationProvider = ({ children }) => {
   }), [showConfirm, showSuccess, showCreate, showError, showWarning, showInfo]);
 
   // Exposer le context globalement pour que showError dans notifications.js puisse l'utiliser
-  React.useEffect(() => {
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       window.__NOTIFICATION_CONTEXT__ = value;
     }

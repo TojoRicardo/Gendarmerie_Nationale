@@ -3,7 +3,7 @@
 Script pour convertir tous les documents Markdown en PDF
 """
 
-import os
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -11,23 +11,18 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm, inch
+    from reportlab.lib.units import cm
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, PageBreak,
-        Table, TableStyle, KeepTogether, Image
+        Table, TableStyle,
     )
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.enums import TA_CENTER
 except ImportError:
     print("ERREUR: reportlab n'est pas installe.")
     print("Installez-le avec: pip install reportlab")
     sys.exit(1)
 
-try:
-    import markdown
-    from markdown.extensions import codehilite, tables
-except ImportError:
+if importlib.util.find_spec('markdown') is None:
     print("ERREUR: markdown n'est pas installe.")
     print("Installez-le avec: pip install markdown")
     sys.exit(1)
@@ -330,7 +325,7 @@ def main():
                 error_count += 1
                 print(f"✗ Erreur lors de la conversion de {file_name}\n")
         else:
-            print(f"⚠ Fichier introuvable: {file_name}\n")
+            print(f"[ATTENTION] Fichier introuvable: {file_name}\n")
             error_count += 1
     
     print("=" * 80)

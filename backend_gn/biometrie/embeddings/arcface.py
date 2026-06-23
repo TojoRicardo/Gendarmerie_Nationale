@@ -6,7 +6,7 @@ normalisés de 512 dimensions.
 
 import logging
 import threading
-from typing import List, Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 import io

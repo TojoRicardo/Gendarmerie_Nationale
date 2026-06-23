@@ -10,11 +10,18 @@ export const usePermissions = () => {
   // Permissions de l'utilisateur - utiliser une référence stable
   const permissions = useMemo(() => {
     const perms = utilisateur?.permissions || []
-    // Retourner un tableau vide si pas de permissions, sinon retourner le tableau trié pour stabilité
+
+    const isAdmin = utilisateur?.role === 'Administrateur Système' ||
+                    utilisateur?.role === 'Administrateur' ||
+                    utilisateur?.is_superuser === true
+
+    if (isAdmin && !perms.includes('*')) {
+      return ['*', ...perms].sort()
+    }
+
     if (perms.length === 0) return []
-    // Créer une copie triée pour éviter les changements de référence
     return [...perms].sort()
-  }, [utilisateur?.permissions])
+  }, [utilisateur?.permissions, utilisateur?.role, utilisateur?.is_superuser])
 
   /**
    * Vérifie si l'utilisateur a une permission spécifique
@@ -82,32 +89,32 @@ export const usePermissions = () => {
    * @returns {boolean}
    */
   const isEnqueteurPrincipal = useMemo(() => {
-    return hasRole('Enquêteur Principal')
-  }, [utilisateur])
+    return utilisateur?.role === 'Enquêteur Principal'
+  }, [utilisateur?.role])
 
   /**
    * Vérifie si l'utilisateur est Administrateur
    * @returns {boolean}
    */
   const isAdmin = useMemo(() => {
-    return hasRole('Administrateur Système') || hasRole('Administrateur')
-  }, [utilisateur])
+    return utilisateur?.role === 'Administrateur Système' || utilisateur?.role === 'Administrateur'
+  }, [utilisateur?.role])
 
   /**
    * Vérifie si l'utilisateur est Analyste (backend: "Analyste")
    * @returns {boolean}
    */
   const isAnalyste = useMemo(() => {
-    return hasRole('Analyste') || hasRole('Analyste Judiciaire')
-  }, [utilisateur])
+    return utilisateur?.role === 'Analyste' || utilisateur?.role === 'Analyste Judiciaire'
+  }, [utilisateur?.role])
 
   /**
    * Vérifie si l'utilisateur est Observateur (backend: "Observateur")
    * @returns {boolean}
    */
   const isObservateur = useMemo(() => {
-    return hasRole('Observateur') || hasRole('Observateur Externe')
-  }, [utilisateur])
+    return utilisateur?.role === 'Observateur' || utilisateur?.role === 'Observateur Externe'
+  }, [utilisateur?.role])
 
   /**
    * Vérifie si l'utilisateur peut modifier une ressource
@@ -183,7 +190,7 @@ export const usePermissions = () => {
       canUseIA: checkPermission('ia.use_recognition') || checkPermission('ia.use_prediction') || hasAdminRole,
       isReadOnly: isReadOnlyMode,
     }
-  }, [permissions, utilisateur])
+  }, [permissions, utilisateur?.role, isEnqueteurPrincipal])
 
   return {
     permissions,

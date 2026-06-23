@@ -13,7 +13,9 @@ export const getGlobalStats = async () => {
     const response = await get('/criminel/fiches-criminelles/stats/')
     return response.data
   } catch (error) {
-    console.error('Erreur lors de la récupération des statistiques:', error)
+    if (error.code !== 'ERR_NETWORK' && error.code !== 'ERR_CONNECTION_REFUSED' && error.code !== 'ECONNABORTED') {
+      console.error('Erreur lors de la récupération des statistiques:', error)
+    }
     throw error
   }
 }
@@ -37,12 +39,14 @@ export const getDashboardUserStats = async () => {
     const response = await get('/utilisateur/dashboard/stats/')
     return response.data
   } catch (error) {
-    console.error('Erreur lors de la récupération des stats dashboard utilisateurs:', error)
-    // Retourner des données par défaut en cas d'erreur
+    if (error.code !== 'ERR_NETWORK' && error.code !== 'ERR_CONNECTION_REFUSED' && error.code !== 'ECONNABORTED') {
+      console.error('Erreur lors de la récupération des stats dashboard utilisateurs:', error)
+    }
     return {
       total_utilisateurs: 0,
       utilisateurs_actifs: 0,
       utilisateurs_inactifs: 0,
+      utilisateurs_suspendus: 0,
       roles_actifs: 0,
       utilisateur_connecte: null
     }
@@ -208,8 +212,9 @@ export const getCrimeTypeStats = async () => {
     const response = await get('/criminel/fiches-criminelles/crime-type-stats/')
     return response.data
   } catch (error) {
-    console.error('Erreur lors de la récupération des stats par type:', error)
-    // Retourner un tableau vide au lieu de lever l'erreur
+    if (error.code !== 'ERR_NETWORK' && error.code !== 'ERR_CONNECTION_REFUSED' && error.code !== 'ECONNABORTED') {
+      console.error('Erreur lors de la récupération des stats par type:', error)
+    }
     return []
   }
 }
@@ -366,7 +371,7 @@ export const getHourlyActivityStats = async () => {
               }
             }
           }
-        } catch (error) {
+        } catch (_error) {
           // Ignorer les dates invalides
         }
       }
@@ -417,7 +422,9 @@ export const getTeamPerformanceStats = async () => {
     const response = await get('/utilisateur/utilisateurs/performance-stats/')
     return response.data
   } catch (error) {
-    console.error('Erreur lors de la récupération des stats de performance:', error)
+    if (error.code !== 'ERR_NETWORK' && error.code !== 'ERR_CONNECTION_REFUSED' && error.code !== 'ECONNABORTED') {
+      console.error('Erreur lors de la récupération des stats de performance:', error)
+    }
     return []
   }
 }

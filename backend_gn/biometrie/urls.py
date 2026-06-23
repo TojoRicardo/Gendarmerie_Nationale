@@ -11,6 +11,7 @@ from .views import (
     EncodeVisageAPIView,
     BiometriePhotoViewSet,
     BiometrieEmpreinteViewSet,
+    BiometriePaumeViewSet,
     BiometrieScanResultatViewSet,
     BiometrieHistoriqueViewSet,
 )
@@ -19,6 +20,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'photos', BiometriePhotoViewSet, basename='biometrie-photo')
 router.register(r'empreintes', BiometrieEmpreinteViewSet, basename='biometrie-empreinte')
+router.register(r'paumes', BiometriePaumeViewSet, basename='biometrie-paume')
 router.register(r'scans', BiometrieScanResultatViewSet, basename='biometrie-scan')
 router.register(r'historique', BiometrieHistoriqueViewSet, basename='biometrie-historique')
 

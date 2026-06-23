@@ -3,7 +3,7 @@
  * Affiche un compte à rebours et permet à l'utilisateur de rester connecté
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, LogOut, RefreshCw } from 'lucide-react'
 import Modal from '../../components/commun/Modal'
 

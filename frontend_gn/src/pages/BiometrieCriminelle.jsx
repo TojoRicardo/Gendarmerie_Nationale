@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Fingerprint, Camera, Search, User, CheckCircle, AlertCircle, 
-  X, FileText, Eye, AlertTriangle, Image, Download, Calendar, MapPin, Loader2, CheckCircle2, Plus
+  X, Eye, AlertTriangle, Image, Download, Loader2, CheckCircle2, Plus
 } from 'lucide-react';
 import { getAuthToken } from '../utils/sessionStorage';
 import { useNotification } from '../context/NotificationContext';
@@ -37,9 +37,7 @@ const BiometrieCriminelle = () => {
   const [isAnalyzing106Modal, setIsAnalyzing106Modal] = useState(false);
   const canvasRefModal = useRef(null);
   const imageRefModal = useRef(null);
-  
-  // Ref pour éviter le double chargement initial
-  const isInitialMount = useRef(true);
+
   const notification = useNotification();
   
   // Effacer automatiquement les messages après 5 secondes
@@ -66,7 +64,7 @@ const BiometrieCriminelle = () => {
     const finalURL = `${cleanBaseURL}${cleanEndpoint}`;
     
     // Log pour débogage
-    console.log('🔗 Construction URL API:', { baseURL, cleanBaseURL, endpoint, finalURL });
+    console.log('Construction URL API:', { baseURL, cleanBaseURL, endpoint, finalURL });
     
     return finalURL;
   };
@@ -127,7 +125,7 @@ const BiometrieCriminelle = () => {
     }
 
     const timer = setTimeout(() => {
-      console.log('⏱ Debounce terminé, recherche en cours...');
+      console.log('Debounce terminé, recherche en cours...');
       chargerCriminels(recherche);
     }, 500); // Attendre 500ms après la dernière frappe
 
@@ -193,7 +191,7 @@ const BiometrieCriminelle = () => {
       console.error(' Erreur chargement criminels:', error);
       
       // Gérer les erreurs avec le gestionnaire centralisé
-      const { getErrorMessage, isNetworkError: isNetError } = await import('../utils/errorHandler')
+      const { getErrorMessage } = await import('../utils/errorHandler')
       const errorInfo = getErrorMessage(error)
       setMessage({ 
         type: 'error', 
@@ -213,15 +211,8 @@ const BiometrieCriminelle = () => {
     setMessage({ type: '', texte: '' });
   };
 
-  // Charger photos d'un criminel
-  useEffect(() => {
-    if (criminelSelectionne) {
-      chargerPhotos();
-      chargerEmpreintes();
-    }
-  }, [criminelSelectionne]);
-
-  const chargerPhotos = async () => {
+  // Charger photos et empreintes d'un criminel
+  const chargerPhotos = useCallback(async () => {
     if (!criminelSelectionne) return;
     
     try {
@@ -240,29 +231,51 @@ const BiometrieCriminelle = () => {
     } catch (error) {
       console.error('Erreur chargement photos:', error);
     }
-  };
+  }, [criminelSelectionne]);
 
-  // Charger les empreintes du criminel sélectionné
-  const chargerEmpreintes = async () => {
+  const chargerEmpreintes = useCallback(async () => {
     if (!criminelSelectionne) return;
     
     try {
       const token = getAuthToken();
-      const url = getAPIUrl(`/biometrie/empreintes/?criminel=${criminelSelectionne.id}`);
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setEmpreintesAffichees(data.results || data);
+      const headers = { Authorization: `Bearer ${token}` };
+      const criminelId = criminelSelectionne.id;
+
+      const [respEmp, respPaume] = await Promise.all([
+        fetch(getAPIUrl(`/biometrie/empreintes/?criminel=${criminelId}`), { headers }),
+        fetch(getAPIUrl(`/biometrie/paumes/?criminel=${criminelId}`), { headers }),
+      ]);
+
+      let empreintes = [];
+      if (respEmp.ok) {
+        const empData = await respEmp.json();
+        empreintes = empData.results || empData || [];
       }
+
+      let paumes = [];
+      if (respPaume.ok) {
+        const paumeData = await respPaume.json();
+        paumes = paumeData.results || paumeData || [];
+      }
+
+      const paumesNormalisees = paumes.map((p) => ({
+        ...p,
+        doigt: p.paume,
+        type_empreinte: 'palmaire',
+      }));
+
+      setEmpreintesAffichees([...empreintes, ...paumesNormalisees]);
     } catch (error) {
       console.error('Erreur chargement empreintes:', error);
     }
-  };
+  }, [criminelSelectionne]);
+
+  useEffect(() => {
+    if (criminelSelectionne) {
+      chargerPhotos();
+      chargerEmpreintes();
+    }
+  }, [criminelSelectionne, chargerPhotos, chargerEmpreintes]);
 
   const sauvegarderPhotosBiometriques = async () => {
     if (!criminelSelectionne) {
@@ -472,28 +485,48 @@ const BiometrieCriminelle = () => {
 
   // Fonction pour l'upload des empreintes digitales
   const handleEmpreinteUpload = async (formData) => {
+    const criminelId = formData.get('criminel') || formData.get('suspectId') || criminelSelectionne?.id;
+    if (!criminelId) {
+      throw new Error('Aucun criminel sélectionné');
+    }
+
     try {
       const token = getAuthToken();
-      
-      const url = getAPIUrl('/biometrie/empreintes/');
+      const uploadData = new FormData();
+      uploadData.append('criminel', criminelId);
+
+      for (const [key, value] of formData.entries()) {
+        if (key === 'suspectId' || key === 'criminel') continue;
+        if (value instanceof File) {
+          uploadData.append(key, value);
+        }
+      }
+
+      const url = getAPIUrl('/biometrie/empreintes/upload-lot/');
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        body: uploadData,
       });
 
-      if (response.ok) {
-        setMessage({ type: 'success', texte: ' Empreintes uploadées avec succès' });
-        chargerEmpreintes(); // Recharger les empreintes après l'upload
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(' Erreur API upload empreintes:', errorData);
-        throw new Error(errorData.detail || 'Erreur lors de l\'upload');
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const detail = data.erreur || data.detail || data.details || 'Erreur lors de l\'upload';
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
       }
+
+      const count = data.count || 0;
+      setMessage({
+        type: 'success',
+        texte: `${count} empreinte(s) enregistrée(s) avec succès`,
+      });
+      await chargerEmpreintes();
     } catch (error) {
       console.error(' Erreur upload empreintes:', error);
+      setMessage({ type: 'error', texte: ` Erreur upload empreintes: ${error.message}` });
       throw error;
     }
   };
@@ -534,11 +567,14 @@ const BiometrieCriminelle = () => {
     }
   };
 
-  // Supprimer une empreinte
-  const supprimerEmpreinte = async (empreinteId) => {
+  // Supprimer une empreinte (digitale ou palmaire)
+  const supprimerEmpreinte = async (empreinte) => {
+    const empreinteId = typeof empreinte === 'object' ? empreinte.id : empreinte;
+    const isPaume = typeof empreinte === 'object' && empreinte.type_empreinte === 'palmaire';
+
     const confirmed = await notification.showConfirm({
       title: 'Supprimer cette empreinte ?',
-      message: "Cette empreinte digitale sera définitivement retirée du dossier biométrique.",
+      message: "Cette empreinte sera définitivement retirée du dossier biométrique.",
       confirmText: 'Supprimer',
       cancelText: 'Annuler'
     });
@@ -549,7 +585,8 @@ const BiometrieCriminelle = () => {
 
     try {
       const token = getAuthToken();
-      const url = getAPIUrl(`/biometrie/empreintes/${empreinteId}/`);
+      const endpoint = isPaume ? '/biometrie/paumes/' : '/biometrie/empreintes/';
+      const url = getAPIUrl(`${endpoint}${empreinteId}/`);
       const response = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -630,31 +667,8 @@ const BiometrieCriminelle = () => {
     }
   }
 
-  // Fonction pour obtenir les connexions du maillage facial
-  const getFaceMeshConnections = () => {
-    const connections = []
-    for (let i = 0; i < 16; i++) connections.push([i, i + 1])
-    for (let i = 17; i < 21; i++) connections.push([i, i + 1])
-    for (let i = 22; i < 26; i++) connections.push([i, i + 1])
-    for (let i = 27; i < 35; i++) connections.push([i, i + 1])
-    for (let i = 36; i < 41; i++) connections.push([i, i + 1])
-    connections.push([41, 36])
-    for (let i = 42; i < 47; i++) connections.push([i, i + 1])
-    connections.push([47, 42])
-    for (let i = 48; i < 59; i++) connections.push([i, i + 1])
-    connections.push([59, 48])
-    for (let i = 60; i < 67; i++) connections.push([i, i + 1])
-    connections.push([67, 60])
-    connections.push([27, 30], [30, 33], [33, 51], [51, 57])
-    connections.push([36, 42], [39, 45], [0, 36], [16, 45])
-    for (let i = 0; i < 16; i += 2) {
-      if (i + 2 <= 16) connections.push([i, i + 2])
-    }
-    return connections
-  }
-
-  // Fonction pour dessiner les landmarks et le bounding box dans le modal
-  const dessinerLandmarksModal = (landmarks, bbox) => {
+  // Fonction pour dessiner les landmarks dans le modal
+  const dessinerLandmarksModal = (landmarks, _bbox) => {
     const canvas = canvasRefModal.current
     const imageElement = imageRefModal.current
     
@@ -700,26 +714,6 @@ const BiometrieCriminelle = () => {
       img.src = fixImageUrl(photoSelectionnee.image)
     }
   }
-
-  // Exporter le dossier biométrique
-  const exporterDossier = async (format = 'pdf') => {
-    if (!criminelSelectionne) {
-      setMessage({ type: 'error', texte: ' Aucun criminel sélectionné' });
-      return;
-    }
-
-    try {
-      setMessage({ type: 'success', texte: ` Export ${format.toUpperCase()} en cours...` });
-      
-      // Ici vous pouvez implémenter l'export réel
-      setTimeout(() => {
-        setMessage({ type: 'success', texte: ` Dossier exporté en ${format.toUpperCase()}` });
-      }, 1500);
-    } catch (error) {
-      console.error(' Erreur export:', error);
-      setMessage({ type: 'error', texte: ` Erreur d'export: ${error.message}` });
-    }
-  };
 
   const ongletsPrincipaux = [
     { id: 'photos', label: 'Photos enregistrées', icone: Camera },
@@ -1301,7 +1295,7 @@ const BiometrieCriminelle = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  supprimerEmpreinte(empreinte.id);
+                                  supprimerEmpreinte(empreinte);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 transition-all bg-red-500 text-white p-2 rounded-full hover:bg-red-600 transform hover:scale-110 shadow-xl"
                               >
@@ -1546,7 +1540,7 @@ const BiometrieCriminelle = () => {
                 </button>
                 <button
                   onClick={() => {
-                    supprimerEmpreinte(empreinteSelectionnee.id);
+                    supprimerEmpreinte(empreinteSelectionnee);
                     setModalEmpreinteOuvert(false);
                     setEmpreinteSelectionnee(null);
                   }}

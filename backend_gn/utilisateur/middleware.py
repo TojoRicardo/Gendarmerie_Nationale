@@ -18,6 +18,7 @@ class UserStatusMiddleware(MiddlewareMixin):
         """
         public_paths = [
             '/api/utilisateur/login/',
+            '/api/utilisateur/verify-pin/',
             '/api/auth/token/refresh/',
             '/api/auth/token/obtain/',
             '/admin/login/',
@@ -33,7 +34,8 @@ class UserStatusMiddleware(MiddlewareMixin):
             
             # Vérifier si l'utilisateur a un statut inactif ou suspendu
             if hasattr(user, 'statut'):
-                if user.statut == 'inactif':
+                user_statut = (user.statut or '').strip().lower()
+                if user_statut == 'inactif':
                     return JsonResponse(
                         {
                             'error': 'Votre compte est inactif. Veuillez contacter l\'administrateur.',
@@ -41,7 +43,7 @@ class UserStatusMiddleware(MiddlewareMixin):
                         },
                         status=403
                     )
-                elif user.statut == 'suspendu':
+                elif user_statut == 'suspendu':
                     return JsonResponse(
                         {
                             'error': 'Votre compte a été suspendu. Veuillez contacter l\'administrateur.',
@@ -51,4 +53,22 @@ class UserStatusMiddleware(MiddlewareMixin):
                     )
         
         return None
+
+
+def check_inactive_users():
+    """
+    Ferme les sessions utilisateur ouvertes depuis plus de 30 minutes.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from audit.models import UserSession
+
+    threshold = timezone.now() - timedelta(minutes=30)
+    stale_sessions = UserSession.objects.filter(end_time__isnull=True, start_time__lt=threshold)
+    checked = stale_sessions.count()
+    marked = 0
+    for session in stale_sessions:
+        session.close()
+        marked += 1
+    return {'checked': checked, 'marked_inactive': marked}
 

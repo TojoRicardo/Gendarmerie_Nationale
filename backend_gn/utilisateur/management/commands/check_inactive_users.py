@@ -15,7 +15,7 @@ class Command(BaseCommand):
             result = check_inactive_users()
             
             self.stdout.write(self.style.SUCCESS(
-                f'\nResultats:'
+                '\nResultats:'
             ))
             self.stdout.write(f'   Utilisateurs verifies: {result["checked"]}')
             self.stdout.write(f'   Marques comme inactifs: {result["marked_inactive"]}')

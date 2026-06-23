@@ -23,6 +23,12 @@ urlpatterns = [
     # Ces routes permettent d'accéder aux actions via /rapports/creer/ et /rapports/statistiques/
     path('creer/', RapportViewSet.as_view({'post': 'creer'}), name='rapport-creer-compat'),
     path('statistiques/', RapportViewSet.as_view({'get': 'statistiques'}), name='rapport-statistiques-compat'),
+    # Compatibilité : /rapports/{uuid}/ pour GET/DELETE (ancienne URL documentée)
+    path(
+        '<uuid:pk>/',
+        RapportViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'}),
+        name='rapport-detail-compat',
+    ),
     # Router DRF - génère: /reports/, /reports/{pk}/, /reports/creer/, /reports/statistiques/, etc.
     # Les routes personnalisées ci-dessus sont testées EN PREMIER par Django dans l'ordre défini
     path('', include(router.urls)),

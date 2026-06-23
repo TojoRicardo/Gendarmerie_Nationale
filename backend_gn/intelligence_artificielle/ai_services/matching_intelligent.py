@@ -8,8 +8,7 @@ pour identifier et matcher les criminels intelligemment.
 
 import numpy as np
 import json
-from typing import Dict, List, Any, Optional, Tuple
-from django.db.models import Q
+from typing import Dict, List, Any
 
 
 class MatchingIntelligentService:
@@ -217,7 +216,6 @@ class MatchingIntelligentService:
         
         try:
             from sklearn.cluster import KMeans
-            from sklearn.decomposition import PCA
         except ImportError:
             return {
                 'success': False,

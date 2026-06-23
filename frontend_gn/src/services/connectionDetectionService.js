@@ -16,7 +16,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la détection de connexion:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -24,9 +23,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Obtient la session actuelle de l'utilisateur
-   */
   async getCurrentSession() {
     try {
       const response = await api.get('/utilisateur/detect-connection/');
@@ -35,7 +31,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération de la session:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -65,7 +60,7 @@ const connectionDetectionService = {
         };
       }
       // Pour les autres erreurs, logger seulement en mode développement
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.debug('Erreur lors de l\'enregistrement de la déconnexion:', error);
       }
       return {
@@ -86,7 +81,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des connexions actives:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -94,10 +88,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Liste les connexions actives par rôle
-   * @param {string} role - Le rôle à filtrer (optionnel)
-   */
   async getConnectionsByRole(role = null) {
     try {
       const url = role 
@@ -110,7 +100,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des connexions par rôle:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -118,9 +107,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Liste les sessions de l'utilisateur connecté
-   */
   async getMySessions() {
     try {
       const response = await api.get('/utilisateur/connections/my_sessions/');
@@ -129,7 +115,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des sessions:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -137,10 +122,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Termine une session spécifique
-   * @param {string} connectionId - ID de la connexion à terminer
-   */
   async endSession(connectionId) {
     try {
       const response = await api.post(`/utilisateur/connections/${connectionId}/end_session/`);
@@ -149,7 +130,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la fin de session:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -157,9 +137,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Termine toutes les sessions de l'utilisateur connecté
-   */
   async endAllMySessions() {
     try {
       const response = await api.post('/utilisateur/connections/end_all_my_sessions/');
@@ -168,7 +145,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la fin de toutes les sessions:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -176,9 +152,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Obtient les statistiques globales des connexions
-   */
   async getConnectionStatistics() {
     try {
       const response = await api.get('/utilisateur/connections/statistics/');
@@ -187,7 +160,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
       return {
         success: false,
         error: error.response?.data || error.message,
@@ -195,9 +167,6 @@ const connectionDetectionService = {
     }
   },
 
-  /**
-   * Obtient les statistiques de l'utilisateur connecté
-   */
   async getMyStats() {
     try {
       const response = await api.get('/utilisateur/connection-stats/my_stats/');
@@ -206,7 +175,6 @@ const connectionDetectionService = {
         data: response.data,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques personnelles:', error);
       return {
         success: false,
         error: error.response?.data || error.message,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { register, getRoles } from '../services/authService'
 import { User, Mail, Lock, Badge, Building, Phone, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react'
@@ -24,7 +24,7 @@ const Register = () => {
   const [success, setSuccess] = useState(false)
 
   // Charger les rôles disponibles
-  React.useEffect(() => {
+  useEffect(() => {
     const loadRoles = async () => {
       try {
         const response = await getRoles()

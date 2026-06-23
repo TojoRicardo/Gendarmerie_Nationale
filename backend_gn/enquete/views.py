@@ -12,10 +12,11 @@ from criminel.models import (
     InvestigationAssignment,
 )
 
-from .models import Avancement, Enquete, EnqueteCriminel, Observation, Preuve, RapportEnquete, TypeEnquete
+from .models import Avancement, DocumentEnquete, Enquete, EnqueteCriminel, Observation, Preuve, RapportEnquete, TypeEnquete
 from .services import recalculate_progression
 from .serializers import (
     AvancementSerializer,
+    DocumentEnqueteSerializer,
     EnqueteCriminelSerializer,
     EnqueteSerializer,
     ObservationSerializer,
@@ -130,7 +131,6 @@ class PreuveCreateView(generics.CreateAPIView):
                 "type_preuve": instance.type_preuve,
             },
         )
-        _refresh_dossier_progression(instance.dossier_id)
         _refresh_dossier_progression(instance.dossier_id)
 
 
@@ -499,8 +499,12 @@ class EnqueteListView(generics.ListAPIView):
             'type_enquete',
             'dossier',
             'enqueteur_principal',
-            'cree_par'
-        ).prefetch_related('enqueteurs_associes').all()
+            'enqueteur_responsable',
+            'cree_par',
+        ).prefetch_related(
+            'enqueteurs_associes',
+            'criminels_lies__criminel',
+        ).all()
         
         # Filtre par type d'enquête
         type_enquete = self.request.query_params.get('type_enquete')
@@ -637,6 +641,21 @@ class EnqueteRapportListView(generics.ListAPIView):
         ).order_by('-date_redaction')
 
 
+class CriminelEnquetesListView(generics.ListAPIView):
+    """Liste des enquêtes liées à un criminel donné"""
+    serializer_class = EnqueteCriminelSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        criminel_id = self.kwargs.get('criminel_id')
+        return (
+            EnqueteCriminel.objects
+            .filter(criminel_id=criminel_id)
+            .select_related('enquete', 'criminel', 'ajoute_par')
+            .order_by('-date_ajout')
+        )
+
+
 class EnqueteCriminelCreateView(generics.CreateAPIView):
     """Création d'une relation Enquête-Criminel"""
     queryset = EnqueteCriminel.objects.all()
@@ -704,4 +723,138 @@ class EnqueteCriminelDetailView(generics.RetrieveUpdateDestroyAPIView):
             },
         )
         instance.delete()
+
+
+# ============================================================================
+# VUES POUR LES DOCUMENTS D'ENQUÊTE
+# ============================================================================
+
+class DocumentEnqueteListCreateView(generics.ListCreateAPIView):
+    serializer_class = DocumentEnqueteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        queryset = DocumentEnquete.objects.select_related(
+            'enquete', 'ajoute_par'
+        )
+
+        categorie = self.request.query_params.get('categorie')
+        if categorie:
+            queryset = queryset.filter(categorie=categorie)
+
+        enquete_id = self.request.query_params.get('enquete')
+        if enquete_id:
+            queryset = queryset.filter(enquete_id=enquete_id)
+
+        type_doc = self.request.query_params.get('type_document')
+        if type_doc:
+            queryset = queryset.filter(type_document=type_doc)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(nom__icontains=search) |
+                models.Q(description__icontains=search)
+            )
+
+        return queryset.order_by('-date_ajout')
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        enregistrer_action_audit(
+            user=self.request.user,
+            action="creation",
+            ressource="Document d'enquete",
+            ressource_id=str(instance.id),
+            details={
+                "categorie": instance.categorie,
+                "nom": instance.nom,
+                "type_document": instance.type_document,
+            },
+        )
+
+
+class DocumentEnqueteStatsView(generics.GenericAPIView):
+    """Retourne le nombre de documents par categorie"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from django.db.models import Count
+        from rest_framework.response import Response
+        stats = (
+            DocumentEnquete.objects
+            .values('categorie')
+            .annotate(count=Count('id'))
+            .order_by('categorie')
+        )
+        result = {item['categorie']: item['count'] for item in stats}
+        return Response(result)
+
+
+class DocumentEnqueteDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = DocumentEnquete.objects.select_related('enquete', 'ajoute_par')
+    serializer_class = DocumentEnqueteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        enregistrer_action_audit(
+            user=self.request.user,
+            action="modification",
+            ressource="Document d'enquete",
+            ressource_id=str(instance.id),
+            details={
+                "enquete_id": str(instance.enquete_id),
+                "nom": instance.nom,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        enregistrer_action_audit(
+            user=self.request.user,
+            action="suppression",
+            ressource="Document d'enquete",
+            ressource_id=str(instance.id),
+            details={
+                "enquete_id": str(instance.enquete_id),
+                "nom": instance.nom,
+            },
+        )
+        if instance.fichier:
+            instance.fichier.delete(save=False)
+        instance.delete()
+
+
+class DocumentEnqueteDownloadView(generics.RetrieveAPIView):
+    queryset = DocumentEnquete.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def retrieve(self, request, *args, **kwargs):
+        import mimetypes
+        import os
+        from django.http import FileResponse
+        from rest_framework.response import Response
+        from rest_framework import status as http_status
+
+        instance = self.get_object()
+        if not instance.fichier:
+            return Response(
+                {"detail": "Aucun fichier associe."},
+                status=http_status.HTTP_404_NOT_FOUND,
+            )
+        filename = os.path.basename(instance.fichier.name)
+        content_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(
+            instance.fichier.open('rb'),
+            content_type=content_type or 'application/octet-stream',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        origin = request.META.get('HTTP_ORIGIN', '')
+        if origin:
+            response['Access-Control-Allow-Origin'] = origin
+            response['Access-Control-Allow-Credentials'] = 'true'
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Type, Content-Length'
+        return response
 

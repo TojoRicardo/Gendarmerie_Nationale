@@ -1,4 +1,3 @@
-import React from 'react';
 import { usePermissions } from '../hooks/usePermissions';
 import { ShieldOff } from 'lucide-react';
 

@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Upload, ArrowLeft, Loader2, FileText, Trash2, Image as ImageIcon } from 'lucide-react'
+import { Upload, ArrowLeft, Loader2, FileText, Trash2 } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { useNotification } from '../context/NotificationContext'
 import { fetchAssignations } from '../services/assignationEnqueteService'
@@ -79,9 +79,12 @@ const AjouterPreuve = () => {
         const data = await fetchAssignations({ status: 'in_progress' })
         const list = data?.results || data || []
         setAssignations(list)
-        if (!form.dossier && list.length > 0) {
-          setForm((prev) => ({ ...prev, dossier: list[0]?.dossier?.id || '' }))
-        }
+        setForm((prev) => {
+          if (!prev.dossier && list.length > 0) {
+            return { ...prev, dossier: list[0]?.dossier?.id || '' }
+          }
+          return prev
+        })
       } catch (error) {
         console.error(error)
         showError('Impossible de charger vos assignations.')
@@ -90,7 +93,7 @@ const AjouterPreuve = () => {
       }
     }
     loadAssignments()
-  }, [])
+  }, [showError])
 
   const loadPreuveDetail = async (preuveId) => {
     try {

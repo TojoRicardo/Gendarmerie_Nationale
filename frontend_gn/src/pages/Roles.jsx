@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ListeRoles from '../../components/roles/ListeRoles'
-import { 
-  TrendingUp, Users, Lock, Key, ShieldCheck
+import { Users, Lock, Key, ShieldCheck
 } from 'lucide-react'
 import { MESSAGES } from '../utils/notifications'
 import { useNotification } from '../context/NotificationContext'

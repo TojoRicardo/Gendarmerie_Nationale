@@ -1,6 +1,7 @@
 {
   "extends": [
-    "stylelint-config-standard"
+    "stylelint-config-standard",
+    "stylelint-config-tailwindcss"
   ],
   "rules": {
     "at-rule-no-unknown": [
@@ -23,7 +24,6 @@
         "ignoreFunctions": ["theme", "screen"]
       }
     ],
-    "declaration-block-trailing-semicolon": null,
     "no-descending-specificity": null,
     "import-notation": "string",
     "selector-class-pattern": null,

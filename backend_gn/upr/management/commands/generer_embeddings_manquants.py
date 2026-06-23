@@ -5,11 +5,8 @@ qui n'en ont pas encore, afin qu'elles puissent être trouvées lors de la reche
 """
 from django.core.management.base import BaseCommand
 from django.db.models import Q
-from django.db import transaction
 from biometrie.models import BiometriePhoto
 from biometrie.pipeline import enrollement_pipeline, save_enrollement_to_biometrie_photo
-from intelligence_artificielle.models import IAFaceEmbedding
-from criminel.models import CriminalFicheCriminelle
 import logging
 import time
 
@@ -55,7 +52,7 @@ class Command(BaseCommand):
         
         # 1. Générer les embeddings pour BiometriePhoto
         if type_gen in ['biometrie', 'all']:
-            self.stdout.write(self.style.WARNING('\n📸 Traitement des BiometriePhoto...\n'))
+            self.stdout.write(self.style.WARNING('\n Traitement des BiometriePhoto...\n'))
             
             photos_query = BiometriePhoto.objects.filter(est_active=True)
             
@@ -78,7 +75,7 @@ class Command(BaseCommand):
                     # Vérifier si l'embedding existe déjà (sauf si --force)
                     if not force and photo.embedding_512:
                         self.stdout.write(
-                            f'   [{idx}/{total_photos}] ⏭  Photo #{photo.id} - Embedding déjà existant'
+                            f'   [{idx}/{total_photos}]   Photo #{photo.id} - Embedding déjà existant'
                         )
                         total_ignorees += 1
                         continue
@@ -86,13 +83,13 @@ class Command(BaseCommand):
                     # Vérifier que l'image existe
                     if not photo.image or not photo.image.name:
                         self.stdout.write(
-                            self.style.ERROR(f'   [{idx}/{total_photos}] ❌ Photo #{photo.id} - Image manquante')
+                            self.style.ERROR(f'   [{idx}/{total_photos}] [ERREUR] Photo #{photo.id} - Image manquante')
                         )
                         total_erreurs += 1
                         continue
                     
                     self.stdout.write(
-                        f'   [{idx}/{total_photos}] 🔄 Photo #{photo.id} - {photo.criminel.nom or "Sans nom"}...'
+                        f'   [{idx}/{total_photos}]  Photo #{photo.id} - {photo.criminel.nom or "Sans nom"}...'
                     )
                     
                     # Utiliser le pipeline d'enrôlement pour générer l'embedding
@@ -110,21 +107,21 @@ class Command(BaseCommand):
                             embedding_dim = len(pipeline_result.get("embedding512", []))
                             self.stdout.write(
                                 self.style.SUCCESS(
-                                    f'      ✅ Embedding généré ({embedding_dim} dimensions)'
+                                    f'      [OK] Embedding généré ({embedding_dim} dimensions)'
                                 )
                             )
                             total_succes += 1
                         else:
                             error_msg = pipeline_result.get("error", "Erreur inconnue")
                             self.stdout.write(
-                                self.style.ERROR(f'      ❌ Échec: {error_msg}')
+                                self.style.ERROR(f'      [ERREUR] Échec: {error_msg}')
                             )
                             total_erreurs += 1
                             
                     except Exception as e:
                         logger.error(f"Erreur lors de la génération de l'embedding pour photo #{photo.id}: {e}", exc_info=True)
                         self.stdout.write(
-                            self.style.ERROR(f'      ❌ Erreur: {str(e)}')
+                            self.style.ERROR(f'      [ERREUR] Erreur: {str(e)}')
                         )
                         total_erreurs += 1
                     
@@ -133,14 +130,14 @@ class Command(BaseCommand):
                 except Exception as e:
                     logger.error(f"Erreur lors du traitement de la photo #{photo.id}: {e}", exc_info=True)
                     self.stdout.write(
-                        self.style.ERROR(f'   [{idx}/{total_photos}] ❌ Erreur: {str(e)}')
+                        self.style.ERROR(f'   [{idx}/{total_photos}] [ERREUR] Erreur: {str(e)}')
                     )
                     total_erreurs += 1
                     total_traitees += 1
         
         # 2. Générer les embeddings pour IAFaceEmbedding (si nécessaire)
         if type_gen in ['ia', 'all']:
-            self.stdout.write(self.style.WARNING('\n🤖 Traitement des IAFaceEmbedding...\n'))
+            self.stdout.write(self.style.WARNING('\n Traitement des IAFaceEmbedding...\n'))
             self.stdout.write('   Note: IAFaceEmbedding nécessite une logique spécifique.')
             self.stdout.write('   Pour l\'instant, utilisez l\'API ou l\'interface pour générer ces embeddings.\n')
         
@@ -148,17 +145,17 @@ class Command(BaseCommand):
         elapsed_time = time.time() - start_time
         
         self.stdout.write(self.style.SUCCESS('\n' + '='*60))
-        self.stdout.write(self.style.SUCCESS('📊 RÉSUMÉ:\n'))
-        self.stdout.write(f'   ⏱️  Temps écoulé: {elapsed_time:.2f} secondes')
-        self.stdout.write(f'   📸 Photos traitées: {total_traitees}')
-        self.stdout.write(f'   ✅ Succès: {total_succes}')
-        self.stdout.write(f'   ⏭  Ignorées (déjà existantes): {total_ignorees}')
-        self.stdout.write(f'   ❌ Erreurs: {total_erreurs}')
+        self.stdout.write(self.style.SUCCESS(' RÉSUMÉ:\n'))
+        self.stdout.write(f'     Temps écoulé: {elapsed_time:.2f} secondes')
+        self.stdout.write(f'    Photos traitées: {total_traitees}')
+        self.stdout.write(f'   [OK] Succès: {total_succes}')
+        self.stdout.write(f'     Ignorées (déjà existantes): {total_ignorees}')
+        self.stdout.write(f'   [ERREUR] Erreurs: {total_erreurs}')
         
         if total_succes > 0:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'\n✅ {total_succes} embedding(s) généré(s) avec succès!'
+                    f'\n[OK] {total_succes} embedding(s) généré(s) avec succès!'
                 )
             )
             self.stdout.write('   → Les fiches criminelles peuvent maintenant être trouvées par visage.')
@@ -166,7 +163,7 @@ class Command(BaseCommand):
         if total_erreurs > 0:
             self.stdout.write(
                 self.style.WARNING(
-                    f'\n⚠️  {total_erreurs} erreur(s) rencontrée(s).'
+                    f'\n[ATTENTION]  {total_erreurs} erreur(s) rencontrée(s).'
                 )
             )
             self.stdout.write('   → Vérifiez les logs pour plus de détails.')

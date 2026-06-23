@@ -2,7 +2,6 @@
 Modèles complets pour le module de versement des dossiers d'enquête
 Conforme aux pratiques judiciaires
 """
-import uuid
 import hashlib
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -10,7 +9,6 @@ from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
-from django.conf import settings
 from criminel.models import CriminalFicheCriminelle
 from .models import Enquete
 
@@ -374,7 +372,6 @@ class PreuveEnquete(models.Model):
     @staticmethod
     def generer_numero_scelle():
         """Génère un numéro de scellé unique"""
-        from django.db import transaction
         annee = timezone.now().year
         prefixe = f"SC-{annee}-"
 

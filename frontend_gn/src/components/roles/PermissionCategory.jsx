@@ -1,4 +1,4 @@
-import React from 'react'
+import { useState } from 'react'
 import PermissionCheckbox from './PermissionCheckbox'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -9,7 +9,7 @@ const PermissionCategory = ({
   onTogglePermission,
   onToggleCategory
 }) => {
-  const [isExpanded, setIsExpanded] = React.useState(true)
+  const [isExpanded, setIsExpanded] = useState(true)
   
   // Filtrer les permissions de cette catégorie
   const categoryPermissions = permissions.filter(p => p.category === category)

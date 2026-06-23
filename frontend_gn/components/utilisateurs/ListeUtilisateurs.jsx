@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Users, X, Mail, Shield, Phone, User, Ban, Trash2, UserCheck, Eye } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Plus, Filter, Users, X, Mail, Shield, User, Ban, Trash2, UserCheck, Eye } from 'lucide-react';
 import Pagination from '../commun/Pagination';
-import Bouton from '../commun/Bouton';
 import ChampTexte from '../commun/ChampTexte';
 import Select from '../commun/Select';
 import SpinnerChargement from '../commun/SpinnerChargement';
 
 // Utiliser le service authService
-import { getUsers as getUsersService } from '../../src/services/authService';
+import { getUsers as getUsersService, getRoles as getRolesService } from '../../src/services/authService';
 // Utiliser le contexte d'authentification pour identifier l'utilisateur connecté
 import { useAuth } from '../../src/context/AuthContext';
+import { getStatutEffectif, getStatutConfig } from '../../src/utils/userStatut';
 
-const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVoir, onSupprimerDefinitif, isAdmin = false }) => {
+const ListeUtilisateurs = ({ onCreer, onModifier: _onModifier, onSupprimer, onRestaurer, onVoir, onSupprimerDefinitif, isAdmin = false }) => {
   // Récupérer l'utilisateur actuellement connecté depuis le contexte d'authentification
   const { utilisateur: currentUser } = useAuth();
   
@@ -28,80 +28,53 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
   const [totalElements, setTotalElements] = useState(0);
   const elementsParPage = 12;
 
-  useEffect(() => {
-    chargerUtilisateurs();
-    chargerRoles();
-  }, [pageActuelle, recherche, filtreRole, filtreStatut]);
-
-  // Réinitialiser la page à 1 quand les filtres changent
-  useEffect(() => {
-    setPageActuelle(1);
-  }, [recherche, filtreRole, filtreStatut]);
-
-  const chargerUtilisateurs = async () => {
+  const chargerUtilisateurs = useCallback(async () => {
     setChargement(true);
     try {
-      // Utiliser le service authService au lieu d'une URL hardcodée
-      const response = await getUsersService();
-      
-      // S'assurer que response est un tableau
+      const params = { page_size: 500 };
+      if (recherche.trim()) params.search = recherche.trim();
+      if (filtreRole) params.role = filtreRole;
+      if (filtreStatut) params.statut = filtreStatut;
+
+      const response = await getUsersService(params);
       let utilisateurs = Array.isArray(response) ? response : [];
 
-      // Appliquer les filtres de recherche
-      if (recherche) {
+      if (filtreStatut) {
+        const filtreNormalise = filtreStatut.toLowerCase().trim();
         utilisateurs = utilisateurs.filter(
-          u =>
-            `${u.nom || ''} ${u.prenom || ''}`.toLowerCase().includes(recherche.toLowerCase()) ||
-            (u.email || '').toLowerCase().includes(recherche.toLowerCase()) ||
-            (u.matricule || '').toLowerCase().includes(recherche.toLowerCase())
+          (u) => getStatutEffectif(u) === filtreNormalise,
         );
       }
 
-      // Appliquer le filtre de rôle
+      if (recherche.trim()) {
+        const terme = recherche.trim().toLowerCase();
+        utilisateurs = utilisateurs.filter(
+          (u) =>
+            `${u.nom || ''} ${u.prenom || ''}`.toLowerCase().includes(terme)
+            || (u.email || '').toLowerCase().includes(terme)
+            || (u.matricule || '').toLowerCase().includes(terme),
+        );
+      }
+
       if (filtreRole) {
-        utilisateurs = utilisateurs.filter(u => u.role === filtreRole);
+        utilisateurs = utilisateurs.filter(
+          (u) => (u.role || '').toLowerCase() === filtreRole.toLowerCase(),
+        );
       }
 
-      // Appliquer le filtre de statut
-      // Les statuts dans la base sont : 'actif', 'inactif', 'suspendu' (en minuscules)
-      if (filtreStatut && filtreStatut.trim() !== '') {
-        const filtreStatutNormalise = filtreStatut.toLowerCase().trim();
-        const avantFiltre = utilisateurs.length;
-        
-        utilisateurs = utilisateurs.filter(u => {
-          // Récupérer le statut de l'utilisateur
-          const statutUtilisateur = u.statut;
-          
-          // Si pas de statut défini, exclure de ce filtre
-          if (!statutUtilisateur) {
-            return false;
-          }
-          
-          // Normaliser le statut (minuscules, sans espaces)
-          const statutNormalise = String(statutUtilisateur).toLowerCase().trim();
-          
-          // Comparer avec le filtre
-          const correspond = statutNormalise === filtreStatutNormalise;
-          
-          return correspond;
-        });
-        
-        console.log(`✅ Filtre statut "${filtreStatutNormalise}": ${utilisateurs.length} utilisateur(s) trouvé(s) sur ${avantFiltre}`);
-      }
-
-      // Calculer la pagination sur les résultats filtrés
       const totalFiltres = utilisateurs.length;
-      const totalPagesCalcul = Math.ceil(totalFiltres / elementsParPage);
-      
-      // Appliquer la pagination
-      const indexDebut = (pageActuelle - 1) * elementsParPage;
+      const totalPagesCalcul = Math.max(1, Math.ceil(totalFiltres / elementsParPage));
+      const pageCourante = Math.min(pageActuelle, totalPagesCalcul);
+      const indexDebut = (pageCourante - 1) * elementsParPage;
       const indexFin = indexDebut + elementsParPage;
       const utilisateursPagines = utilisateurs.slice(indexDebut, indexFin);
 
-      // Mettre à jour les états
       setUtilisateurs(utilisateursPagines);
       setTotalElements(totalFiltres);
       setTotalPages(totalPagesCalcul);
+      if (pageCourante !== pageActuelle) {
+        setPageActuelle(pageCourante);
+      }
 
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs :', error);
@@ -111,25 +84,55 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
     } finally {
       setChargement(false);
     }
-  };
+  }, [pageActuelle, recherche, filtreRole, filtreStatut, elementsParPage]);
 
-  const chargerRoles = async () => {
+  const chargerRoles = useCallback(async () => {
     try {
-      // Données fictives des rôles
-      const rolesMock = [
-        { value: 'Administrateur Système', label: 'Administrateur Système' },
-        { value: 'Enquêteur Principal', label: 'Enquêteur Principal' },
-        { value: 'Analyste', label: 'Analyste' },
-        { value: 'Observateur', label: 'Observateur' },
-      ];
-      setRoles(rolesMock);
+      const rolesApi = await getRolesService();
+      let liste = [];
+      if (Array.isArray(rolesApi)) {
+        liste = rolesApi;
+      } else if (Array.isArray(rolesApi?.results)) {
+        liste = rolesApi.results;
+      }
+      const options = liste
+        .map((role) => {
+          const label = role.name || role.nom || role.libelle || role.label;
+          return label ? { value: label, label } : null;
+        })
+        .filter(Boolean);
+      setRoles(options);
     } catch (error) {
       console.error('Erreur lors du chargement des rôles:', error);
+      setRoles([]);
     }
+  }, []);
+
+  useEffect(() => {
+    chargerUtilisateurs();
+  }, [chargerUtilisateurs]);
+
+  useEffect(() => {
+    chargerRoles();
+  }, [chargerRoles]);
+
+  const appliquerFiltreRecherche = (value) => {
+    setRecherche(value);
+    setPageActuelle(1);
+  };
+
+  const appliquerFiltreRole = (value) => {
+    setFiltreRole(value);
+    setPageActuelle(1);
+  };
+
+  const appliquerFiltreStatut = (value) => {
+    setFiltreStatut(value);
+    setPageActuelle(1);
   };
 
   const reinitialiserFiltres = () => {
-    console.log('🔄 Réinitialisation des filtres');
+    console.log('Réinitialisation des filtres');
     setRecherche('');
     setFiltreRole('');
     setFiltreStatut('');
@@ -137,62 +140,6 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
   };
 
   const filtresActifs = recherche || filtreRole || filtreStatut;
-
-  const handleExporter = async () => {
-    try {
-      const response = await fetch('/api/utilisateurs/exporter', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `utilisateurs_${new Date().toISOString()}.xlsx`;
-        a.click();
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'export:', error);
-    }
-  };
-
-  const colonnes = [
-    { id: 'nom', label: 'Nom Complet', sortable: true, render: (_, user) => `${user.nom} ${user.prenom}` },
-    { id: 'matricule', label: 'Matricule', sortable: true },
-    { id: 'email', label: 'Email', sortable: true },
-    { id: 'role', label: 'Rôle', sortable: true },
-    {
-      id: 'statut',
-      label: 'Statut',
-      render: (statut, user) => {
-        // Le premier paramètre est la valeur de la colonne, le second est l'objet complet
-        // Utiliser user.statut si statut n'est pas défini
-        const statutValue = statut || user?.statut || 'actif';
-        // Normaliser le statut (minuscules, sans espaces)
-        const statutNormalise = statutValue.toString().toLowerCase().trim();
-        const badges = {
-          actif: 'bg-green-100 text-green-800 border border-green-300',
-          inactif: 'bg-red-100 text-red-800 border border-red-300',
-          suspendu: 'bg-gray-100 text-gray-800 border border-gray-300',
-        };
-        const badgeClass = badges[statutNormalise] || badges.actif;
-        // Afficher le statut avec la première lettre en majuscule
-        const statutDisplay = statutNormalise.charAt(0).toUpperCase() + statutNormalise.slice(1);
-        // Debug: afficher dans la console pour vérifier
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Tableau - Statut:', statutValue, 'Normalisé:', statutNormalise, 'Badge:', badgeClass);
-        }
-        return (
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-            {statutDisplay}
-          </span>
-        );
-      }
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -248,25 +195,21 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
           <ChampTexte
             placeholder="Rechercher par nom, email..."
             value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
+            onChange={(e) => appliquerFiltreRecherche(e.target.value)}
             icone={Search}
           />
 
           <Select
             placeholder="Filtrer par rôle"
             value={filtreRole}
-            onChange={(e) => setFiltreRole(e.target.value)}
+            onChange={(e) => appliquerFiltreRole(e.target.value)}
             options={roles}
           />
 
           <Select
             placeholder="Tous les statuts"
             value={filtreStatut || ''}
-            onChange={(e) => {
-              const newValue = e.target.value || '';
-              console.log('🔍 Filtre statut changé:', newValue);
-              setFiltreStatut(newValue);
-            }}
+            onChange={(e) => appliquerFiltreStatut(e.target.value || '')}
             options={[
               { value: 'actif', label: 'Actif' },
               { value: 'inactif', label: 'Inactif' },
@@ -288,31 +231,8 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
             const isCurrentUser = utilisateur.is_current_user || utilisateur.is_connected || 
                                  (currentUser && currentUser.id === utilisateur.id);
             
-            const getStatutBadge = (statut, isConnected = false) => {
-              // Si l'utilisateur est connecté, toujours afficher comme actif
-              if (isConnected) {
-                return 'bg-green-100 text-green-800 border border-green-300';
-              }
-              
-              // Normaliser le statut (minuscules, sans espaces)
-              const statutNormalise = (statut || 'actif').toString().toLowerCase().trim();
-              const badges = {
-                actif: 'bg-green-100 text-green-800 border border-green-300',
-                inactif: 'bg-red-100 text-red-800 border border-red-300',
-                suspendu: 'bg-gray-100 text-gray-800 border border-gray-300',
-              };
-              return badges[statutNormalise] || badges.actif;
-            };
-            
-            const getStatutDisplay = (statut, isConnected = false) => {
-              // Si l'utilisateur est connecté, afficher "Connecté"
-              if (isConnected) {
-                return 'Connecté';
-              }
-              // Sinon, afficher le statut normal
-              const statutNormalise = (statut || 'actif').toString().toLowerCase().trim();
-              return statutNormalise.charAt(0).toUpperCase() + statutNormalise.slice(1);
-            };
+            const statutEffectif = getStatutEffectif(utilisateur);
+            const statutConfig = getStatutConfig(statutEffectif);
 
             return (
               <div
@@ -345,8 +265,8 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
                             <span className="ml-2 text-xs text-green-600 font-medium">(Vous)</span>
                           )}
                         </h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatutBadge(utilisateur.statut, isCurrentUser)}`}>
-                          {getStatutDisplay(utilisateur.statut, isCurrentUser)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statutConfig.badgeClass}`}>
+                          {isCurrentUser && statutEffectif === 'actif' ? 'Connecté' : statutConfig.label}
                         </span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
@@ -380,7 +300,7 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
                         <Eye size={18} />
                       </button>
                     )}
-                    {utilisateur.statut !== 'suspendu' && onSupprimer && (
+                    {statutEffectif !== 'suspendu' && onSupprimer && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -392,7 +312,7 @@ const ListeUtilisateurs = ({ onCreer, onModifier, onSupprimer, onRestaurer, onVo
                         <Ban size={18} />
                       </button>
                     )}
-                    {utilisateur.statut === 'suspendu' && isAdmin && onRestaurer && (
+                    {statutEffectif === 'suspendu' && isAdmin && onRestaurer && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

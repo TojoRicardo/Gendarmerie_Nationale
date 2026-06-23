@@ -212,7 +212,7 @@ const normaliserResultatsRecherchePhoto = (data, fallbackThresholdPercent) => {
         confidencePercent: similarityPercent,
         confidenceText: `${similarityPercent.toFixed(1)}%`,
         photoUrl: entry?.photo_criminel || entry?.photo_url,
-        ficheUrl: entry?.fiche_url || (ficheId ? `/criminels/${ficheId}` : null),
+        ficheUrl: entry?.fiche_url || (ficheId ? `/fiches-criminelles/voir/${ficheId}` : null),
         verified: similarityPercent >= thresholdPercent,
         raw: entry,
         source: 'photo-search',
@@ -356,7 +356,7 @@ export const rechercherCorrespondancesMultiples = async (files, options = {}) =>
   const results = []
 
   for (const file of files) {
-    // eslint-disable-next-line no-await-in-loop
+     
     const analysis = await rechercherCorrespondance(file, options)
     results.push({
       file,

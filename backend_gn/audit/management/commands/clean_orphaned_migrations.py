@@ -50,7 +50,10 @@ class Command(BaseCommand):
                     # Trouver le chemin du dossier migrations
                     import importlib
                     app_module = importlib.import_module(app_name)
-                    app_path = os.path.dirname(app_module.__file__)
+                    app_file = getattr(app_module, '__file__', None)
+                    if not app_file:
+                        continue
+                    app_path = os.path.dirname(app_file)
                     migrations_path = os.path.join(app_path, 'migrations')
                     
                     if not os.path.exists(migrations_path):
@@ -88,7 +91,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.WARNING(
-                f'\n⚠️  {len(orphaned_migrations)} migration(s) orpheline(s) trouvée(s):\n'
+                f'\n[ATTENTION]  {len(orphaned_migrations)} migration(s) orpheline(s) trouvée(s):\n'
             )
         )
 
@@ -98,7 +101,7 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(
                 self.style.WARNING(
-                    f'\n🔍 Mode dry-run: {len(orphaned_migrations)} entrée(s) seraient supprimées.'
+                    f'\n Mode dry-run: {len(orphaned_migrations)} entrée(s) seraient supprimées.'
                 )
             )
             return
@@ -107,7 +110,7 @@ class Command(BaseCommand):
         if not options.get('yes', False):
             self.stdout.write(
                 self.style.WARNING(
-                    f'\n⚠️  Cette opération va supprimer {len(orphaned_migrations)} entrée(s) orpheline(s) de la base de données.'
+                    f'\n[ATTENTION]  Cette opération va supprimer {len(orphaned_migrations)} entrée(s) orpheline(s) de la base de données.'
                 )
             )
             response = input('Continuer ? (oui/non): ')

@@ -18,7 +18,7 @@ const safeStringify = (value) => {
 const safeParse = (value) => {
   try {
     return JSON.parse(value)
-  } catch (error) {
+  } catch (_error) {
     return null
   }
 }
@@ -63,7 +63,7 @@ export const readCache = (key, defaultValue = null, ttl = DEFAULT_TTL) => {
       }
     }
     return payload.data ?? defaultValue
-  } catch (error) {
+  } catch (_error) {
     return defaultValue
   }
 }

@@ -5,7 +5,7 @@ Si MediaPipe n'est pas disponible, les fonctions retournent des résultats vides
 """
 
 import logging
-from typing import List, Optional, Dict, Any, Union
+from typing import Dict, Any
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ def detect_facemesh468(image: np.ndarray) -> Dict[str, Any]:
 
     try:
         mp_face_mesh = mp.solutions.face_mesh
-        mp_drawing = mp.solutions.drawing_utils
         
         with mp_face_mesh.FaceMesh(
             static_image_mode=True,

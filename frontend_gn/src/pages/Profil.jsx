@@ -1,15 +1,28 @@
 import { useState, useRef, useEffect } from 'react'
-import { User, Mail, Phone, Lock, Camera, Upload, X, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, ShieldCheck, Shield } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { User, Mail, Phone, Lock, Camera, Upload, X, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import ChampTexte from '../../components/commun/ChampTexte'
 import Bouton from '../../components/commun/Bouton'
-import { formatPhoneNumber } from '../utils/phoneUtils'
 import { changePassword, updateUser, getCurrentUser } from '../services/authService'
 import api from '../services/api'
+import { resolveMediaUrl } from '../utils/mediaUrl'
 import PinManagement from '../components/pin/PinManagement'
 
+const buildPhotoState = (photoUrl, extra = {}) => {
+  const url = resolveMediaUrl(photoUrl)
+  if (!url) return null
+  return {
+    url,
+    nom: 'Photo de profil',
+    taille: 0,
+    ...extra,
+  }
+}
+
 const Profil = () => {
-  const { utilisateur } = useAuth()
+  const navigate = useNavigate()
+  const { utilisateur, mettreAJourUtilisateurDirect } = useAuth()
   const [ongletActif, setOngletActif] = useState('infos')
   const [photoProfil, setPhotoProfil] = useState(null)
   const [photoProfilSauvegardee, setPhotoProfilSauvegardee] = useState(null) // Photo déjà sauvegardée
@@ -79,18 +92,9 @@ const Profil = () => {
 
       // Charger la photo de profil si elle existe
       if (utilisateur.photo_profil) {
-        // Construire l'URL complète de la photo
-        const photoUrl = utilisateur.photo_profil.startsWith('http') 
-          ? utilisateur.photo_profil 
-          : `${window.location.origin}${utilisateur.photo_profil.startsWith('/') ? '' : '/'}${utilisateur.photo_profil}`
-        
-        const photoData = {
-          url: photoUrl,
-          nom: 'Photo de profil',
-          taille: 0,
-        }
+        const photoData = buildPhotoState(utilisateur.photo_profil)
         setPhotoProfil(photoData)
-        setPhotoProfilSauvegardee(photoData) // Sauvegarder la photo actuelle
+        setPhotoProfilSauvegardee(photoData)
       } else {
         setPhotoProfil(null)
         setPhotoProfilSauvegardee(null)
@@ -149,6 +153,7 @@ const Profil = () => {
   const rechargerDonneesUtilisateur = async () => {
     try {
       const userData = await getCurrentUser()
+      mettreAJourUtilisateurDirect(userData)
       
       // Fonction pour formater le téléphone
       const formatTelephoneForDisplay = (phone) => {
@@ -180,15 +185,7 @@ const Profil = () => {
       
       // Mettre à jour la photo de profil si elle existe
       if (userData.photo_profil) {
-        const photoUrl = userData.photo_profil.startsWith('http') 
-          ? userData.photo_profil 
-          : `${window.location.origin}${userData.photo_profil.startsWith('/') ? '' : '/'}${userData.photo_profil}`
-        
-        const photoData = {
-          url: photoUrl,
-          nom: 'Photo de profil',
-          taille: 0,
-        }
+        const photoData = buildPhotoState(userData.photo_profil)
         setPhotoProfil(photoData)
         setPhotoProfilSauvegardee(photoData)
       } else {
@@ -224,33 +221,18 @@ const Profil = () => {
       const data = response.data
       
       // Recharger les données utilisateur depuis le serveur
-      await rechargerDonneesUtilisateur()
+      const userData = await getCurrentUser()
+      mettreAJourUtilisateurDirect(userData)
       
       // Mettre à jour la photo affichée
-      if (data.photo_profil) {
-        const photoData = {
-          url: data.photo_profil,
-          nom: 'Photo de profil',
-          taille: photoProfil.taille || 0,
-        }
-        console.log('Photo sauvegardée avec succès:', photoData)
+      const savedPhotoUrl = data.photo_profil || userData?.photo_profil
+      if (savedPhotoUrl) {
+        const photoData = buildPhotoState(savedPhotoUrl, { taille: photoProfil.taille || 0 })
         setPhotoProfil(photoData)
-        setPhotoProfilSauvegardee(photoData) // Mettre à jour la photo sauvegardée
+        setPhotoProfilSauvegardee(photoData)
       } else {
-        // Si pas de photo retournée, recharger depuis le serveur
-        const userData = await rechargerDonneesUtilisateur()
-        if (userData && userData.photo_profil) {
-          const photoUrl = userData.photo_profil.startsWith('http') 
-            ? userData.photo_profil 
-            : `${window.location.origin}${userData.photo_profil.startsWith('/') ? '' : '/'}${userData.photo_profil}`
-          const photoData = {
-            url: photoUrl,
-            nom: 'Photo de profil',
-            taille: 0,
-          }
-          setPhotoProfil(photoData)
-          setPhotoProfilSauvegardee(photoData)
-        }
+        setPhotoProfil(null)
+        setPhotoProfilSauvegardee(null)
       }
 
       setSuccesPhoto('Photo de profil sauvegardée avec succès !')
@@ -468,6 +450,15 @@ const Profil = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft size={20} className="mr-2" />
+        Retour
+      </button>
+
       {/* En-tête */}
       <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-600">
         <div className="flex items-center justify-between">

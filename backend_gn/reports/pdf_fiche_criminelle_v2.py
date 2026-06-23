@@ -3,9 +3,9 @@ Génération PDF de la fiche criminelle selon format Gendarmerie Nationale.
 Format conforme au formulaire officiel "FICHIER CRIMINELLE".
 
 Layout:
-- PAGE 1: En-tête + AGRESSION + Identité + Filiation + Coordonnées + Description physique + Dossier judiciaire + Photos + Empreintes digitales
-- PAGE 2: Empreintes palmaires + Empreintes de contrôle + Footer
-- PAGE 3: Informations personnelles/sociales + Adresse et déplacements + Informations professionnelles/financières + Réseau relationnel
+- PAGE 1: En-tête + Infraction + Identité (2 col.) + Photos + Empreintes digitales
+- PAGE 2: Empreintes palmaires + Empreintes de contrôle
+- PAGE 3: Informations complémentaires (2 col.) + Signature
 """
 
 import os
@@ -13,23 +13,20 @@ import logging
 from io import BytesIO
 from datetime import datetime
 from PIL import Image
-from django.http import HttpResponse
 from django.conf import settings
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
+from reportlab.lib.units import cm
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph,
-    Spacer, Image as RLImage, PageBreak, KeepTogether, Flowable
+    Spacer, Image as RLImage, PageBreak, KeepTogether
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 logger = logging.getLogger(__name__)
+
+GENDARMERIE_LOGO_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'logo_gendarmerie.png')
 
 
 class FicheCriminellePDFGeneratorV2:
@@ -76,7 +73,7 @@ class FicheCriminellePDFGeneratorV2:
             rightMargin=1.0*cm,
             leftMargin=1.0*cm,
             topMargin=1.0*cm,
-            bottomMargin=1.0*cm
+            bottomMargin=2.2*cm
         )
         self.page_width = 19*cm
         self.styles = getSampleStyleSheet()
@@ -204,7 +201,7 @@ class FicheCriminellePDFGeneratorV2:
         try:
             # Vérifier que le champ existe dans le modèle
             if not hasattr(self.criminel, field_name):
-                logger.warning(f"⚠ Champ {field_name} n'existe pas dans le modèle")
+                logger.warning(f"[WARNING] Champ {field_name} n'existe pas dans le modèle")
                 return default
             
             # Récupérer la valeur directement depuis l'objet modèle
@@ -215,34 +212,39 @@ class FicheCriminellePDFGeneratorV2:
             if isinstance(value, str):
                 value_stripped = value.strip()
                 if value_stripped:
-                    logger.debug(f"✓ Champ {field_name} trouvé avec valeur: {value_stripped[:50]}...")
+                    logger.debug(f"[OK] Champ {field_name} trouvé avec valeur: {value_stripped[:50]}...")
                     return value_stripped
-                logger.debug(f"✗ Champ {field_name} est vide ou contient seulement des espaces")
+                logger.debug(f"Champ {field_name} est vide ou contient seulement des espaces")
                 return default
             
             if value is not None and value != '':
                 formatted = self._format_value(value, default)
-                logger.debug(f"✓ Champ {field_name} trouvé avec valeur: {formatted[:50]}...")
+                logger.debug(f"[OK] Champ {field_name} trouvé avec valeur: {formatted[:50]}...")
                 return formatted
             else:
-                logger.debug(f"✗ Champ {field_name} est None ou vide")
+                logger.debug(f"Champ {field_name} est None ou vide")
                 return default
         except Exception as e:
-            logger.error(f"❌ Erreur lors de la récupération du champ {field_name}: {e}", exc_info=True)
+            logger.error(f"Erreur lors de la récupération du champ {field_name}: {e}", exc_info=True)
         return default
     
-    def _get_choice_display_safe(self, choices_attr, value):
-        """Récupère la valeur d'affichage d'un choix de manière sécurisée avec les données réelles."""
+    def _get_choice_display_safe(self, field_name, value):
+        """Récupère le libellé affichable d'un champ à choix (ex: statut matrimonial)."""
         if not value:
             return ''
         try:
-            if hasattr(self.criminel, choices_attr):
-                choices = getattr(self.criminel, choices_attr)
+            display_method = getattr(self.criminel, f'get_{field_name}_display', None)
+            if callable(display_method):
+                return display_method() or str(value)
+
+            model_class = self.criminel.__class__
+            choices_attr = f'{field_name.upper()}_CHOICES'
+            if hasattr(model_class, choices_attr):
+                choices = getattr(model_class, choices_attr)
                 if choices and isinstance(choices, (list, tuple)):
-                    choices_dict = dict(choices)
-                    return choices_dict.get(value, str(value))
+                    return dict(choices).get(value, str(value))
         except Exception as e:
-            logger.warning(f"Erreur lors de la récupération du choix {choices_attr}: {e}")
+            logger.warning(f"Erreur lors de la récupération du choix {field_name}: {e}")
         return str(value) if value else ''
     
     def _format_date(self, date_value, format_str='%d %B %Y'):
@@ -361,19 +363,249 @@ class FicheCriminellePDFGeneratorV2:
         ]))
         
         return header_table
-    
+
+    def _create_header_logo_cell(self, cell_width=1.3*cm, cell_height=1.6*cm):
+        """Logo Zandarimaria dans l'en-tête, sans cadre ni contour."""
+        logo_content = Paragraph("", self.styles['Normal'])
+        logo_path = GENDARMERIE_LOGO_PATH
+
+        if os.path.exists(logo_path):
+            try:
+                optimized = self.optimize_image_for_pdf(
+                    logo_path,
+                    max_width=int(cell_width / cm * 120),
+                    max_height=int(cell_height / cm * 120),
+                )
+                if optimized:
+                    logo_content = RLImage(
+                        optimized,
+                        width=cell_width,
+                        height=cell_height,
+                    )
+            except Exception as e:
+                logger.warning(f"Impossible de charger le logo Gendarmerie: {e}")
+
+        logo_cell = Table([[logo_content]], colWidths=[cell_width], rowHeights=[cell_height])
+        logo_cell.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), self.colors['header_bg']),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        return logo_cell
+
+    def _empty_fingerprint_placeholder(self):
+        """Case d'empreinte vide sans code R1/L1."""
+        return Paragraph(
+            '',
+            ParagraphStyle('EmptyFinger', parent=self.styles['Normal'], fontSize=1)
+        )
+
+    def _format_field_display(self, value, empty='—'):
+        text = self._format_value(value, '')
+        return text if text else empty
+
+    def _create_form_table(self, data, width):
+        """Tableau label/valeur aligné — style fiche administrative."""
+        label_style = ParagraphStyle(
+            'FormLabel', parent=self.styles['Normal'],
+            fontSize=8, fontName='Helvetica-Bold',
+            textColor=self.colors['text_light'], alignment=TA_LEFT,
+        )
+        value_style = ParagraphStyle(
+            'FormValue', parent=self.styles['Normal'],
+            fontSize=10, fontName='Helvetica-Bold',
+            textColor=self.colors['text'], alignment=TA_LEFT, leading=12,
+        )
+        rows = []
+        for label, value in data:
+            rows.append([
+                Paragraph(str(label).upper(), label_style),
+                Paragraph(self._format_field_display(value), value_style),
+            ])
+        if not rows:
+            return None
+        label_width = min(4.0 * cm, width * 0.40)
+        table = Table(rows, colWidths=[label_width, width - label_width])
+        table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.colors['border']),
+            ('LINEAFTER', (0, 0), (0, -1), 0.5, self.colors['border']),
+            ('BACKGROUND', (0, 0), (0, -1), self.colors['background_section']),
+        ]))
+        return table
+
+    def _append_no_data_block(self, elements, width):
+        no_data = Table(
+            [[self._no_data_paragraph()]],
+            colWidths=[width],
+        )
+        no_data.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+            ('BOX', (0, 0), (-1, -1), 0.5, self.colors['border']),
+        ]))
+        elements.append(no_data)
+
+    def _no_data_paragraph(self):
+        return Paragraph(
+            '<i>Aucune information disponible</i>',
+            ParagraphStyle(
+                'NoData', parent=self.styles['Normal'], fontSize=9,
+                textColor=self.colors['text_light'], fontName='Helvetica-Oblique',
+                alignment=TA_CENTER,
+            ),
+        )
+
+    def _create_subsection_bar(self, title):
+        bar = Paragraph(
+            f'<b>{title}</b>',
+            ParagraphStyle(
+                'SubBar', parent=self.styles['Normal'], fontSize=9,
+                fontName='Helvetica-Bold', textColor=self.colors['text'],
+                alignment=TA_CENTER,
+            ),
+        )
+        table = Table([[bar]], colWidths=[self.page_width])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),
+            ('BOX', (0, 0), (-1, -1), 0.5, self.colors['border']),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        return table
+
+    def _build_fingerprint_hand(self, empreintes, doigts, finger_names):
+        """Grille de 5 empreintes centrée avec cadre propre."""
+        finger_gap = 0.15 * cm
+        box_size = (self.page_width - 4 * finger_gap) / 5
+        imprint_row, label_row = [], []
+
+        for doigt, name in zip(doigts, finger_names):
+            cell_content = self._empty_fingerprint_placeholder()
+            empreinte = empreintes.filter(doigt=doigt).first()
+            if (
+                empreinte and empreinte.image
+                and hasattr(empreinte.image, 'path')
+                and os.path.exists(empreinte.image.path)
+            ):
+                try:
+                    optimized = self.optimize_image_for_pdf(
+                        empreinte.image.path, max_width=2000, max_height=2000,
+                    )
+                    if optimized:
+                        pad = 0.12 * cm
+                        cell_content = RLImage(
+                            optimized,
+                            width=box_size - pad,
+                            height=box_size - pad,
+                        )
+                except Exception as e:
+                    logger.error(f"Erreur empreinte {doigt}: {e}")
+
+            frame = Table([[cell_content]], colWidths=[box_size], rowHeights=[box_size])
+            frame.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('BACKGROUND', (0, 0), (-1, -1), self.colors['white']),
+            ]))
+            imprint_row.append(frame)
+            label_row.append(Paragraph(
+                f'<font size=7>{name}</font>',
+                ParagraphStyle(
+                    'FingerLabel', parent=self.styles['Normal'],
+                    alignment=TA_CENTER, fontSize=7,
+                    textColor=self.colors['text_light'],
+                ),
+            ))
+
+        inner = Table([imprint_row, label_row], colWidths=[box_size] * 5)
+        inner.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), finger_gap / 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), finger_gap / 2),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
+        ]))
+        outer = Table([[inner]], colWidths=[self.page_width])
+        outer.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
+            ('BACKGROUND', (0, 0), (-1, -1), self.colors['white']),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        return outer
+
+    def _draw_page_footer(self, canvas, doc):
+        """Pied de page : date, numéro de fiche, pagination."""
+        canvas.saveState()
+        page_num = canvas.getPageNumber()
+        gen_date = datetime.now().strftime('%d/%m/%Y')
+        footer_y = 1.1 * cm
+        canvas.setStrokeColor(self.colors['border'])
+        canvas.setLineWidth(0.5)
+        canvas.line(1.5 * cm, footer_y + 0.5 * cm, A4[0] - 1.5 * cm, footer_y + 0.5 * cm)
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(colors.HexColor('#555555'))
+        canvas.drawString(
+            1.5 * cm, footer_y,
+            f"Gendarmerie Nationale Malagasy — Fiche N° {self.criminel.numero_fiche or 'N/A'}",
+        )
+        canvas.drawCentredString(A4[0] / 2, footer_y, f"Document généré le {gen_date}")
+        canvas.drawRightString(A4[0] - 1.5 * cm, footer_y, f"Page {page_num}")
+        canvas.restoreState()
+
+    def _append_signature_footer(self, elements):
+        """Bloc signature officiel en fin de document."""
+        elements.append(Spacer(1, 0.8 * cm))
+        sig_date = datetime.now().strftime('%d/%m/%Y')
+        sig_table = Table(
+            [[
+                Paragraph(
+                    f'<b>Date :</b> {sig_date}',
+                    ParagraphStyle('SigDate', parent=self.styles['Normal'], fontSize=9, alignment=TA_LEFT),
+                ),
+                Paragraph(
+                    "<b>Signature et cachet de l'officier</b><br/><br/>______________________________",
+                    ParagraphStyle('SigLine', parent=self.styles['Normal'], fontSize=9, alignment=TA_RIGHT),
+                ),
+            ]],
+            colWidths=[self.page_width / 2, self.page_width / 2],
+        )
+        sig_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LINEABOVE', (0, 0), (-1, 0), 1, self.colors['border']),
+        ]))
+        elements.append(sig_table)
+        elements.append(Spacer(1, 0.2 * cm))
+        elements.append(Paragraph(
+            "<i>Gendarmerie Nationale — Service d'Identification Criminelle</i>",
+            self.conformity_style,
+        ))
+
     def generate_page_1(self, elements):
         """
         PAGE 1: En-tête + AGRESSION + Identité + Filiation + Coordonnées + Description + Dossier judiciaire + Photos + Empreintes digitales
         """
         # En-tête optimisé selon nouveau design HTML
-        logo_cell = Table([[Paragraph("", self.styles['Normal'])]], colWidths=[1.3*cm], rowHeights=[1.6*cm])
-        logo_cell.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['white']),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('BOX', (0, 0), (-1, -1), 2, colors.HexColor('#d4af37')),  # Bordure dorée
-        ]))
+        logo_cell = self._create_header_logo_cell()
         
         header_center = Paragraph(
             "<b><font size=14 color='white'>GENDARMERIE NATIONALE MALAGASY</font></b><br/>"
@@ -463,14 +695,12 @@ class FicheCriminellePDFGeneratorV2:
         agression_data = [[agression_header], [agression_content]]
         agression_table = Table(agression_data, colWidths=[self.page_width])
         agression_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background']),  # Fond blanc
-            ('LINEAFTER', (0, 0), (-1, -1), 3, self.colors['accent_border']),  # Bordure gauche dorée subtile
-            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),  # Bordure légère
+            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background']),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]))
         elements.append(agression_table)
         elements.append(Spacer(1, 0.3*cm))
@@ -490,7 +720,7 @@ class FicheCriminellePDFGeneratorV2:
             ['NOM', self._get_field_value('nom')],
             ['PRÉNOM', self._get_field_value('prenom')],
             ['SURNOM', self._get_field_value('surnom')],
-            ['SEXE', self._get_choice_display_safe('SEXE_CHOICES', getattr(self.criminel, 'sexe', None))],
+            ['SEXE', self._get_choice_display_safe('sexe', getattr(self.criminel, 'sexe', None))],
             ['DATE DE NAISSANCE', self._format_date(getattr(self.criminel, 'date_naissance', None), '%d %B %Y')],
             ['LIEU DE NAISSANCE', self._get_field_value('lieu_naissance')],
             ['NATIONALITÉ', self._get_field_value('nationalite')],
@@ -498,10 +728,10 @@ class FicheCriminellePDFGeneratorV2:
         ]
         
         # DESCRIPTION PHYSIQUE - Utiliser les données réelles
-        corpulence_value = self._get_choice_display_safe('CORPULENCE_CHOICES', self.criminel.corpulence)
-        cheveux_value = self._get_choice_display_safe('CHEVEUX_CHOICES', self.criminel.cheveux)
-        visage_value = self._get_choice_display_safe('VISAGE_CHOICES', self.criminel.visage)
-        barbe_value = self._get_choice_display_safe('BARBE_CHOICES', self.criminel.barbe)
+        corpulence_value = self._get_choice_display_safe('corpulence', self.criminel.corpulence)
+        cheveux_value = self._get_choice_display_safe('cheveux', self.criminel.cheveux)
+        visage_value = self._get_choice_display_safe('visage', self.criminel.visage)
+        barbe_value = self._get_choice_display_safe('barbe', self.criminel.barbe)
         
         physical_data = [
             ['CORPULENCE', corpulence_value],
@@ -551,38 +781,11 @@ class FicheCriminellePDFGeneratorV2:
         
         def create_data_table(data, header_title, width):
             """Crée un tableau de données avec titre de section."""
-            table_data = []
-            for label, value in data:
-                label_cell = Paragraph(
-                    f"<i>{label}</i>",
-                    ParagraphStyle('Label', parent=self.styles['Normal'], fontSize=8, textColor=self.colors['text_light'], fontName='Helvetica-Oblique')
-                )
-                value_cell = Paragraph(
-                    f"<b>{value}</b>",
-                    ParagraphStyle('Value', parent=self.styles['Normal'], fontSize=10, textColor=self.colors['text'], fontName='Helvetica-Bold')
-                )
-                table_data.append([label_cell, value_cell])
-            
             section_header = self._create_section_header(header_title, width)
-            
-            label_col_width = 3.7*cm  # 140px ≈ 3.7cm
-            value_col_width = width - label_col_width
-            data_table = Table(table_data, colWidths=[label_col_width, value_col_width])
-            data_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('ROWBACKGROUNDS', (0, 0), (-1, -1), [self.colors['white']] * len(table_data)),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.colors['border']),  # Ligne de séparation subtile
-                # Séparation entre label et valeur
-                ('LINEAFTER', (0, 0), (0, -1), 0.5, self.colors['border']),
-            ]))
-            
-            return [section_header, data_table]
+            data_table = self._create_form_table(data, width)
+            if data_table:
+                return [section_header, Spacer(1, 0.12 * cm), data_table]
+            return [section_header, Spacer(1, 0.12 * cm)]
         
         # Colonne gauche - IDENTITÉ
         identity_elements = create_data_table(identity_data, "IDENTITÉ / IDENTITY", column_width)
@@ -757,1143 +960,352 @@ class FicheCriminellePDFGeneratorV2:
             logger.warning(f"Erreur lors de la récupération des empreintes: {e}")
             empreintes = BiometrieEmpreinte.objects.none()
         
-        # Section empreintes digitales avec fond clair
-        empreintes_title = Paragraph(
-            "<b>EMPREINTES DIGITALES / FINGERPRINTS</b>",
-            ParagraphStyle(
-                'EmpreintesTitle',
-                parent=self.styles['Normal'],
-                fontSize=10,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['text'],
-                alignment=TA_CENTER,
-                spaceAfter=8
-            )
-        )
-        
-        main_droite_header = Paragraph(
-            "<b>MAIN DROITE / RIGHT HAND</b>",
-            ParagraphStyle(
-                'MainHeader',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['text'],
-                alignment=TA_CENTER
-            )
-        )
-        main_droite_header_table = Table([[main_droite_header]], colWidths=[self.page_width])
-        main_droite_header_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
-        ]))
-        elements.append(empreintes_title)
-        elements.append(main_droite_header_table)
-        elements.append(Spacer(1, 0.15*cm))
-        doigts_droits = ['pouce_droit', 'index_droit', 'majeur_droit', 'annulaire_droit', 'auriculaire_droit']
         finger_names = ['POUCE', 'INDEX', 'MAJEUR', 'ANNULAIRE', 'AURICULAIRE']
-        finger_codes = ['R1', 'R2', 'R3', 'R4', 'R5']  # Codes selon design HTML
-        
-        empreinte_row_droite = []
-        label_row_droite = []
-        
-        # Calculer la taille des cases d'empreintes avec espacement bien séparé
-        finger_gap = 0.5*cm  # Espacement entre chaque empreinte
-        total_finger_width = self.page_width - 2*finger_gap  # Marges extérieures
-        finger_box_size = (total_finger_width - 4*finger_gap) / 5  # 5 doigts avec espacement
-        
-        for doigt, finger_name, finger_code in zip(doigts_droits, finger_names, finger_codes):
-            # Créer une case carrée avec l'empreinte à l'intérieur
-            empreinte = empreintes.filter(doigt=doigt).first()
-            
-            # Case avec code du doigt au centre si pas d'image
-            if (empreinte and empreinte.image and 
-                    hasattr(empreinte.image, 'path') and 
-                    os.path.exists(empreinte.image.path)):
-                try:
-                    optimized_img = self.optimize_image_for_pdf(
-                        empreinte.image.path,
-                        max_width=2000,
-                        max_height=2000
-                    )
-                    if optimized_img:
-                        img = RLImage(optimized_img, width=finger_box_size, height=finger_box_size)
-                        cell_content = img
-                    else:
-                        cell_content = Paragraph(f"<font size=8 color='#999'>{finger_code}</font>", 
-                            ParagraphStyle('FingerCode', parent=self.styles['Normal'], fontSize=8, alignment=TA_CENTER))
-                except Exception as e:
-                    logger.error(f"Erreur empreinte: {e}")
-                    cell_content = Paragraph(f"<font size=9 color='#999'>{finger_code}</font>", 
-                        ParagraphStyle('FingerCode', parent=self.styles['Normal'], alignment=TA_CENTER))
-            else:
-                cell_content = Paragraph(f"<font size=9 color='#999'>{finger_code}</font>", 
-                    ParagraphStyle('FingerCode', parent=self.styles['Normal'], alignment=TA_CENTER))
-            
-            # Créer une case avec bordure
-            finger_frame = Table([[cell_content]], colWidths=[finger_box_size], rowHeights=[finger_box_size])
-            finger_frame.setStyle(TableStyle([
-                ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('BACKGROUND', (0, 0), (-1, -1), self.colors['background']),
-                ('INNERGRID', (0, 0), (-1, -1), 0.5, self.colors['border']),  # Grille interne subtile
-            ]))
-            
-            empreinte_row_droite.append(finger_frame)
-            
-            label_row_droite.append(Paragraph(
-                f"<font size=7 color='#666'>{finger_name}</font>", 
-                ParagraphStyle(
-                    'FingerLabel',
-                    parent=self.styles['Normal'],
-                    alignment=TA_CENTER,
-                    fontSize=7,
-                    textColor=self.colors['text_light']
-                )
-            ))
-        
-        # Tableau avec empreintes en haut et labels en bas
-        empreintes_table_droite = Table([empreinte_row_droite, label_row_droite], colWidths=[finger_box_size] * 5)
-        empreintes_table_droite.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (0, -1), finger_gap),  # Espacement gauche
-            ('RIGHTPADDING', (0, 0), (0, -1), finger_gap/2),  # Espacement entre empreintes
-            ('LEFTPADDING', (1, 0), (1, -1), finger_gap/2),
-            ('RIGHTPADDING', (1, 0), (1, -1), finger_gap/2),
-            ('LEFTPADDING', (2, 0), (2, -1), finger_gap/2),
-            ('RIGHTPADDING', (2, 0), (2, -1), finger_gap/2),
-            ('LEFTPADDING', (3, 0), (3, -1), finger_gap/2),
-            ('RIGHTPADDING', (3, 0), (3, -1), finger_gap/2),
-            ('LEFTPADDING', (4, 0), (4, -1), finger_gap/2),
-            ('RIGHTPADDING', (4, 0), (4, -1), finger_gap),  # Espacement droite
-            ('TOPPADDING', (0, 0), (-1, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, 1), (-1, 1), 2),
-            ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
-        ]))
-        elements.append(empreintes_table_droite)
-        elements.append(Spacer(1, 0.15*cm))
-        
-        main_gauche_header = Paragraph(
-            "<b><font size=8 color='#000'>MAIN GAUCHE / LEFT HAND</font></b>",
-            ParagraphStyle(
-                'MainHeader',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['white'],
-                alignment=TA_CENTER
-            )
-        )
-        main_gauche_header_table = Table([[main_gauche_header]], colWidths=[self.page_width])
-        main_gauche_header_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),  # Fond léger au lieu de noir
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
-        ]))
-        elements.append(main_gauche_header_table)
-        elements.append(Spacer(1, 0.15*cm))
-        
+        doigts_droits = ['pouce_droit', 'index_droit', 'majeur_droit', 'annulaire_droit', 'auriculaire_droit']
         doigts_gauches = ['pouce_gauche', 'index_gauche', 'majeur_gauche', 'annulaire_gauche', 'auriculaire_gauche']
-        finger_codes_gauche = ['L1', 'L2', 'L3', 'L4', 'L5']
-        
-        empreinte_row_gauche = []
-        label_row_gauche = []
-        
-        for doigt, finger_name, finger_code in zip(doigts_gauches, finger_names, finger_codes_gauche):
-            # Créer une case carrée avec l'empreinte à l'intérieur
-            empreinte = empreintes.filter(doigt=doigt).first()
-            
-            if (empreinte and empreinte.image and 
-                    hasattr(empreinte.image, 'path') and 
-                    os.path.exists(empreinte.image.path)):
-                try:
-                    optimized_img = self.optimize_image_for_pdf(
-                        empreinte.image.path,
-                        max_width=2000,
-                        max_height=2000
-                    )
-                    if optimized_img:
-                        img = RLImage(optimized_img, width=finger_box_size, height=finger_box_size)
-                        cell_content = img
-                    else:
-                        cell_content = Paragraph(f"<font size=8 color='#999'>{finger_code}</font>", 
-                            ParagraphStyle('FingerCode', parent=self.styles['Normal'], fontSize=8, alignment=TA_CENTER))
-                except Exception as e:
-                    logger.error(f"Erreur empreinte: {e}")
-                    cell_content = Paragraph(f"<font size=9 color='#999'>{finger_code}</font>", 
-                        ParagraphStyle('FingerCode', parent=self.styles['Normal'], alignment=TA_CENTER))
-            else:
-                cell_content = Paragraph(f"<font size=9 color='#999'>{finger_code}</font>", 
-                    ParagraphStyle('FingerCode', parent=self.styles['Normal'], alignment=TA_CENTER))
-            
-            # Créer une case avec bordure
-            finger_frame = Table([[cell_content]], colWidths=[finger_box_size], rowHeights=[finger_box_size])
-            finger_frame.setStyle(TableStyle([
-                ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('BACKGROUND', (0, 0), (-1, -1), self.colors['background']),
-                ('INNERGRID', (0, 0), (-1, -1), 0.5, self.colors['border']),  # Grille interne subtile
-            ]))
-            
-            empreinte_row_gauche.append(finger_frame)
-            
-            label_row_gauche.append(Paragraph(
-                f"<font size=7 color='#666'>{finger_name}</font>", 
-                ParagraphStyle(
-                    'FingerLabel',
-                    parent=self.styles['Normal'],
-                    alignment=TA_CENTER,
-                    fontSize=7,
-                    textColor=self.colors['text_light']
-                )
-            ))
-        
-        # Tableau avec empreintes en haut et labels en bas
-        empreintes_table_gauche = Table([empreinte_row_gauche, label_row_gauche], colWidths=[finger_box_size] * 5)
-        empreintes_table_gauche.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (0, -1), finger_gap),  # Espacement gauche
-            ('RIGHTPADDING', (0, 0), (0, -1), finger_gap/2),  # Espacement entre empreintes
-            ('LEFTPADDING', (1, 0), (1, -1), finger_gap/2),
-            ('RIGHTPADDING', (1, 0), (1, -1), finger_gap/2),
-            ('LEFTPADDING', (2, 0), (2, -1), finger_gap/2),
-            ('RIGHTPADDING', (2, 0), (2, -1), finger_gap/2),
-            ('LEFTPADDING', (3, 0), (3, -1), finger_gap/2),
-            ('RIGHTPADDING', (3, 0), (3, -1), finger_gap/2),
-            ('LEFTPADDING', (4, 0), (4, -1), finger_gap/2),
-            ('RIGHTPADDING', (4, 0), (4, -1), finger_gap),  # Espacement droite
-            ('TOPPADDING', (0, 0), (-1, 0), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-            ('TOPPADDING', (0, 1), (-1, 1), 2),
-            ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
-        ]))
-        elements.append(empreintes_table_gauche)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        # === INFORMATIONS COMPLÉMENTAIRES ===
-        elements.append(Spacer(1, 0.3*cm))
-        
-        # En-tête principal avec style gris foncé comme les autres sections
-        page3_header = self._create_section_header("INFORMATIONS COMPLÉMENTAIRES", self.page_width)
-        elements.append(page3_header)
-        elements.append(Spacer(1, 0.3*cm))
-        
-        def create_simple_data_table(data, width):
-            """Crée un tableau de données simple."""
-            table_data = []
-            for label, value in data:
-                label_cell = Paragraph(
-                    f"<i>{label}</i>",
-                    ParagraphStyle('Label', parent=self.styles['Normal'], fontSize=8, textColor=self.colors['text_light'], fontName='Helvetica-Oblique')
-                )
-                value_cell = Paragraph(
-                    f"<b>{value}</b>",
-                    ParagraphStyle('Value', parent=self.styles['Normal'], fontSize=10, textColor=self.colors['text'], fontName='Helvetica-Bold')
-                )
-                table_data.append([label_cell, value_cell])
-            
-            label_col_width = 3.7*cm
-            value_col_width = width - label_col_width
-            table = Table(table_data, colWidths=[label_col_width, value_col_width])
-            table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.colors['border']),
-                ('LINEAFTER', (0, 0), (0, -1), 0.5, self.colors['border']),
-            ]))
-            return table
-        
-        # === INFORMATIONS PERSONNELLES / SOCIALES ===
+
+        elements.append(Paragraph(
+            '<b>EMPREINTES DIGITALES / FINGERPRINTS</b>',
+            ParagraphStyle(
+                'EmpreintesTitle', parent=self.styles['Normal'],
+                fontSize=10, fontName='Helvetica-Bold',
+                textColor=self.colors['text'], alignment=TA_CENTER, spaceAfter=6,
+            ),
+        ))
+        elements.append(Spacer(1, 0.15 * cm))
+        elements.append(self._create_subsection_bar('MAIN DROITE / RIGHT HAND'))
+        elements.append(Spacer(1, 0.12 * cm))
+        elements.append(self._build_fingerprint_hand(empreintes, doigts_droits, finger_names))
+        elements.append(Spacer(1, 0.2 * cm))
+        elements.append(self._create_subsection_bar('MAIN GAUCHE / LEFT HAND'))
+        elements.append(Spacer(1, 0.12 * cm))
+        elements.append(self._build_fingerprint_hand(empreintes, doigts_gauches, finger_names))
+        elements.append(Spacer(1, 0.2 * cm))
+    
+    def _collect_complementary_data(self):
+        """Regroupe les données complémentaires du formulaire."""
         social_data = []
-        
-        # Situation familiale - Récupérer directement les valeurs réelles
-        statut_mat = self._get_choice_display_safe('STATUT_MATRIMONIAL_CHOICES', getattr(self.criminel, 'statut_matrimonial', None))
+        statut_mat = self._get_choice_display_safe(
+            'statut_matrimonial', getattr(self.criminel, 'statut_matrimonial', None),
+        )
         if statut_mat:
             social_data.append(['Statut matrimonial', statut_mat])
-        
-        spouse_value = self._get_field_value('spouse')
-        if spouse_value:
-            social_data.append(['Partenaire / Conjoint(e)', spouse_value])
-        
-        children_value = self._get_field_value('children')
-        if children_value:
-            social_data.append(['Enfants', children_value])
-        
-        personnes_proches_value = self._get_field_value('personnes_proches')
-        if personnes_proches_value:
-            social_data.append(['Personnes proches', personnes_proches_value])
-        
-        dependants_value = self._get_field_value('dependants')
-        if dependants_value:
-            social_data.append(['Dépendants', dependants_value])
-        
-        # Réseaux sociaux - Récupérer toutes les valeurs réelles
-        reseaux_sociaux = []
-        facebook_value = self._get_field_value('facebook')
-        if facebook_value:
-            reseaux_sociaux.append(f"Facebook: {facebook_value}")
-        instagram_value = self._get_field_value('instagram')
-        if instagram_value:
-            reseaux_sociaux.append(f"Instagram: {instagram_value}")
-        tiktok_value = self._get_field_value('tiktok')
-        if tiktok_value:
-            reseaux_sociaux.append(f"TikTok: {tiktok_value}")
-        twitter_value = self._get_field_value('twitter_x')
-        if twitter_value:
-            reseaux_sociaux.append(f"X (Twitter): {twitter_value}")
-        whatsapp_value = self._get_field_value('whatsapp')
-        if whatsapp_value:
-            reseaux_sociaux.append(f"WhatsApp: {whatsapp_value}")
-        telegram_value = self._get_field_value('telegram')
-        if telegram_value:
-            reseaux_sociaux.append(f"Telegram: {telegram_value}")
-        email_value = self._get_field_value('email')
-        if email_value:
-            reseaux_sociaux.append(f"Email: {email_value}")
-        autres_reseaux_value = self._get_field_value('autres_reseaux')
-        if autres_reseaux_value:
-            reseaux_sociaux.append(f"Autres: {autres_reseaux_value}")
-        
-        if reseaux_sociaux:
-            social_data.append(['Réseaux sociaux', ' | '.join(reseaux_sociaux)])
-        
-        # Habitudes - Récupérer les valeurs booléennes
+        for label, field in [
+            ('Partenaire / Conjoint(e)', 'spouse'),
+            ('Enfants', 'children'),
+            ('Personnes proches', 'personnes_proches'),
+            ('Dépendants', 'dependants'),
+            ('Fréquentations connues', 'frequentations_connues'),
+            ('Endroits fréquentés', 'endroits_frequentes'),
+        ]:
+            val = self._get_field_value(field)
+            if val:
+                social_data.append([label, val])
+
+        reseaux = []
+        for prefix, field in [
+            ('Facebook', 'facebook'), ('Instagram', 'instagram'), ('TikTok', 'tiktok'),
+            ('X (Twitter)', 'twitter_x'), ('WhatsApp', 'whatsapp'), ('Telegram', 'telegram'),
+            ('Email', 'email'),
+        ]:
+            val = self._get_field_value(field)
+            if val:
+                reseaux.append(f'{prefix}: {val}')
+        autres = self._get_field_value('autres_reseaux')
+        if autres:
+            reseaux.append(f'Autres: {autres}')
+        if reseaux:
+            social_data.append(['Réseaux sociaux', ' | '.join(reseaux)])
+
         habitudes = []
         if getattr(self.criminel, 'consommation_alcool', False):
-            habitudes.append('Consommation d\'alcool')
+            habitudes.append("Consommation d'alcool")
         if getattr(self.criminel, 'consommation_drogues', False):
             habitudes.append('Consommation de drogues')
         if habitudes:
             social_data.append(['Habitudes', ', '.join(habitudes)])
-        
-        frequentations_value = self._get_field_value('frequentations_connues')
-        if frequentations_value:
-            social_data.append(['Fréquentations connues', frequentations_value])
-        
-        endroits_value = self._get_field_value('endroits_frequentes')
-        if endroits_value:
-            social_data.append(['Endroits fréquentés', endroits_value])
-        
-        # Toujours afficher la section même si vide
-        social_header = self._create_section_header("INFORMATIONS PERSONNELLES / SOCIALES", self.page_width)
-        elements.append(social_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if social_data:
-            social_table = create_simple_data_table(social_data, self.page_width)
-            elements.append(social_table)
-        else:
-            # Afficher un message si aucune donnée
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.3*cm))
-        
-        # === ADRESSE ET DÉPLACEMENTS ===
+
         deplacements_data = []
-        
-        # Adresse actuelle
-        adresse_actuelle_value = self._get_field_value('adresse')
-        if adresse_actuelle_value:
-            deplacements_data.append(['Adresse actuelle', adresse_actuelle_value])
-        
-        anciennes_adresses_value = self._get_field_value('anciennes_adresses')
-        if anciennes_adresses_value:
-            deplacements_data.append(['Anciennes adresses', anciennes_adresses_value])
-        
-        adresses_secondaires_value = self._get_field_value('adresses_secondaires')
-        if adresses_secondaires_value:
-            deplacements_data.append(['Adresses secondaires', adresses_secondaires_value])
-        
-        lieux_visites_value = self._get_field_value('lieux_visites_frequemment')
-        if lieux_visites_value:
-            deplacements_data.append(['Lieux visités fréquemment', lieux_visites_value])
-        
-        vehicules_value = self._get_field_value('vehicules_associes')
-        if vehicules_value:
-            deplacements_data.append(['Véhicules associés', vehicules_value])
-        
-        plaques_value = self._get_field_value('plaques_immatriculation')
-        if plaques_value:
-            deplacements_data.append(["Plaques d'immatriculation", plaques_value])
-        
-        permis_value = self._get_field_value('permis_conduire')
-        if permis_value:
-            deplacements_data.append(['Permis de conduire', permis_value])
-        
-        trajets_value = self._get_field_value('trajets_habituels')
-        if trajets_value:
-            deplacements_data.append(['Trajets habituels', trajets_value])
-        
-        # Toujours afficher la section
-        logger.info(f"ADRESSE ET DÉPLACEMENTS: {len(deplacements_data)} données récupérées")
-        deplacements_header = self._create_section_header("ADRESSE ET DÉPLACEMENTS", self.page_width)
-        elements.append(deplacements_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if deplacements_data:
-            deplacements_table = create_simple_data_table(deplacements_data, self.page_width)
-            elements.append(deplacements_table)
-        else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.3*cm))
-        
-        # === INFORMATIONS PROFESSIONNELLES / FINANCIÈRES ===
+        for label, field in [
+            ('Adresse actuelle', 'adresse'),
+            ('Anciennes adresses', 'anciennes_adresses'),
+            ('Adresses secondaires', 'adresses_secondaires'),
+            ('Lieux visités fréquemment', 'lieux_visites_frequemment'),
+            ('Véhicules associés', 'vehicules_associes'),
+            ("Plaques d'immatriculation", 'plaques_immatriculation'),
+            ('Permis de conduire', 'permis_conduire'),
+            ('Trajets habituels', 'trajets_habituels'),
+        ]:
+            val = self._get_field_value(field)
+            if val:
+                deplacements_data.append([label, val])
+
         profession_data = []
-        
-        emplois_value = self._get_field_value('emplois_precedents')
-        if emplois_value:
-            profession_data.append(['Emplois précédents', emplois_value])
-        
-        sources_revenus_value = self._get_field_value('sources_revenus')
-        if sources_revenus_value:
-            profession_data.append(['Sources de revenus', sources_revenus_value])
-        
-        entreprises_value = self._get_field_value('entreprises_associees')
-        if entreprises_value:
-            profession_data.append(['Entreprises associées', entreprises_value])
-        
-        comptes_value = self._get_field_value('comptes_bancaires')
-        if comptes_value:
-            profession_data.append(['Comptes bancaires', comptes_value])
-        
-        biens_value = self._get_field_value('biens_proprietes')
-        if biens_value:
-            profession_data.append(['Biens ou propriétés', biens_value])
-        
-        dettes_value = self._get_field_value('dettes_importantes')
-        if dettes_value:
-            profession_data.append(['Dettes importantes', dettes_value])
-        
-        transactions_value = self._get_field_value('transactions_suspectes')
-        if transactions_value:
-            profession_data.append(['Transactions suspectes', transactions_value])
-        
-        # Toujours afficher la section
-        logger.info(f"INFORMATIONS PROFESSIONNELLES / FINANCIÈRES: {len(profession_data)} données récupérées")
-        profession_header = self._create_section_header("INFORMATIONS PROFESSIONNELLES / FINANCIÈRES", self.page_width)
-        elements.append(profession_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if profession_data:
-            profession_table = create_simple_data_table(profession_data, self.page_width)
-            elements.append(profession_table)
-        else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.3*cm))
-        
-        # === RÉSEAU RELATIONNEL ===
+        for label, field in [
+            ('Emploi actuel', 'profession'),
+            ('Service militaire', 'service_militaire'),
+            ('Emplois précédents', 'emplois_precedents'),
+            ('Sources de revenus', 'sources_revenus'),
+            ('Entreprises associées', 'entreprises_associees'),
+            ('Comptes bancaires', 'comptes_bancaires'),
+            ('Biens ou propriétés', 'biens_proprietes'),
+            ('Dettes importantes', 'dettes_importantes'),
+            ('Transactions suspectes', 'transactions_suspectes'),
+        ]:
+            val = self._get_field_value(field)
+            if val:
+                profession_data.append([label, val])
+
         reseau_data = []
-        
-        partenaire_value = self._get_field_value('partenaire_affectif')
-        if partenaire_value:
-            reseau_data.append(['Partenaire affectif', partenaire_value])
-        
-        famille_value = self._get_field_value('famille_proche')
-        if famille_value:
-            reseau_data.append(['Famille proche', famille_value])
-        
-        amis_value = self._get_field_value('amis_proches')
-        if amis_value:
-            reseau_data.append(['Amis proches', amis_value])
-        
-        relations_risque_value = self._get_field_value('relations_risque')
-        if relations_risque_value:
-            reseau_data.append(['Relations à risque', relations_risque_value])
-        
-        suspects_value = self._get_field_value('suspects_associes')
-        if suspects_value:
-            reseau_data.append(['Suspects associés', suspects_value])
-        
-        membres_reseau_value = self._get_field_value('membres_reseau_criminel')
-        if membres_reseau_value:
-            reseau_data.append(["Membres d'un réseau criminel", membres_reseau_value])
-        
-        complices_value = self._get_field_value('complices_potentiels')
-        if complices_value:
-            reseau_data.append(['Complices potentiels', complices_value])
-        
-        contacts_value = self._get_field_value('contacts_recurrents')
-        if contacts_value:
-            reseau_data.append(['Contacts récurrents', contacts_value])
-        
-        # Toujours afficher la section
-        logger.info(f"RÉSEAU RELATIONNEL: {len(reseau_data)} données récupérées")
-        reseau_header = self._create_section_header("RÉSEAU RELATIONNEL", self.page_width)
-        elements.append(reseau_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if reseau_data:
-            reseau_table = create_simple_data_table(reseau_data, self.page_width)
-            elements.append(reseau_table)
+        for label, field in [
+            ('Partenaire affectif', 'partenaire_affectif'),
+            ('Famille proche', 'famille_proche'),
+            ('Amis proches', 'amis_proches'),
+            ('Relations à risque', 'relations_risque'),
+            ('Suspects associés', 'suspects_associes'),
+            ("Membres d'un réseau criminel", 'membres_reseau_criminel'),
+            ('Complices potentiels', 'complices_potentiels'),
+            ('Contacts récurrents', 'contacts_recurrents'),
+        ]:
+            val = self._get_field_value(field)
+            if val:
+                reseau_data.append([label, val])
+
+        return {
+            'social': social_data,
+            'deplacements': deplacements_data,
+            'profession': profession_data,
+            'reseau': reseau_data,
+        }
+
+    def _append_complementary_section(self, elements, title, data, width):
+        elements.append(self._create_section_header(title, width))
+        elements.append(Spacer(1, 0.12 * cm))
+        if data:
+            table = self._create_form_table(data, width)
+            if table:
+                elements.append(table)
+            else:
+                self._append_no_data_block(elements, width)
         else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-    
-    def generate_page_2(self, elements):
-        """
-        PAGE 2: Empreintes palmaires + Empreintes de contrôle + Footer
-        """
-        elements.append(PageBreak())
-        
-        paumes_label = Paragraph(
-            "<b>EMPREINTES PALMAIRES / PALM PRINTS</b>",
-            ParagraphStyle(
-                'PaumesLabel',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['text'],
-                alignment=TA_CENTER
-            )
-        )
-        paumes_label_table = Table([[paumes_label]], colWidths=[self.page_width])
-        paumes_label_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),  # Fond léger
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
+            self._append_no_data_block(elements, width)
+        elements.append(Spacer(1, 0.22 * cm))
+
+    def _build_column_cell(self, sections, width):
+        """Empile des sections dans une colonne."""
+        cell_table = Table([[item] for item in sections], colWidths=[width])
+        cell_table.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
-        elements.append(paumes_label_table)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        from biometrie.models import BiometriePaume
-        paumes = BiometriePaume.objects.filter(
-            criminel=self.criminel,
-            est_active=True
+        return cell_table
+
+    def _compute_page2_box_heights(self):
+        """Hauteurs palmaire et contrôle pour tenir sur une seule page A4."""
+        usable_h = A4[1] - self.doc.topMargin - self.doc.bottomMargin
+        overhead = (
+            1.0 * cm    # en-tête palmaire
+            + 0.15 * cm
+            + 0.45 * cm # labels paumes
+            + 0.15 * cm
+            + 0.65 * cm # titre contrôle
+            + 0.55 * cm # labels contrôle
+            + 0.7 * cm  # paddings tableaux
         )
-        
-        paume_droite = paumes.filter(paume='paume_droite').first()
-        paume_gauche = paumes.filter(paume='paume_gauche').first()
-        
-        # Ajuster les tailles pour ratio 120% avec espacement bien séparé
-        paume_gap = 1*cm  # Espacement important entre les deux paumes
-        total_paume_width = self.page_width - 2*0.5*cm  # Marges extérieures
-        paume_width = (total_paume_width - paume_gap) / 2  # 2 paumes avec espacement
-        paume_height = paume_width * 1.2  # Ratio 120%
-        
-        # Reconstruire avec les bonnes tailles
+        remaining = max((usable_h - overhead) * 0.97, 12 * cm)
+        paume_h = remaining * 0.54
+        control_h = remaining * 0.46
+        return paume_h, control_h
+
+    def _build_paumes_table(self, paume_droite, paume_gauche, paume_width, paume_height, paume_gap):
+        """Tableau palmaire avec une seule bordure par case (sans cadre doublé)."""
+        empty_cell = Paragraph('', self.value_style)
         paume_row = []
         label_row = []
-        
+
         for paume_obj, label_text in [
             (paume_droite, 'PAUME DROITE'),
-            (paume_gauche, 'PAUME GAUCHE')
+            (paume_gauche, 'PAUME GAUCHE'),
         ]:
-            image_added = False
-            
+            cell_content = empty_cell
             if paume_obj and paume_obj.image:
                 try:
                     image_path = self.get_image_path(paume_obj.image)
                     if image_path:
                         optimized_img = self.optimize_image_for_pdf(
-                            image_path,
-                            max_width=1500,
-                            max_height=1800
+                            image_path, max_width=1500, max_height=1800,
                         )
                         if optimized_img:
-                            img = RLImage(optimized_img, width=paume_width, height=paume_height)
-                            paume_row.append(img)
-                            image_added = True
+                            cell_content = RLImage(
+                                optimized_img, width=paume_width, height=paume_height,
+                            )
                 except Exception as e:
-                    logger.error(f"Erreur paume {label_text}: {e}", exc_info=True)
-            
-            if not image_added:
-                # Case vide avec bordure
-                empty_paume = Table([[Paragraph("", self.styles['Normal'])]], colWidths=[paume_width], rowHeights=[paume_height])
-                empty_paume.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 1, self.colors['border'])]))
-                paume_row.append(empty_paume)
-            
+                    logger.error(f"Erreur paume {label_text}: {e}")
+
+            paume_row.append(cell_content)
             label_row.append(Paragraph(
-                f"<b><font size=8>{label_text}</font></b>", 
+                f'<b><font size=8>{label_text}</font></b>',
                 ParagraphStyle(
-                    'PaumeLabel',
-                    parent=self.styles['Normal'],
-                    alignment=TA_CENTER,
-                    fontSize=8,
-                    fontName='Helvetica-Bold',
-                    textColor=self.colors['text']
-                )
+                    'PaumeLabel', parent=self.styles['Normal'],
+                    alignment=TA_CENTER, fontSize=8,
+                    fontName='Helvetica-Bold', textColor=self.colors['text'],
+                ),
             ))
-        
-        paumes_table = Table([paume_row, label_row], colWidths=[paume_width, paume_width])
+
+        paumes_table = Table(
+            [paume_row, label_row],
+            colWidths=[paume_width, paume_width],
+            rowHeights=[paume_height, 0.45 * cm],
+        )
         paumes_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 1, self.colors['border']),
-            ('BOX', (0, 0), (-1, -1), 1, self.colors['border']),
-            ('LEFTPADDING', (0, 0), (0, -1), 0.5*cm),  # Marge gauche
-            ('RIGHTPADDING', (0, 0), (0, -1), paume_gap/2),  # Espacement entre paumes
-            ('LEFTPADDING', (1, 0), (1, -1), paume_gap/2),
-            ('RIGHTPADDING', (1, 0), (1, -1), 0.5*cm),  # Marge droite
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 1), (-1, 1), 3),
-            ('BOTTOMPADDING', (0, 1), (-1, 1), 3),
-            ('BACKGROUND', (0, 0), (-1, 0), self.colors['background']),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+            ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (0, -1), 0),
+            ('RIGHTPADDING', (0, 0), (0, -1), paume_gap / 2),
+            ('LEFTPADDING', (1, 0), (1, -1), paume_gap / 2),
+            ('RIGHTPADDING', (1, 0), (1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 1), (-1, 1), 2),
+            ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
         ]))
-        elements.append(paumes_table)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        control_title = Paragraph(
-            "<b><font size=9>EMPREINTES DE CONTRÔLE</font></b>",
-            ParagraphStyle(
-                'ControlTitle',
-                parent=self.styles['Normal'],
-                fontSize=9,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['text'],
-                alignment=TA_CENTER
-            )
+        return paumes_table
+
+    def _build_control_prints_table(self, box_h):
+        """Grille contrôle : MAIN GAUCHE | POUCE G | POUCE D | MAIN DROITE — bordure unique."""
+        main_w = self.page_width * 0.40
+        pouce_w = self.page_width * 0.10
+        header_h = 0.65 * cm
+        footer_h = 0.55 * cm
+
+        control_title_style = ParagraphStyle(
+            'ControlTitle', parent=self.styles['Normal'],
+            fontSize=10, fontName='Helvetica-Bold',
+            textColor=self.colors['text'], alignment=TA_CENTER,
         )
-        control_title_table = Table([[control_title]], colWidths=[self.page_width])
-        control_title_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        elements.append(control_title_table)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        # Structure en 3 colonnes selon le formulaire:
-        
-        col_width = 6*cm
-        pouce_height = 4*cm
-        index_height = 3*cm
-        main_height = 7*cm
-        
-        # Créer les cellules pour chaque empreinte
-        empty_cell = Paragraph("", self.value_style)
-        
-        left_col_data = [
-            [Paragraph("<b>MAIN GAUCHE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Grande case pour MAIN GAUCHE
-            [empty_cell],
-            [Paragraph("<b>INDEX GAUCHE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Petite case pour INDEX GAUCHE
-        ]
-        left_col_table = Table(left_col_data, colWidths=[col_width])
-        left_col_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOX', (0, 1), (0, 2), 1.5, self.colors['border']),  # MAIN GAUCHE
-            ('BOX', (0, 4), (0, 4), 1.5, self.colors['border']),  # INDEX GAUCHE
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 1), (0, 2), 50),  # Hauteur pour MAIN
-            ('BOTTOMPADDING', (0, 1), (0, 2), 50),
-            ('TOPPADDING', (0, 4), (0, 4), 25),  # Hauteur pour INDEX
-            ('BOTTOMPADDING', (0, 4), (0, 4), 25),
-            ('BACKGROUND', (0, 0), (0, 0), self.colors['background']),
-            ('BACKGROUND', (0, 3), (0, 3), self.colors['background']),
-        ]))
-        
-        center_col_data = [
-            [Paragraph("<b>POUCES</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [Paragraph("<b>GAUCHE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Case pour POUCE GAUCHE
-            [Paragraph("<b>DROITE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Case pour POUCE DROITE
-        ]
-        center_col_table = Table(center_col_data, colWidths=[col_width])
-        center_col_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOX', (0, 2), (0, 2), 1.5, self.colors['border']),  # POUCE GAUCHE
-            ('BOX', (0, 4), (0, 4), 1.5, self.colors['border']),  # POUCE DROITE
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 2), (0, 2), 30),
-            ('BOTTOMPADDING', (0, 2), (0, 2), 30),
-            ('TOPPADDING', (0, 4), (0, 4), 30),
-            ('BOTTOMPADDING', (0, 4), (0, 4), 30),
-            ('BACKGROUND', (0, 0), (0, 0), self.colors['background']),
-            ('BACKGROUND', (0, 1), (0, 1), self.colors['background']),
-            ('BACKGROUND', (0, 3), (0, 3), self.colors['background']),
-        ]))
-        
-        right_col_data = [
-            [Paragraph("<b>MAIN DROITE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Grande case pour MAIN DROITE
-            [empty_cell],
-            [Paragraph("<b>INDEX DROITE</b>", ParagraphStyle('ControlLabel', parent=self.label_style, fontSize=11, alignment=TA_CENTER))],
-            [empty_cell],  # Petite case pour INDEX DROITE
-        ]
-        right_col_table = Table(right_col_data, colWidths=[col_width])
-        right_col_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOX', (0, 1), (0, 2), 1.5, self.colors['border']),  # MAIN DROITE
-            ('BOX', (0, 4), (0, 4), 1.5, self.colors['border']),  # INDEX DROITE
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 1), (0, 2), 50),  # Hauteur pour MAIN
-            ('BOTTOMPADDING', (0, 1), (0, 2), 50),
-            ('TOPPADDING', (0, 4), (0, 4), 25),  # Hauteur pour INDEX
-            ('BOTTOMPADDING', (0, 4), (0, 4), 25),
-            ('BACKGROUND', (0, 0), (0, 0), self.colors['background']),
-            ('BACKGROUND', (0, 3), (0, 3), self.colors['background']),
-        ]))
-        
-        # Créer le tableau principal en 3 colonnes
-        control_prints_table = Table([[left_col_table, center_col_table, right_col_table]], colWidths=[col_width, col_width, col_width])
-        control_prints_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(control_prints_table)
-        
-        # Footer
-        elements.append(Spacer(1, 0.6*cm))
-        
-        footer_para = Paragraph(
-            "<b>Gendarmerie Nationale - Service d'Identification Criminelle</b>",
-            ParagraphStyle(
-                'Footer',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                fontName='Helvetica-Bold',
-                textColor=colors.HexColor('#000000'),
-                alignment=TA_CENTER
-            )
+        control_label_style = ParagraphStyle(
+            'ControlFooterLabel', parent=self.label_style,
+            fontSize=9, fontName='Helvetica-Bold', alignment=TA_CENTER,
         )
-        footer_table = Table([[footer_para]], colWidths=[self.page_width])
-        footer_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),
+        empty_cell = Paragraph('', self.value_style)
+
+        control_data = [
+            [Paragraph('<b>EMPREINTES DE CONTRÔLE</b>', control_title_style), '', '', ''],
+            [empty_cell, empty_cell, empty_cell, empty_cell],
+            [
+                Paragraph('<b>MAIN GAUCHE</b>', control_label_style),
+                Paragraph('<b>POUCES</b>', control_label_style),
+                '',
+                Paragraph('<b>MAIN DROITE</b>', control_label_style),
+            ],
+        ]
+        control_table = Table(
+            control_data,
+            colWidths=[main_w, pouce_w, pouce_w, main_w],
+            rowHeights=[header_h, box_h, footer_h],
+        )
+        control_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (3, 0)),
+            ('SPAN', (1, 2), (2, 2)),
+            ('GRID', (0, 0), (-1, -1), 1, self.colors['border']),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 15),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LINEABOVE', (0, 0), (-1, 0), 1.5, self.colors['border']),  # Ligne plus subtile
+            ('BACKGROUND', (0, 0), (-1, 0), self.colors['background_section']),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ]))
-        elements.append(footer_table)
+        return control_table
+
+    def generate_page_2(self, elements):
+        """
+        PAGE 2: Empreintes palmaires + Empreintes de contrôle sur une seule page.
+        """
+        from biometrie.models import BiometriePaume
+
+        paumes = BiometriePaume.objects.filter(criminel=self.criminel, est_active=True)
+        paume_droite = paumes.filter(paume='paume_droite').first()
+        paume_gauche = paumes.filter(paume='paume_gauche').first()
+
+        paume_height, control_box_h = self._compute_page2_box_heights()
+        paume_gap = 0.6 * cm
+        paume_width = (self.page_width - paume_gap) / 2
+
+        page2_blocks = [
+            self._create_section_header("EMPREINTES PALMAIRES / PALM PRINTS", self.page_width),
+            Spacer(1, 0.15 * cm),
+            self._build_paumes_table(
+                paume_droite, paume_gauche, paume_width, paume_height, paume_gap,
+            ),
+            Spacer(1, 0.15 * cm),
+            self._build_control_prints_table(control_box_h),
+        ]
+
+        elements.append(PageBreak())
+        elements.append(KeepTogether(page2_blocks))
     
     def generate_page_3(self, elements):
-        """
-        PAGE 3: Informations personnelles/sociales + Adresse et déplacements + 
-        Informations professionnelles/financières + Réseau relationnel
-        """
-        # Saut de page
+        """PAGE 3 : Informations complémentaires en 2 colonnes + signature."""
         elements.append(PageBreak())
-        
-        page3_header = Paragraph(
-            "<b><font size=12>INFORMATIONS COMPLÉMENTAIRES</font></b>",
-            ParagraphStyle(
-                'Page3Header',
-                parent=self.styles['Normal'],
-                fontSize=12,
-                fontName='Helvetica-Bold',
-                textColor=self.colors['primary'],
-                alignment=TA_CENTER,
-                spaceAfter=15
-            )
+        elements.append(self._create_section_header("INFORMATIONS COMPLÉMENTAIRES", self.page_width))
+        elements.append(Spacer(1, 0.25 * cm))
+
+        data = self._collect_complementary_data()
+        col_gap = 0.6 * cm
+        col_width = (self.page_width - col_gap) / 2
+
+        left_sections = []
+        right_sections = []
+
+        for title, key in [
+            ("INFORMATIONS PERSONNELLES / SOCIALES", 'social'),
+            ("INFORMATIONS PROFESSIONNELLES / FINANCIÈRES", 'profession'),
+        ]:
+            left_sections.append(self._create_section_header(title, col_width))
+            left_sections.append(Spacer(1, 0.1 * cm))
+            table = self._create_form_table(data[key], col_width)
+            if table:
+                left_sections.append(table)
+            else:
+                left_sections.append(self._no_data_paragraph())
+            left_sections.append(Spacer(1, 0.18 * cm))
+
+        for title, key in [
+            ("ADRESSE ET DÉPLACEMENTS", 'deplacements'),
+            ("RÉSEAU RELATIONNEL", 'reseau'),
+        ]:
+            right_sections.append(self._create_section_header(title, col_width))
+            right_sections.append(Spacer(1, 0.1 * cm))
+            table = self._create_form_table(data[key], col_width)
+            if table:
+                right_sections.append(table)
+            else:
+                right_sections.append(self._no_data_paragraph())
+            right_sections.append(Spacer(1, 0.18 * cm))
+
+        two_col = Table(
+            [[self._build_column_cell(left_sections, col_width),
+              self._build_column_cell(right_sections, col_width)]],
+            colWidths=[col_width, col_width],
         )
-        elements.append(page3_header)
-        elements.append(Spacer(1, 0.3*cm))
-        
-        # === INFORMATIONS PERSONNELLES / SOCIALES ===
-        social_data = []
-        
-        # Situation familiale - Récupérer directement les valeurs réelles
-        statut_mat = self._get_choice_display_safe('STATUT_MATRIMONIAL_CHOICES', getattr(self.criminel, 'statut_matrimonial', None))
-        if statut_mat:
-            social_data.append(['Statut matrimonial', statut_mat])
-        
-        spouse_value = self._get_field_value('spouse')
-        if spouse_value:
-            social_data.append(['Partenaire / Conjoint(e)', spouse_value])
-        
-        children_value = self._get_field_value('children')
-        if children_value:
-            social_data.append(['Enfants', children_value])
-        
-        personnes_proches_value = self._get_field_value('personnes_proches')
-        if personnes_proches_value:
-            social_data.append(['Personnes proches', personnes_proches_value])
-        
-        dependants_value = self._get_field_value('dependants')
-        if dependants_value:
-            social_data.append(['Dépendants', dependants_value])
-        
-        # Réseaux sociaux - Récupérer toutes les valeurs réelles
-        reseaux_sociaux = []
-        facebook_value = self._get_field_value('facebook')
-        if facebook_value:
-            reseaux_sociaux.append(f"Facebook: {facebook_value}")
-        instagram_value = self._get_field_value('instagram')
-        if instagram_value:
-            reseaux_sociaux.append(f"Instagram: {instagram_value}")
-        tiktok_value = self._get_field_value('tiktok')
-        if tiktok_value:
-            reseaux_sociaux.append(f"TikTok: {tiktok_value}")
-        twitter_value = self._get_field_value('twitter_x')
-        if twitter_value:
-            reseaux_sociaux.append(f"X (Twitter): {twitter_value}")
-        whatsapp_value = self._get_field_value('whatsapp')
-        if whatsapp_value:
-            reseaux_sociaux.append(f"WhatsApp: {whatsapp_value}")
-        telegram_value = self._get_field_value('telegram')
-        if telegram_value:
-            reseaux_sociaux.append(f"Telegram: {telegram_value}")
-        email_value = self._get_field_value('email')
-        if email_value:
-            reseaux_sociaux.append(f"Email: {email_value}")
-        autres_reseaux_value = self._get_field_value('autres_reseaux')
-        if autres_reseaux_value:
-            reseaux_sociaux.append(f"Autres: {autres_reseaux_value}")
-        
-        if reseaux_sociaux:
-            social_data.append(['Réseaux sociaux', ' | '.join(reseaux_sociaux)])
-        
-        # Habitudes - Récupérer les valeurs booléennes
-        habitudes = []
-        if getattr(self.criminel, 'consommation_alcool', False):
-            habitudes.append('Consommation d\'alcool')
-        if getattr(self.criminel, 'consommation_drogues', False):
-            habitudes.append('Consommation de drogues')
-        if habitudes:
-            social_data.append(['Habitudes', ', '.join(habitudes)])
-        
-        frequentations_value = self._get_field_value('frequentations_connues')
-        if frequentations_value:
-            social_data.append(['Fréquentations connues', frequentations_value])
-        
-        endroits_value = self._get_field_value('endroits_frequentes')
-        if endroits_value:
-            social_data.append(['Endroits fréquentés', endroits_value])
-        
-        def create_simple_data_table(data, width):
-            """Crée un tableau de données simple."""
-            table_data = []
-            for label, value in data:
-                label_cell = Paragraph(
-                    f"<i>{label}</i>",
-                    ParagraphStyle('Label', parent=self.styles['Normal'], fontSize=8, textColor=self.colors['text_light'], fontName='Helvetica-Oblique')
-                )
-                value_cell = Paragraph(
-                    f"<b>{value}</b>",
-                    ParagraphStyle('Value', parent=self.styles['Normal'], fontSize=10, textColor=self.colors['text'], fontName='Helvetica-Bold')
-                )
-                table_data.append([label_cell, value_cell])
-            
-            label_col_width = 3.7*cm
-            value_col_width = width - label_col_width
-            table = Table(table_data, colWidths=[label_col_width, value_col_width])
-            table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.colors['border']),
-                ('LINEAFTER', (0, 0), (0, -1), 0.5, self.colors['border']),
-            ]))
-            return table
-        
-        # Toujours afficher la section même si vide
-        social_header = self._create_section_header("INFORMATIONS PERSONNELLES / SOCIALES", self.page_width)
-        elements.append(social_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if social_data:
-            social_table = create_simple_data_table(social_data, self.page_width)
-            elements.append(social_table)
-        else:
-            # Afficher un message si aucune donnée
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.4*cm))
-        
-        # === ADRESSE ET DÉPLACEMENTS ===
-        deplacements_data = []
-        
-        # Adresse actuelle
-        adresse_actuelle_value = self._get_field_value('adresse')
-        if adresse_actuelle_value:
-            deplacements_data.append(['Adresse actuelle', adresse_actuelle_value])
-        
-        anciennes_adresses_value = self._get_field_value('anciennes_adresses')
-        if anciennes_adresses_value:
-            deplacements_data.append(['Anciennes adresses', anciennes_adresses_value])
-        
-        adresses_secondaires_value = self._get_field_value('adresses_secondaires')
-        if adresses_secondaires_value:
-            deplacements_data.append(['Adresses secondaires', adresses_secondaires_value])
-        
-        lieux_visites_value = self._get_field_value('lieux_visites_frequemment')
-        if lieux_visites_value:
-            deplacements_data.append(['Lieux visités fréquemment', lieux_visites_value])
-        
-        vehicules_value = self._get_field_value('vehicules_associes')
-        if vehicules_value:
-            deplacements_data.append(['Véhicules associés', vehicules_value])
-        
-        plaques_value = self._get_field_value('plaques_immatriculation')
-        if plaques_value:
-            deplacements_data.append(["Plaques d'immatriculation", plaques_value])
-        
-        permis_value = self._get_field_value('permis_conduire')
-        if permis_value:
-            deplacements_data.append(['Permis de conduire', permis_value])
-        
-        trajets_value = self._get_field_value('trajets_habituels')
-        if trajets_value:
-            deplacements_data.append(['Trajets habituels', trajets_value])
-        
-        # Toujours afficher la section
-        logger.info(f"ADRESSE ET DÉPLACEMENTS: {len(deplacements_data)} données récupérées")
-        deplacements_header = self._create_section_header("ADRESSE ET DÉPLACEMENTS", self.page_width)
-        elements.append(deplacements_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if deplacements_data:
-            deplacements_table = create_simple_data_table(deplacements_data, self.page_width)
-            elements.append(deplacements_table)
-        else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.4*cm))
-        
-        # === INFORMATIONS PROFESSIONNELLES / FINANCIÈRES ===
-        profession_data = []
-        
-        emplois_value = self._get_field_value('emplois_precedents')
-        if emplois_value:
-            profession_data.append(['Emplois précédents', emplois_value])
-        
-        sources_revenus_value = self._get_field_value('sources_revenus')
-        if sources_revenus_value:
-            profession_data.append(['Sources de revenus', sources_revenus_value])
-        
-        entreprises_value = self._get_field_value('entreprises_associees')
-        if entreprises_value:
-            profession_data.append(['Entreprises associées', entreprises_value])
-        
-        comptes_value = self._get_field_value('comptes_bancaires')
-        if comptes_value:
-            profession_data.append(['Comptes bancaires', comptes_value])
-        
-        biens_value = self._get_field_value('biens_proprietes')
-        if biens_value:
-            profession_data.append(['Biens ou propriétés', biens_value])
-        
-        dettes_value = self._get_field_value('dettes_importantes')
-        if dettes_value:
-            profession_data.append(['Dettes importantes', dettes_value])
-        
-        transactions_value = self._get_field_value('transactions_suspectes')
-        if transactions_value:
-            profession_data.append(['Transactions suspectes', transactions_value])
-        
-        # Toujours afficher la section
-        logger.info(f"INFORMATIONS PROFESSIONNELLES / FINANCIÈRES: {len(profession_data)} données récupérées")
-        profession_header = self._create_section_header("INFORMATIONS PROFESSIONNELLES / FINANCIÈRES", self.page_width)
-        elements.append(profession_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if profession_data:
-            profession_table = create_simple_data_table(profession_data, self.page_width)
-            elements.append(profession_table)
-        else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        elements.append(Spacer(1, 0.4*cm))
-        
-        # === RÉSEAU RELATIONNEL ===
-        reseau_data = []
-        
-        partenaire_value = self._get_field_value('partenaire_affectif')
-        if partenaire_value:
-            reseau_data.append(['Partenaire affectif', partenaire_value])
-        
-        famille_value = self._get_field_value('famille_proche')
-        if famille_value:
-            reseau_data.append(['Famille proche', famille_value])
-        
-        amis_value = self._get_field_value('amis_proches')
-        if amis_value:
-            reseau_data.append(['Amis proches', amis_value])
-        
-        relations_risque_value = self._get_field_value('relations_risque')
-        if relations_risque_value:
-            reseau_data.append(['Relations à risque', relations_risque_value])
-        
-        suspects_value = self._get_field_value('suspects_associes')
-        if suspects_value:
-            reseau_data.append(['Suspects associés', suspects_value])
-        
-        membres_reseau_value = self._get_field_value('membres_reseau_criminel')
-        if membres_reseau_value:
-            reseau_data.append(["Membres d'un réseau criminel", membres_reseau_value])
-        
-        complices_value = self._get_field_value('complices_potentiels')
-        if complices_value:
-            reseau_data.append(['Complices potentiels', complices_value])
-        
-        contacts_value = self._get_field_value('contacts_recurrents')
-        if contacts_value:
-            reseau_data.append(['Contacts récurrents', contacts_value])
-        
-        # Toujours afficher la section
-        logger.info(f"RÉSEAU RELATIONNEL: {len(reseau_data)} données récupérées")
-        reseau_header = self._create_section_header("RÉSEAU RELATIONNEL", self.page_width)
-        elements.append(reseau_header)
-        elements.append(Spacer(1, 0.2*cm))
-        
-        if reseau_data:
-            reseau_table = create_simple_data_table(reseau_data, self.page_width)
-            elements.append(reseau_table)
-        else:
-            no_data_para = Paragraph(
-                "<i>Aucune information disponible</i>",
-                ParagraphStyle('NoData', parent=self.styles['Normal'], fontSize=9, textColor=self.colors['text_light'], fontName='Helvetica-Oblique', alignment=TA_CENTER)
-            )
-            no_data_table = Table([[no_data_para]], colWidths=[self.page_width])
-            no_data_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-            elements.append(no_data_table)
-        
-        # Footer pour page 3
-        elements.append(Spacer(1, 0.6*cm))
-        footer_para = Paragraph(
-            "<b>Gendarmerie Nationale - Service d'Identification Criminelle</b>",
-            ParagraphStyle(
-                'Footer',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                fontName='Helvetica-Bold',
-                textColor=colors.HexColor('#000000'),
-                alignment=TA_CENTER
-            )
-        )
-        footer_table = Table([[footer_para]], colWidths=[self.page_width])
-        footer_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), self.colors['background_section']),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 15),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LINEABOVE', (0, 0), (-1, 0), 1.5, self.colors['border']),
+        two_col.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (0, -1), 0),
+            ('RIGHTPADDING', (0, 0), (0, -1), col_gap / 2),
+            ('LEFTPADDING', (1, 0), (1, -1), col_gap / 2),
+            ('RIGHTPADDING', (1, 0), (1, -1), 0),
+            ('LINEAFTER', (0, 0), (0, -1), 0.5, self.colors['border']),
         ]))
-        elements.append(footer_table)
-    
+        elements.append(two_col)
+        self._append_signature_footer(elements)
+
     def generate(self):
-        """Génère le PDF complet en 3 pages (ou plus si nécessaire)."""
+        """Génère le PDF complet en 3 pages (dossier dactyloscopique officiel)."""
         elements = []
         
         try:
@@ -1918,7 +1330,12 @@ class FicheCriminellePDFGeneratorV2:
                 self.generate_page_2(elements)
             except Exception as e:
                 logger.error(f"Erreur lors de la génération de la page 2: {e}", exc_info=True)
-                # Continuer même si la page 2 échoue
+
+            # PAGE 3 — Informations complémentaires
+            try:
+                self.generate_page_3(elements)
+            except Exception as e:
+                logger.error(f"Erreur lors de la génération de la page 3: {e}", exc_info=True)
             
             # Construire le PDF
             try:
@@ -1930,7 +1347,11 @@ class FicheCriminellePDFGeneratorV2:
                     )
                     elements.append(error_para)
                 
-                self.doc.build(elements)
+                self.doc.build(
+                    elements,
+                    onFirstPage=self._draw_page_footer,
+                    onLaterPages=self._draw_page_footer,
+                )
             except Exception as e:
                 logger.error(f"Erreur lors de la construction du PDF: {e}", exc_info=True)
                 raise

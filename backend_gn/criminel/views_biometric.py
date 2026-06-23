@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.db import transaction
-from django.utils import timezone
 
 from .models import CriminalFicheCriminelle
 from biometrie.models import BiometriePhoto
@@ -202,22 +201,22 @@ class BiometricPhotoUploadMixin:
                 
                 # Enregistrer aussi dans le journal d'audit général
                 try:
-                    from utils.audit_logger import log_action
+                    from audit.utils import log_action
                     log_action(
+                        request=request,
                         user=request.user if request.user.is_authenticated else None,
-                        action='upload',
-                        resource='Photo Biométrique',
+                        action='CREATE',
+                        resource_type='Photo Biométrique',
                         resource_id=str(photo.id),
                         ip_address=request.META.get('REMOTE_ADDR'),
                         user_agent=request.META.get('HTTP_USER_AGENT', ''),
                         endpoint=request.path,
-                        methode_http=request.method,
-                        details={
+                        method=request.method,
+                        data_after={
                             'criminel_id': criminel.pk,
                             'type_photo': type_photo,
                             'encodage_reussi': encodage_reussi
                         },
-                        request=request
                     )
                 except Exception as e:
                     logger.warning(f"Erreur lors de l'enregistrement dans le journal d'audit: {e}")

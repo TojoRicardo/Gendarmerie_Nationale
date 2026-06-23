@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from typing import List, Dict, Any
 from .models import AuditLog
+from .typing_helpers import as_datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def detect_duplicate_logs(log1: AuditLog, log2: AuditLog, time_threshold_seconds
         return False
     
     # Vérifier la proximité temporelle
-    time_diff = abs((log1.timestamp - log2.timestamp).total_seconds())
+    time_diff = abs((as_datetime(log1.timestamp) - as_datetime(log2.timestamp)).total_seconds())
     if time_diff > time_threshold_seconds:
         return False
     
@@ -163,7 +164,7 @@ def group_logs_by_session(logs: List[AuditLog], session_timeout_minutes: int = 3
             last_timestamp = log.timestamp
         else:
             # Vérifier si on est dans la même session
-            time_diff = (log.timestamp - last_timestamp).total_seconds() / 60 if log.timestamp and last_timestamp else 0
+            time_diff = (as_datetime(log.timestamp) - as_datetime(last_timestamp)).total_seconds() / 60 if log.timestamp and last_timestamp else 0
             same_user = log.user_id == current_session[0].user_id if current_session else False
             same_ip = str(log.ip_address) == str(current_session[0].ip_address) if current_session and log.ip_address and current_session[0].ip_address else False
             
@@ -230,7 +231,6 @@ def group_audit_logs_into_sessions(logs: List[AuditLog], session_timeout_minutes
         Dictionnaire {session_id: [liste des logs]}
     """
     from collections import defaultdict
-    from datetime import timedelta
     
     if not logs:
         return {}
@@ -257,7 +257,7 @@ def group_audit_logs_into_sessions(logs: List[AuditLog], session_timeout_minutes
             new_session = True
         elif ip_address != last_ip_address:
             new_session = True
-        elif last_log_time and log_time and (log_time - last_log_time) > timedelta(minutes=session_timeout_minutes):
+        elif last_log_time and log_time and (as_datetime(log_time) - as_datetime(last_log_time)) > timedelta(minutes=session_timeout_minutes):
             new_session = True
         
         if new_session:

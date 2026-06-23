@@ -1,11 +1,10 @@
 import { BrowserRouter, Routes } from 'react-router-dom'
-import { useMemo } from 'react'
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import { ToastProvider } from './context/ToastContext'
-import { NavigationProvider, useNavigation } from './context/NavigationContext'
+import { NavigationProvider } from './context/NavigationContext'
 
 // Components
 import ErrorBoundary from './components/ErrorBoundary'

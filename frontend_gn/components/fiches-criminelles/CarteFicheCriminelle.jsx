@@ -1,11 +1,6 @@
-import React from 'react';
-import { FileText, Calendar, AlertTriangle, User, MapPin, Edit2, Trash2, Eye } from 'lucide-react';
-import { usePermissions } from '../../src/hooks/usePermissions';
-import { PERMISSIONS } from '../../src/utils/permissions';
+import { FileText, Calendar, AlertTriangle, User, MapPin } from 'lucide-react';
 
-const CarteFicheCriminelle = ({ fiche, onVoir, onModifier, onSupprimer, isArchived = false }) => {
-  const { hasPermission, canModify, canDelete } = usePermissions();
-  
+const CarteFicheCriminelle = ({ fiche, onVoir }) => {
   const getStatutBadge = (statut) => {
     const badges = {
       'en_cours': { 

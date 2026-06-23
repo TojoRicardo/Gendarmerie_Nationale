@@ -3,6 +3,7 @@
  * Évite de ré-analyser les mêmes descriptions
  */
 
+import { parseUserAgent } from './userAgentParser'
 const CACHE_KEY_PREFIX = 'audit_ia_analysis_';
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
 const MAX_CACHE_SIZE = 100; // Maximum 100 entrées en cache
@@ -38,7 +39,7 @@ const cleanExpiredCache = () => {
             localStorage.removeItem(key);
             cleaned++;
           }
-        } catch (e) {
+        } catch (_e) {
           // Si erreur de parsing, supprimer la clé
           localStorage.removeItem(key);
           cleaned++;
@@ -205,7 +206,6 @@ export const quickAnalysis = (entry) => {
   // Parser le User-Agent si disponible
   if (entry.user_agent) {
     try {
-      const { parseUserAgent } = require('./userAgentParser');
       const uaInfo = parseUserAgent(entry.user_agent);
       if (uaInfo.navigateur) {
         analysis.navigateur = uaInfo.navigateur;
@@ -215,7 +215,7 @@ export const quickAnalysis = (entry) => {
         analysis.systeme = uaInfo.systeme;
         analysis.details.systeme = uaInfo.systeme;
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignorer les erreurs de parsing
     }
   }

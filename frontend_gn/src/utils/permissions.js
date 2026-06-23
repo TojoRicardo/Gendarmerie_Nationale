@@ -45,7 +45,7 @@ export const PERMISSIONS = {
   BIOMETRIE_UPLOAD: 'biometrie.upload',
   
   // IA
-  // IA_USE: 'ia.use', // ⚠️ N'existe pas dans le backend - Supprimé
+  // IA_USE: 'ia.use', // N'existe pas dans le backend - Supprimé
   IA_VIEW_RESULTS: 'ia.view_results',
   IA_USE_RECOGNITION: 'ia.use_recognition',
   IA_USE_PREDICTION: 'ia.use_prediction',

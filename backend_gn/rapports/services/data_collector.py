@@ -2,10 +2,11 @@
 Service de collecte de données pour les rapports
 Récupère les données depuis la base PostgreSQL
 """
+# pyright: reportAttributeAccessIssue=false, reportOperatorIssue=false
 
 from datetime import datetime, timedelta
-from django.db.models import Count, Q, Avg, Sum, F
-from django.db.models.functions import TruncMonth, TruncDay
+from django.db.models import Count, Q, Avg
+from django.db.models.functions import TruncDay
 from django.utils import timezone
 from typing import Dict, List, Any
 from criminel.models import CriminalFicheCriminelle
@@ -14,7 +15,7 @@ from criminel.models import CriminalFicheCriminelle
 class DataCollectorService:
     """Service de collecte de données pour les rapports"""
     
-    def __init__(self, type_rapport: str, date_debut, date_fin, filtres: Dict = None):
+    def __init__(self, type_rapport: str, date_debut, date_fin, filtres: Dict | None = None):
         """
         Initialise le collecteur de données
         
@@ -28,6 +29,8 @@ class DataCollectorService:
         self.date_debut = date_debut
         self.date_fin = date_fin
         self.filtres = filtres or {}
+        self._collect_notes: List[str] = []
+        self._actual_data_period: tuple | None = None
     
     def collect_data(self) -> Dict[str, Any]:
         """
@@ -50,171 +53,166 @@ class DataCollectorService:
         collector = collectors.get(self.type_rapport, self._collect_personnalise)
         return collector()
     
-    def _get_base_queryset(self):
-        """
-        Retourne le queryset de base filtré par dates et filtres
-        Utilise les vraies données du modèle CriminalFicheCriminelle
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        from criminel.models import CriminalFicheCriminelle
-        from django.utils import timezone
-        
-        # Convertir les dates en datetime aware si nécessaire
-        if hasattr(self.date_debut, 'date'):
-            date_debut = self.date_debut
-        else:
-            date_debut = self.date_debut
-        
-        if hasattr(self.date_fin, 'date'):
-            date_fin = self.date_fin
-        else:
-            date_fin = self.date_fin
-        
-        # Si les dates sont des date (naive), les convertir en datetime aware
+    def _parse_filter_dates(self):
+        """Convertit date_debut/date_fin en datetime timezone-aware."""
         from datetime import date, datetime
+
+        date_debut = self.date_debut
+        date_fin = self.date_fin
+
         if isinstance(date_debut, date) and not isinstance(date_debut, datetime):
             date_debut = timezone.make_aware(datetime.combine(date_debut, datetime.min.time()))
         if isinstance(date_fin, date) and not isinstance(date_fin, datetime):
             date_fin = timezone.make_aware(datetime.combine(date_fin, datetime.max.time()))
-        
-        logger.info(f"🔵 [DataCollector] Filtrage par dates: {date_debut} à {date_fin}")
-        
-        # Vérifier combien de fiches existent au total (sans filtre de date)
-        total_fiches_db = CriminalFicheCriminelle.objects.count()
-        logger.info(f"🔵 [DataCollector] Total fiches dans la base: {total_fiches_db}")
-        
-        # Vérifier les dates min/max des fiches existantes
-        try:
-            fiche_min = CriminalFicheCriminelle.objects.order_by('date_creation').first()
-            fiche_max = CriminalFicheCriminelle.objects.order_by('-date_creation').first()
-            if fiche_min and fiche_max:
-                logger.info(f"🔵 [DataCollector] Date min fiche: {fiche_min.date_creation}, Date max fiche: {fiche_max.date_creation}")
-        except Exception as e:
-            logger.warning(f"⚠️ [DataCollector] Erreur récupération dates min/max: {e}")
-        
-        # Filtrer par dates et exclure les fiches archivées
-        filter_kwargs = {
-            'date_creation__gte': date_debut,
-            'date_creation__lte': date_fin,
-        }
-        
-        # Ajouter is_archived seulement si le champ existe
+
+        return date_debut, date_fin
+
+    def _active_fiches_qs(self):
+        """Queryset de base : fiches non archivées."""
+        qs = CriminalFicheCriminelle.objects.all()
         try:
             CriminalFicheCriminelle._meta.get_field('is_archived')
-            filter_kwargs['is_archived'] = False
-            logger.info(f"🔵 [DataCollector] Filtre is_archived=False ajouté")
-        except:
-            logger.info(f"🔵 [DataCollector] Champ is_archived n'existe pas, ignoré")
-        
-        qs = CriminalFicheCriminelle.objects.filter(**filter_kwargs)
-        
-        count_filtered = qs.count()
-        logger.info(f"🔵 [DataCollector] Nombre de fiches après filtrage par dates: {count_filtered}")
-        
-        # Vérifier si une province est spécifiée
+            qs = qs.filter(is_archived=False)
+        except Exception:
+            pass
+        return qs
+
+    def _apply_province_filter(self, qs, province: str):
+        """Filtre par province (champ province, lieu d'arrestation ou adresse)."""
+        if not province:
+            return qs
+        province = province.strip()
+        province_normalized = province.lower()
+        return qs.filter(
+            Q(province__icontains=province) |
+            Q(province__icontains=province_normalized) |
+            Q(lieu_arrestation__icontains=province) |
+            Q(lieu_arrestation__icontains=province_normalized) |
+            Q(adresse__icontains=province) |
+            Q(adresse__icontains=province_normalized)
+        )
+
+    def _format_period(self, debut, fin) -> str:
+        """Formate une période pour affichage dans le rapport."""
+        def _fmt(d):
+            if hasattr(d, 'strftime'):
+                return d.strftime('%Y-%m-%d')
+            return str(d)
+
+        return f"{_fmt(debut)} au {_fmt(fin)}"
+
+    def _get_base_queryset(self):
+        """
+        Retourne le queryset filtré par dates et filtres.
+        Repli automatique si la période ou la province ne correspondent à aucune fiche.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        self._collect_notes = []
+        self._actual_data_period = None
+
+        date_debut, date_fin = self._parse_filter_dates()
         province_filter = self.filtres.get('province') or self.filtres.get('region')
-        
-        # Si aucune fiche n'est trouvée dans la période, essayer sans filtre de date
-        if count_filtered == 0:
-            logger.warning(f"⚠️ [DataCollector] Aucune fiche trouvée dans la période {date_debut} à {date_fin}")
-            
-            # Réinitialiser le queryset sans filtre de date (mais garder les autres filtres)
-            filter_kwargs_no_date = {}
-            if 'is_archived' in filter_kwargs:
-                filter_kwargs_no_date['is_archived'] = filter_kwargs['is_archived']
-            
-            qs_no_date = CriminalFicheCriminelle.objects.filter(**filter_kwargs_no_date)
-            
-            # Si une province est spécifiée, l'appliquer maintenant
-            if province_filter:
-                logger.warning(f"⚠️ [DataCollector] Tentative sans filtre de date mais avec province '{province_filter}'")
-                # Normaliser le nom de la province pour la recherche
-                province_normalized = province_filter.strip().lower()
-                qs_no_date = qs_no_date.filter(
-                    Q(province__icontains=province_filter) |
-                    Q(province__icontains=province_normalized) |
-                    Q(lieu_arrestation__icontains=province_filter) |
-                    Q(lieu_arrestation__icontains=province_normalized) |
-                    Q(adresse__icontains=province_filter) |
-                    Q(adresse__icontains=province_normalized)
+        periode_demandee = self._format_period(self.date_debut, self.date_fin)
+
+        logger.info(f"[DataCollector] Filtrage par dates: {date_debut} à {date_fin}")
+        total_fiches_db = CriminalFicheCriminelle.objects.count()
+        logger.info(f"[DataCollector] Total fiches dans la base: {total_fiches_db}")
+
+        base = self._active_fiches_qs()
+        qs = base.filter(date_creation__gte=date_debut, date_creation__lte=date_fin)
+
+        if province_filter:
+            qs_with_province = self._apply_province_filter(qs, province_filter)
+            if qs_with_province.count() > 0:
+                qs = qs_with_province
+            elif qs.count() > 0:
+                self._collect_notes.append(
+                    f"Aucune fiche pour la province « {province_filter} » sur la période demandée. "
+                    f"Toutes les provinces sont prises en compte."
+                )
+                logger.warning(
+                    f"[DataCollector] Province « {province_filter} » sans résultat, toutes provinces utilisées"
                 )
             else:
-                logger.warning(f"⚠️ [DataCollector] Utilisation de TOUTES les fiches disponibles (sans filtre de date)")
-            
-            count_no_date = qs_no_date.count()
-            if count_no_date > 0:
-                logger.info(f"✅ [DataCollector] {count_no_date} fiches trouvées sans filtre de date - utilisation de ces fiches")
-                qs = qs_no_date
-                count_filtered = count_no_date
+                qs = qs_with_province
+
+        if qs.count() == 0:
+            logger.warning(f"[DataCollector] Aucune fiche sur la période {date_debut} à {date_fin}")
+            qs_all_dates = base
+
+            if province_filter:
+                qs_province_only = self._apply_province_filter(qs_all_dates, province_filter)
+                if qs_province_only.count() > 0:
+                    qs = qs_province_only
+                    self._collect_notes.append(
+                        f"Aucune fiche sur la période demandée ({periode_demandee}). "
+                        f"Les données de toutes les dates disponibles sont utilisées."
+                    )
+                elif qs_all_dates.count() > 0:
+                    qs = qs_all_dates
+                    self._collect_notes.append(
+                        f"Aucune fiche sur la période demandée ({periode_demandee}) "
+                        f"ni pour la province « {province_filter} ». "
+                        f"Données de toutes les provinces et dates disponibles."
+                    )
+                else:
+                    qs = qs_all_dates
             else:
-                logger.warning(f"⚠️ [DataCollector] Aucune fiche trouvée même sans filtre de date")
-        
-        # Ajouter les relations si elles existent
+                qs = qs_all_dates
+                if qs.count() > 0:
+                    self._collect_notes.append(
+                        f"Aucune fiche sur la période demandée ({periode_demandee}). "
+                        f"Les données de toutes les dates disponibles sont utilisées."
+                    )
+
         try:
             qs = qs.select_related('statut_fiche')
-        except:
+        except Exception:
             pass
         try:
             qs = qs.prefetch_related('infractions__type_infraction', 'infractions__statut_affaire')
-        except:
+        except Exception:
             pass
-        
-        # Appliquer les autres filtres (statut, niveau_danger) si pas déjà appliqués
+
         if self.filtres.get('statut'):
-            # Chercher le statut par code
             from criminel.models import RefStatutFiche
             try:
                 statut = RefStatutFiche.objects.get(code=self.filtres['statut'])
                 qs = qs.filter(statut_fiche=statut)
-                logger.info(f"🔵 [DataCollector] Filtre statut appliqué: {self.filtres['statut']}")
-            except:
+                logger.info(f"[DataCollector] Filtre statut appliqué: {self.filtres['statut']}")
+            except RefStatutFiche.DoesNotExist:
                 pass
-        
-        # Filtrer par province si pas déjà fait (cas où des fiches étaient trouvées avec les dates)
-        if province_filter and count_filtered > 0:
-            logger.info(f"🔵 [DataCollector] Filtre province appliqué: {province_filter}")
-            
-            # Normaliser le nom de la province pour la recherche (enlever les accents, espaces, etc.)
-            province_normalized = province_filter.strip().lower()
-            
-            qs = qs.filter(
-                Q(province__icontains=province_filter) |
-                Q(province__icontains=province_normalized) |
-                Q(lieu_arrestation__icontains=province_filter) |
-                Q(lieu_arrestation__icontains=province_normalized) |
-                Q(adresse__icontains=province_filter) |
-                Q(adresse__icontains=province_normalized)
-            )
-            count_after_province = qs.count()
-            logger.info(f"🔵 [DataCollector] Nombre de fiches après filtre province: {count_after_province}")
-            
-            # Si aucune fiche n'est trouvée avec le filtre de province, vérifier les provinces disponibles
-            if count_after_province == 0:
-                logger.warning(f"⚠️ [DataCollector] Aucune fiche trouvée pour la province '{province_filter}' dans la période spécifiée")
-                # Lister les provinces disponibles pour aider au diagnostic
-                try:
-                    provinces_disponibles = list(CriminalFicheCriminelle.objects.exclude(
-                        province__isnull=True
-                    ).exclude(
-                        province=''
-                    ).values_list('province', flat=True).distinct()[:10])
-                    logger.info(f"🔵 [DataCollector] Provinces disponibles dans la base: {provinces_disponibles}")
-                except Exception as e:
-                    logger.warning(f"⚠️ [DataCollector] Erreur récupération provinces: {e}")
-        
+
         if self.filtres.get('niveau_danger'):
             qs = qs.filter(niveau_danger=self.filtres['niveau_danger'])
-            logger.info(f"🔵 [DataCollector] Filtre niveau_danger appliqué: {self.filtres['niveau_danger']}")
-        
-        if self.filtres.get('niveau_danger'):
-            qs = qs.filter(niveau_danger=self.filtres['niveau_danger'])
-        
+            logger.info(f"[DataCollector] Filtre niveau_danger appliqué: {self.filtres['niveau_danger']}")
+
+        if qs.count() > 0:
+            from django.db.models import Min, Max
+            agg = qs.aggregate(dmin=Min('date_creation'), dmax=Max('date_creation'))
+            self._actual_data_period = (agg['dmin'], agg['dmax'])
+
+        logger.info(f"[DataCollector] Fiches retenues: {qs.count()}")
+        if self._collect_notes:
+            logger.info(f"[DataCollector] Notes de repli: {self._collect_notes}")
+
         return qs
     
     # COLLECTEURS SPÉCIFIQUES
     
+    def _build_resume_text(self) -> str:
+        """Construit le texte de résumé avec les éventuelles notes de repli."""
+        periode = self._format_period(self.date_debut, self.date_fin)
+        resume = f"Ce rapport présente un résumé complet de l'activité du {periode}."
+        if self._actual_data_period and self._collect_notes:
+            periode_reelle = self._format_period(*self._actual_data_period)
+            resume += f" Données effectives : {periode_reelle}."
+        if self._collect_notes:
+            resume += " " + " ".join(self._collect_notes)
+        return resume
+
     def _collect_resume_mensuel(self) -> Dict[str, Any]:
         """Collecte les données pour le résumé mensuel"""
         import logging
@@ -225,23 +223,23 @@ class DataCollectorService:
             
             # Statistiques globales
             total_fiches = qs.count()
-            logger.info(f"🔵 [DataCollector] Total fiches dans le queryset: {total_fiches}")
+            logger.info(f"[DataCollector] Total fiches dans le queryset: {total_fiches}")
             
             # Si aucune fiche n'est trouvée, vérifier si c'est un problème de dates
             if total_fiches == 0:
                 total_all_fiches = CriminalFicheCriminelle.objects.count()
-                logger.warning(f"⚠️ [DataCollector] AUCUNE fiche trouvée dans la période {self.date_debut} à {self.date_fin}")
-                logger.warning(f"⚠️ [DataCollector] Total fiches dans la base (toutes périodes): {total_all_fiches}")
+                logger.warning(f"[DataCollector] WARNING: AUCUNE fiche trouvée dans la période {self.date_debut} à {self.date_fin}")
+                logger.warning(f"[DataCollector] WARNING: Total fiches dans la base (toutes périodes): {total_all_fiches}")
                 
                 # Vérifier les dates min/max réelles
                 try:
                     fiche_min = CriminalFicheCriminelle.objects.order_by('date_creation').first()
                     fiche_max = CriminalFicheCriminelle.objects.order_by('-date_creation').first()
                     if fiche_min and fiche_max:
-                        logger.warning(f"⚠️ [DataCollector] Période réelle des données: {fiche_min.date_creation} à {fiche_max.date_creation}")
-                        logger.warning(f"⚠️ [DataCollector] Période demandée: {self.date_debut} à {self.date_fin}")
+                        logger.warning(f"[DataCollector] WARNING: Période réelle des données: {fiche_min.date_creation} à {fiche_max.date_creation}")
+                        logger.warning(f"[DataCollector] WARNING: Période demandée: {self.date_debut} à {self.date_fin}")
                 except Exception as e:
-                    logger.warning(f"⚠️ [DataCollector] Erreur récupération dates: {e}")
+                    logger.warning(f"[DataCollector] WARNING: Erreur récupération dates: {e}")
             
             # Compter par statut - avec gestion d'erreur
             fiches_ouvertes = 0
@@ -249,16 +247,16 @@ class DataCollectorService:
             try:
                 from criminel.models import RefStatutFiche
                 statuts_en_cours = RefStatutFiche.objects.filter(code__in=['en_cours', 'en_attente'])
-                logger.info(f"🔵 [DataCollector] Statuts en cours trouvés: {list(statuts_en_cours.values_list('code', flat=True))}")
+                logger.info(f"[DataCollector] Statuts en cours trouvés: {list(statuts_en_cours.values_list('code', flat=True))}")
                 fiches_ouvertes = qs.filter(statut_fiche__in=statuts_en_cours).count()
-                logger.info(f"🔵 [DataCollector] Fiches ouvertes: {fiches_ouvertes}")
+                logger.info(f"[DataCollector] Fiches ouvertes: {fiches_ouvertes}")
                 
                 statuts_closes = RefStatutFiche.objects.filter(code__in=['cloture', 'clos'])
-                logger.info(f"🔵 [DataCollector] Statuts clos trouvés: {list(statuts_closes.values_list('code', flat=True))}")
+                logger.info(f"[DataCollector] Statuts clos trouvés: {list(statuts_closes.values_list('code', flat=True))}")
                 fiches_closes = qs.filter(statut_fiche__in=statuts_closes).count()
-                logger.info(f"🔵 [DataCollector] Fiches closes: {fiches_closes}")
+                logger.info(f"[DataCollector] Fiches closes: {fiches_closes}")
             except Exception as e:
-                logger.warning(f"⚠️ [DataCollector] Erreur calcul statuts: {e}", exc_info=True)
+                logger.warning(f"[DataCollector] WARNING: Erreur calcul statuts: {e}", exc_info=True)
                 fiches_ouvertes = total_fiches
                 fiches_closes = 0
             
@@ -287,7 +285,13 @@ class DataCollectorService:
             
             return {
                 'titre': 'Résumé Mensuel',
-                'resume': f"Ce rapport présente un résumé complet de l'activité du {self.date_debut} au {self.date_fin}.",
+                'resume': self._build_resume_text(),
+                'notes': list(self._collect_notes),
+                'periode_demandee': self._format_period(self.date_debut, self.date_fin),
+                'periode_donnees': (
+                    self._format_period(*self._actual_data_period)
+                    if self._actual_data_period else None
+                ),
                 'statistiques': {
                     'Total des fiches': total_fiches,
                     'Fiches ouvertes': fiches_ouvertes,
@@ -579,20 +583,20 @@ class DataCollectorService:
         
         # Chercher les empreintes digitales si le modèle existe
         try:
-            from biometrie.models import EmpreinteDigitale
-            empreintes_total = EmpreinteDigitale.objects.filter(
-                fiche_criminelle__in=qs
+            from biometrie.models import BiometrieEmpreinte
+            empreintes_total = BiometrieEmpreinte.objects.filter(
+                criminel__in=qs
             ).count()
-        except:
+        except Exception:
             empreintes_total = 0
         
         # Chercher les photos biométriques si le modèle existe
         try:
-            from biometrie.models import PhotoBiometrique
-            photos_biometriques = PhotoBiometrique.objects.filter(
-                fiche_criminelle__in=qs
+            from biometrie.models import BiometriePhoto
+            photos_biometriques = BiometriePhoto.objects.filter(
+                criminel__in=qs
             ).count()
-        except:
+        except Exception:
             photos_biometriques = 0
         
         # Statistiques détaillées
@@ -607,10 +611,10 @@ class DataCollectorService:
             
             # Ajouter les empreintes si disponibles
             try:
-                from biometrie.models import EmpreinteDigitale
-                empreintes = EmpreinteDigitale.objects.filter(fiche_criminelle=fiche).count()
+                from biometrie.models import BiometrieEmpreinte
+                empreintes = BiometrieEmpreinte.objects.filter(criminel=fiche).count()
                 donnees_fiche['nombre_empreintes'] = empreintes
-            except:
+            except Exception:
                 donnees_fiche['nombre_empreintes'] = 0
             
             donnees.append(donnees_fiche)

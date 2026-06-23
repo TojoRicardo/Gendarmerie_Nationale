@@ -2,6 +2,9 @@
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+from .generateur import GenerateurRapport
+from .models import Rapport
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -20,9 +23,6 @@ else:
             def decorator(func):
                 return func
             return decorator
-
-from .generateur import GenerateurRapport
-from .models import Rapport
 
 
 @shared_task(max_retries=3)
@@ -89,7 +89,6 @@ def generate_automatic_reports():
 @shared_task
 def generate_daily_statistics_report():
     from .generateur import GenerateurRapport
-    from datetime import date, timedelta
     
     logger.info("Génération du rapport statistique quotidien")
     
@@ -131,7 +130,6 @@ def generate_daily_statistics_report():
 @shared_task
 def generate_weekly_statistics_report():
     from .generateur import GenerateurRapport
-    from datetime import date, timedelta
     
     logger.info("Génération du rapport statistique hebdomadaire")
     
@@ -174,7 +172,6 @@ def generate_weekly_statistics_report():
 @shared_task
 def generate_monthly_statistics_report():
     from .generateur import GenerateurRapport
-    from datetime import date, timedelta
     
     logger.info("Génération du rapport statistique mensuel")
     
@@ -220,7 +217,6 @@ def generate_monthly_statistics_report():
 @shared_task
 def generate_yearly_statistics_report():
     from .generateur import GenerateurRapport
-    from datetime import date
     
     logger.info("Génération du rapport statistique annuel")
     
@@ -263,7 +259,6 @@ def generate_yearly_statistics_report():
 @shared_task
 def generate_daily_audit_report():
     from .generateur import GenerateurRapport
-    from datetime import date, timedelta
     
     logger.info("Génération du rapport d'audit quotidien")
     

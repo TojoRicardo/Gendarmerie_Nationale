@@ -4,8 +4,7 @@ Script de suppression des fiches criminelles de démonstration
 from django.core.management.base import BaseCommand
 from criminel.models import (
     CriminalFicheCriminelle,
-    CriminalInfraction,
-    CriminalTypeInfraction
+    CriminalInfraction
 )
 
 
@@ -25,7 +24,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        delete_all = options['all']
+        options['all']
         confirm = options['confirm']
         
         # Compter les fiches
@@ -37,13 +36,13 @@ class Command(BaseCommand):
             return
         
         # Afficher les statistiques
-        self.stdout.write(self.style.WARNING(f'\nStatistiques actuelles:'))
+        self.stdout.write(self.style.WARNING('\nStatistiques actuelles:'))
         self.stdout.write(f'  - Fiches criminelles: {total_fiches}')
         self.stdout.write(f'  - Infractions: {total_infractions}')
         
         # Demander confirmation
         if not confirm:
-            self.stdout.write(self.style.WARNING(f'\nATTENTION: Cette operation va supprimer:'))
+            self.stdout.write(self.style.WARNING('\nATTENTION: Cette operation va supprimer:'))
             self.stdout.write(f'  - {total_fiches} fiche(s) criminelle(s)')
             self.stdout.write(f'  - {total_infractions} infraction(s)')
             
@@ -60,7 +59,7 @@ class Command(BaseCommand):
         fiches_supprimees = CriminalFicheCriminelle.objects.all().delete()[0]
         
         # Confirmation
-        self.stdout.write(self.style.SUCCESS(f'\nSuppression terminee:'))
+        self.stdout.write(self.style.SUCCESS('\nSuppression terminee:'))
         self.stdout.write(f'  - {fiches_supprimees} fiche(s) criminelle(s) supprimee(s)')
         self.stdout.write(f'  - {infractions_supprimees} infraction(s) supprimee(s)')
         

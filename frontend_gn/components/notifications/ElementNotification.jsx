@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bell, FileText, User, AlertCircle, Check, X } from 'lucide-react';
 
 const ElementNotification = ({ notification, onMarquerLue, onSupprimer, onClick }) => {
@@ -8,6 +7,10 @@ const ElementNotification = ({ notification, onMarquerLue, onSupprimer, onClick 
       utilisateur: User,
       alerte: AlertCircle,
       systeme: Bell,
+      info: Bell,
+      success: Check,
+      warning: AlertCircle,
+      error: AlertCircle,
     };
     return icones[type] || Bell;
   };
@@ -49,29 +52,42 @@ const ElementNotification = ({ notification, onMarquerLue, onSupprimer, onClick 
   const Icone = getIcone(notification.type);
   const estNonLue = !notification.lue;
   const styles = getStyles(notification.type, estNonLue);
+  const dateAffichee = notification.date_creation || notification.date;
+
+  const handleOpen = () => {
+    if (onClick) {
+      onClick(notification);
+    }
+  };
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       className={`
         w-full text-left p-4 border-l-3 rounded-lg transition-all duration-200
         ${styles.containerClasses}
         hover:shadow-md cursor-pointer transform hover:-translate-y-0.5
       `}
-      onClick={() => onClick && onClick(notification)}
+      onClick={handleOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleOpen();
+        }
+      }}
     >
       <div className="flex items-start space-x-3">
-        {/* Icône */}
         <div className={`
           flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center shadow-sm
           ${styles.iconBgClasses}
         `}>
-          <Icone 
-            size={20} 
-            className={styles.iconClasses} 
+          <Icone
+            size={20}
+            className={styles.iconClasses}
           />
         </div>
 
-        {/* Contenu */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -84,7 +100,9 @@ const ElementNotification = ({ notification, onMarquerLue, onSupprimer, onClick 
               <div className="flex items-center space-x-2 mt-2">
                 <div className="h-1 w-1 bg-gray-400 rounded-full"></div>
                 <p className="text-xs text-gray-500 font-medium">
-                  {new Date(notification.date).toLocaleString('fr-FR')}
+                  {dateAffichee
+                    ? new Date(dateAffichee).toLocaleString('fr-FR')
+                    : '—'}
                 </p>
                 {notification.priorite && (
                   <>
@@ -101,37 +119,37 @@ const ElementNotification = ({ notification, onMarquerLue, onSupprimer, onClick 
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center space-x-1.5 ml-3">
               {estNonLue && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onMarquerLue(notification.id);
                   }}
-                      className="p-1.5 hover:bg-gendarme-green/10 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
-                      title="Marquer comme lue"
-                    >
-                      <Check size={16} className="text-gendarme-green" />
+                  className="p-1.5 hover:bg-gendarme-green/10 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
+                  title="Marquer comme lue"
+                >
+                  <Check size={16} className="text-gendarme-green" />
                 </button>
               )}
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSupprimer(notification.id);
                 }}
-                    className="p-1.5 hover:bg-gendarme-red/10 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
-                    title="Supprimer"
-                  >
-                    <X size={16} className="text-gendarme-red" />
+                className="p-1.5 hover:bg-gendarme-red/10 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
+                title="Supprimer"
+              >
+                <X size={16} className="text-gendarme-red" />
               </button>
             </div>
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 };
 
 export default ElementNotification;
-

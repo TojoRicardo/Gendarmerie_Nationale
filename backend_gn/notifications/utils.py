@@ -127,7 +127,7 @@ class NotificationTypes:
             titre='Analyse IA terminée',
             message=f'L\'analyse prédictive pour la fiche #{numero_fiche} est terminée',
             type='success',
-            lien=f'/ia'
+            lien='/ia'
         )
     
     @staticmethod

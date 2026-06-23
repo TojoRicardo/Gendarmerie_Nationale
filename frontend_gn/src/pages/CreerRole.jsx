@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
-  Save, X, Key, Users, CheckSquare, ShieldCheck
+  Save, X, Key, CheckSquare, ShieldCheck
 } from 'lucide-react'
 import { MESSAGES } from '../utils/notifications'
 import { useNotification } from '../context/NotificationContext'

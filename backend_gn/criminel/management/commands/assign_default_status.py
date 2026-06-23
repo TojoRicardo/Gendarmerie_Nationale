@@ -24,7 +24,7 @@ class Command(BaseCommand):
         try:
             statut = RefStatutFiche.objects.get(code=statut_code)
         except RefStatutFiche.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f'❌ Le statut "{statut_code}" n\'existe pas.'))
+            self.stdout.write(self.style.ERROR(f'[ERREUR] Le statut "{statut_code}" n\'existe pas.'))
             self.stdout.write(self.style.NOTICE('Statuts disponibles:'))
             for s in RefStatutFiche.objects.all():
                 self.stdout.write(self.style.NOTICE(f'  - {s.code}: {s.libelle}'))
@@ -45,7 +45,7 @@ class Command(BaseCommand):
         # Assigner le statut
         updated = fiches_sans_statut.update(statut_fiche=statut)
         
-        self.stdout.write(self.style.SUCCESS(f'✅ {updated} fiche(s) mise(s) à jour avec le statut "{statut.libelle}".'))
+        self.stdout.write(self.style.SUCCESS(f'[OK] {updated} fiche(s) mise(s) à jour avec le statut "{statut.libelle}".'))
         
         # Afficher un résumé
         self.stdout.write(self.style.NOTICE('\nRésumé des statuts:'))

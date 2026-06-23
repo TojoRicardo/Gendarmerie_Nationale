@@ -7,8 +7,8 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
 from .models import AuditLog
+from .typing_helpers import as_datetime, as_str, as_dict, related_username
 import json
 
 logger = logging.getLogger(__name__)
@@ -71,8 +71,9 @@ def format_date_fr(dt: datetime) -> str:
     return f"{dt.day} {months[dt.month]} {dt.year}, {dt.strftime('%Hh%M:%S')}"
 
 
-def get_action_fr(action: str) -> str:
+def get_action_fr(action: Any) -> str:
     """Traduit une action en français."""
+    action_str = as_str(action, 'VIEW')
     action_map = {
         'LOGIN': 'Connexion',
         'LOGOUT': 'Déconnexion',
@@ -92,7 +93,7 @@ def get_action_fr(action: str) -> str:
         'PIN_FAILED': 'Échec de validation PIN',
         'ACCESS_DENIED': 'Accès refusé',
     }
-    return action_map.get(action, action.replace('_', ' ').title())
+    return action_map.get(action_str, action_str.replace('_', ' ').title())
 
 
 def get_resource_display(audit_log: AuditLog) -> str:
@@ -123,7 +124,7 @@ def get_resource_display(audit_log: AuditLog) -> str:
         resource_name = audit_log.resource_type
         if resource_parts:
             return f"{resource_name} {''.join(resource_parts)}"
-        return resource_name
+        return str(resource_name)
     
     # Fallback sur content_type
     if audit_log.content_type:
@@ -250,9 +251,9 @@ def generate_narrative_report(audit_log: AuditLog, workstation_info: Optional[Di
         Journal narratif formaté en texte
     """
     # Informations de base
-    date_str = format_date_fr(audit_log.timestamp) if audit_log.timestamp else "Date non disponible"
-    user_display = audit_log.user.username if audit_log.user else "Système"
-    role_display = audit_log.user_role or "Non spécifié"
+    date_str = format_date_fr(as_datetime(audit_log.timestamp)) if audit_log.timestamp else "Date non disponible"
+    user_display = related_username(audit_log.user)
+    role_display = as_str(audit_log.user_role, "Non spécifié")
     action_fr = get_action_fr(audit_log.action)
     resource_display = get_resource_display(audit_log)
     
@@ -301,7 +302,7 @@ def generate_narrative_report(audit_log: AuditLog, workstation_info: Optional[Di
     # Générer le résumé selon le type d'action
     if audit_log.action == 'LOGIN':
         lines.append(f"À {audit_log.timestamp.strftime('%Hh%M')}, l'utilisateur {user_display} ({role_display}) s'est connecté au système depuis le poste {workstation_name} ({machine_name}).")
-        lines.append(f"Connexion validée avec authentification multi-facteurs (MFA) et validation par le système.")
+        lines.append("Connexion validée avec authentification multi-facteurs (MFA) et validation par le système.")
         if audit_log.reussi:
             lines.append("Connexion réussie et authentifiée.")
         else:
@@ -338,7 +339,7 @@ def generate_narrative_report(audit_log: AuditLog, workstation_info: Optional[Di
         after_data = audit_log.after or audit_log.changes_after or audit_log.data_after
         
         if before_data and after_data:
-            modifications = generate_modifications_table(before_data, after_data)
+            modifications = generate_modifications_table(as_dict(before_data), as_dict(after_data))
             if modifications:
                 lines.append("MODIFICATIONS DÉTAILLÉES")
                 lines.append("-" * 80)
@@ -429,223 +430,6 @@ def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Opt
     
     # Dates de session
     if first_log.timestamp and last_log.timestamp:
-        date_start = format_date_fr(first_log.timestamp)
-        time_start = first_log.timestamp.strftime("%Hh%M")
-        time_end = last_log.timestamp.strftime("%Hh%M")
-        date_session = f"{first_log.timestamp.day} {months[first_log.timestamp.month]} {first_log.timestamp.year}, {time_start} – {time_end}"
-    else:
-        date_session = "Date non disponible"
-        time_start = "N/A"
-        time_end = "N/A"
-    
-    ip_address = first_log.ip_address or "Non disponible"
-    browser = first_log.browser or "Non disponible"
-    os_info = first_log.os or "Non disponible"
-    
-    # Informations poste de travail
-    workstation_name = (workstation_info or {}).get('workstation_name') or "Non spécifié"
-    machine_name = (workstation_info or {}).get('machine_name') or (workstation_info or {}).get('computer_name') or "Non spécifié"
-    
-    # Construire le rapport
-    lines = []
-    lines.append("=" * 80)
-    lines.append("JOURNAL D'AUDIT PROFESSIONNEL - SESSION COMPLÈTE")
-    lines.append("=" * 80)
-    lines.append("")
-    
-    # En-tête de session
-    lines.append("INFORMATIONS DE LA SESSION")
-    lines.append("-" * 80)
-    lines.append(f"Date et heure de session : {date_session}")
-    lines.append(f"Utilisateur : {role_display} {user_display}")
-    lines.append(f"Poste de travail : {workstation_name}")
-    lines.append(f"Nom de la machine : {machine_name}")
-    lines.append(f"IP locale : {ip_address}")
-    lines.append(f"Navigateur : {browser}")
-    lines.append(f"Système : {os_info}")
-    lines.append("")
-    
-    # Résumé de la session
-    lines.append("RÉSUMÉ DE LA SESSION")
-    lines.append("-" * 80)
-    
-    # Identifier les actions principales
-    actions_summary = []
-    modifications = []
-    suppressions = []
-    telechargements = []
-    ajouts = []
-    consultations = []
-    
-    for log in sorted_logs:
-        action_fr = get_action_fr(log.action)
-        resource_display = get_resource_display(log)
-        
-        if log.action == 'LOGIN':
-            log_time = log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A'
-            lines.append(f"L'utilisateur s'est connecté à {log_time} depuis le poste {workstation_name}.")
-            if log.reussi:
-                lines.append("Connexion validée avec authentification multi-facteurs (MFA) et validation par le système.")
-            else:
-                lines.append(f"Tentative de connexion échouée. {log.message_erreur or 'Raison non spécifiée'}.")
-            lines.append("")
-        elif log.action == 'VIEW':
-            consultations.append({
-                'time': log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A',
-                'resource': resource_display
-            })
-        elif log.action == 'UPDATE':
-            before_data = log.before or log.changes_before or log.data_before
-            after_data = log.after or log.changes_after or log.data_after
-            if before_data and after_data:
-                mods = generate_modifications_table(before_data, after_data)
-                modifications.extend(mods)
-        elif log.action == 'DELETE':
-            before_data = log.before or log.changes_before or log.data_before
-            suppressions.append({
-                'time': log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A',
-                'resource': resource_display,
-                'before': before_data
-            })
-        elif log.action == 'DOWNLOAD':
-            telechargements.append({
-                'time': log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A',
-                'resource': resource_display
-            })
-        elif log.action == 'UPLOAD':
-            ajouts.append({
-                'time': log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A',
-                'resource': resource_display
-            })
-        elif log.action == 'LOGOUT':
-            lines.append(f"L'utilisateur s'est déconnecté à {log.timestamp.strftime('%Hh%M')}.")
-            lines.append("")
-    
-    # Narration des actions
-    if consultations:
-        lines.append(f"À {time_start}, l'utilisateur a ouvert et consulté les ressources suivantes :")
-        for consult in consultations:
-            lines.append(f"  - {consult['resource']} (à {consult['time']})")
-        lines.append("")
-        lines.append("Le système a sauvegardé automatiquement l'état initial de chaque ressource pour assurer la traçabilité.")
-        lines.append("")
-        lines.append("Après consultation complète, l'utilisateur a détecté des incohérences et a effectué les actions suivantes dans l'ordre chronologique :")
-        lines.append("")
-    
-    # Modifications
-    if modifications:
-        lines.append("MODIFICATIONS")
-        lines.append("-" * 80)
-        lines.append("")
-        lines.append("| Champ | Avant modification | Après modification | Motif |")
-        lines.append("|-------|---------------------|-------------------|-------|")
-        for mod in modifications:
-            champ = mod['champ'].replace('|', '\\|')
-            avant = mod['avant'].replace('|', '\\|').replace('\n', ' ')[:50]
-            apres = mod['apres'].replace('|', '\\|').replace('\n', ' ')[:50]
-            motif = mod['motif'].replace('|', '\\|')
-            lines.append(f"| {champ} | {avant} | {apres} | {motif} |")
-        lines.append("")
-    
-    # Téléchargements
-    if telechargements:
-        lines.append("TÉLÉCHARGEMENTS")
-        lines.append("-" * 80)
-        for dl in telechargements:
-            lines.append(f"- {dl['resource']} téléchargé à {dl['time']}")
-        lines.append("")
-    
-    # Suppressions
-    if suppressions:
-        lines.append("SUPPRESSIONS")
-        lines.append("-" * 80)
-        for supp in suppressions:
-            lines.append(f"- {supp['resource']} supprimé à {supp['time']}")
-            if supp['before']:
-                # Essayer d'identifier le nom du fichier ou ressource
-                resource_name = supp['resource']
-                if isinstance(supp['before'], dict):
-                    # Chercher des champs qui pourraient contenir le nom
-                    for key in ['nom', 'titre', 'fichier', 'file', 'filename']:
-                        if key in supp['before']:
-                            resource_name = f"{supp['resource']} ({supp['before'][key]})"
-                            break
-                lines.append(f"  État avant suppression : {resource_name}")
-            # Le motif sera extrait des données réelles si disponible, sinon on ne spécule pas
-            if isinstance(supp['before'], dict):
-                if 'motif' in supp['before']:
-                    lines.append(f"  Motif : {supp['before']['motif']}")
-                elif 'raison' in supp['before']:
-                    lines.append(f"  Motif : {supp['before']['raison']}")
-                elif 'reason' in supp['before']:
-                    lines.append(f"  Motif : {supp['before']['reason']}")
-        lines.append("")
-    
-    # Ajouts
-    if ajouts:
-        lines.append("AJOUTS")
-        lines.append("-" * 80)
-        for ajout in ajouts:
-            lines.append(f"- {ajout['resource']} ajouté à {ajout['time']}")
-            # Utiliser les informations réelles si disponibles depuis le log
-        lines.append("")
-    
-    # Validation finale
-    lines.append("VALIDATION FINALE")
-    lines.append("-" * 80)
-    lines.append("Toutes les actions ont été enregistrées et archivées.")
-    lines.append("États avant/après archivés pour chaque action.")
-    lines.append("Motifs et justifications consignés.")
-    lines.append("Transparence et traçabilité totales respectées.")
-    lines.append("")
-    
-    # Déconnexion
-    logout_logs = [log for log in sorted_logs if log.action == 'LOGOUT']
-    if logout_logs:
-        logout_time = logout_logs[-1].timestamp.strftime('%Hh%M') if logout_logs[-1].timestamp else "N/A"
-        lines.append(f"Déconnexion : {logout_time}")
-    else:
-        lines.append(f"Fin de session : {time_end}")
-    lines.append("")
-    
-    # Référence d'audit
-    date_ref = first_log.timestamp.strftime('%Y-%m-%d') if first_log.timestamp else "N/A"
-    object_id = first_log.object_id or first_log.id
-    ref_audit = f"SGIC-AUDIT-{date_ref}-{object_id}"
-    lines.append(f"Référence audit : {ref_audit}")
-    lines.append("")
-    lines.append("=" * 80)
-    
-    return "\n".join(lines)
-
-
-def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Optional[Dict] = None) -> str:
-    """
-    Génère un journal narratif professionnel complet pour une session utilisateur.
-    Regroupe tous les logs d'une session en un récit cohérent et chronologique.
-    
-    Args:
-        audit_logs: Liste d'instances AuditLog d'une même session (triées par timestamp)
-        workstation_info: Dict avec workstation_name, machine_name (optionnel)
-        
-    Returns:
-        Journal narratif formaté en texte
-    """
-    if not audit_logs:
-        return "Aucun log d'audit disponible pour cette session."
-    
-    # Trier par timestamp
-    sorted_logs = sorted(audit_logs, key=lambda x: x.timestamp if x.timestamp else timezone.now())
-    
-    # Informations de base de la session
-    first_log = sorted_logs[0]
-    last_log = sorted_logs[-1]
-    
-    user_display = first_log.user.username if first_log.user else "Système"
-    role_display = first_log.user_role or "Non spécifié"
-    
-    # Dates de session
-    if first_log.timestamp and last_log.timestamp:
         time_start = first_log.timestamp.strftime("%Hh%M")
         time_end = last_log.timestamp.strftime("%Hh%M")
         date_session = f"{first_log.timestamp.day} {months[first_log.timestamp.month]} {first_log.timestamp.year}, {time_start} – {time_end}"
@@ -695,7 +479,7 @@ def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Opt
     logout_time = None
     
     for log in sorted_logs:
-        action_fr = get_action_fr(log.action)
+        get_action_fr(log.action)
         resource_display = get_resource_display(log)
         log_time = log.timestamp.strftime('%Hh%M') if log.timestamp else 'N/A'
         
@@ -713,7 +497,7 @@ def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Opt
             before_data = log.before or log.changes_before or log.data_before
             after_data = log.after or log.changes_after or log.data_after
             if before_data and after_data and isinstance(before_data, dict) and isinstance(after_data, dict):
-                mods = generate_modifications_table(before_data, after_data)
+                mods = generate_modifications_table(as_dict(before_data), as_dict(after_data))
                 modifications.extend(mods)
         elif log.action == 'DELETE':
             before_data = log.before or log.changes_before or log.data_before
@@ -778,7 +562,7 @@ def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Opt
         lines.append("-" * 80)
         for dl in telechargements:
             lines.append(f"- {dl['resource']} téléchargé à {dl['time']}")
-            lines.append(f"  Téléchargement sécurisé effectué")
+            lines.append("  Téléchargement sécurisé effectué")
         lines.append("")
     
     # Suppressions
@@ -843,7 +627,11 @@ def generate_session_narrative(audit_logs: List[AuditLog], workstation_info: Opt
     return "\n".join(lines)
 
 
-def generate_narrative_report_from_logs(audit_logs: List[AuditLog], group_by_session: bool = True) -> str:
+def generate_narrative_report_from_logs(
+    audit_logs: List[AuditLog],
+    group_by_session: bool = True,
+    workstation_info: Optional[Dict] = None,
+) -> str:
     """
     Génère un journal narratif professionnel à partir d'une liste de logs d'audit.
     Peut regrouper les logs par session pour créer un récit continu.
@@ -851,6 +639,7 @@ def generate_narrative_report_from_logs(audit_logs: List[AuditLog], group_by_ses
     Args:
         audit_logs: Liste d'instances AuditLog
         group_by_session: Si True, regroupe les logs par session utilisateur
+        workstation_info: Informations poste de travail (optionnel)
         
     Returns:
         Journal narratif formaté en texte

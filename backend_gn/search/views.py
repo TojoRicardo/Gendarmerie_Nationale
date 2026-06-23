@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 try:
     from haystack.query import SearchQuerySet
-    from haystack.inputs import AutoQuery, Exact, Clean
+    from haystack.inputs import AutoQuery, Exact
     HAYSTACK_AVAILABLE = True
 except ImportError:
     HAYSTACK_AVAILABLE = False
@@ -32,7 +32,6 @@ except ImportError:
         def __init__(self, value):
             self.value = value
 
-from django.conf import settings
 
 
 @api_view(['GET'])

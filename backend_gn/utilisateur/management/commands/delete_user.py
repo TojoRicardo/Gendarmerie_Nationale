@@ -32,7 +32,7 @@ class Command(BaseCommand):
             user = User.objects.get(email=email)
             
             # Afficher les informations de l'utilisateur avant suppression
-            self.stdout.write(self.style.WARNING(f'\nUtilisateur trouvé:'))
+            self.stdout.write(self.style.WARNING('\nUtilisateur trouvé:'))
             self.stdout.write(f'  ID: {user.id}')
             self.stdout.write(f'  Username: {user.username}')
             self.stdout.write(f'  Email: {user.email}')
@@ -46,7 +46,7 @@ class Command(BaseCommand):
             
             if force:
                 # Suppression SQL directe pour contourner les contraintes
-                self.stdout.write(self.style.WARNING(f'\n⚠️  Suppression forcée en cours...'))
+                self.stdout.write(self.style.WARNING('\n[ATTENTION]  Suppression forcée en cours...'))
                 
                 with transaction.atomic():
                     with connection.cursor() as cursor:
@@ -81,16 +81,16 @@ class Command(BaseCommand):
                         except Exception:
                             pass
                 
-                self.stdout.write(self.style.SUCCESS(f'\n✅ Utilisateur "{username}" ({email}) supprimé avec succès (mode forcé)!'))
+                self.stdout.write(self.style.SUCCESS(f'\n[OK] Utilisateur "{username}" ({email}) supprimé avec succès (mode forcé)!'))
             else:
                 # Tentative de suppression normale
-                self.stdout.write(self.style.WARNING(f'\n⚠️  ATTENTION: Cette action est irréversible!'))
+                self.stdout.write(self.style.WARNING('\n[ATTENTION]  ATTENTION: Cette action est irréversible!'))
                 user.delete()
-                self.stdout.write(self.style.SUCCESS(f'\n✅ Utilisateur "{username}" ({email}) supprimé avec succès!'))
+                self.stdout.write(self.style.SUCCESS(f'\n[OK] Utilisateur "{username}" ({email}) supprimé avec succès!'))
             
         except User.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f'\n❌ Aucun utilisateur trouvé avec l\'email: {email}'))
+            self.stdout.write(self.style.ERROR(f'\n[ERREUR] Aucun utilisateur trouvé avec l\'email: {email}'))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'\n❌ Erreur lors de la suppression: {e}'))
-            self.stdout.write(self.style.WARNING(f'\n💡 Essayez avec --force pour forcer la suppression'))
+            self.stdout.write(self.style.ERROR(f'\n[ERREUR] Erreur lors de la suppression: {e}'))
+            self.stdout.write(self.style.WARNING('\n Essayez avec --force pour forcer la suppression'))
 

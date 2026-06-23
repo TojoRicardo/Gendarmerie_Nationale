@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   BarChart3, TrendingUp, TrendingDown, Brain, FileText, 
-  Activity, PieChart, LineChart, Download, Filter,
-  AlertTriangle, CheckCircle, Clock, Target
+  Activity, PieChart, LineChart,
+  AlertTriangle, CheckCircle, Target
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -126,7 +126,7 @@ const DashboardAnalyste = () => {
                 <span>Rapports</span>
               </button>
               <button
-                onClick={() => navigate('/intelligence-artificielle')}
+                onClick={() => navigate('/ia')}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
               >
                 <Brain size={20} />
@@ -302,7 +302,7 @@ const DashboardAnalyste = () => {
               <p className="text-sm text-purple-100 mt-1">Créer des rapports détaillés</p>
             </button>
             <button
-              onClick={() => navigate('/intelligence-artificielle')}
+              onClick={() => navigate('/ia')}
               className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all border border-white/20"
             >
               <Brain size={24} className="mb-2" />

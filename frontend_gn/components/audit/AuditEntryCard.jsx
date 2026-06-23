@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Brain, Clock, MapPin, Activity, Eye, Shield,
+import { useState, useEffect, useCallback } from 'react';
+import { Clock, MapPin, Activity, Eye,
   CheckCircle, XCircle, ChevronDown, ChevronUp,
   UserCheck, AlertTriangle, FileText, Server,
-  Key, Database, Code, Globe, Monitor, Download, Upload
+  Code, Globe, Monitor, Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { analyserJournal } from '../../src/services/auditAnalysisService';
@@ -36,14 +35,7 @@ const AuditEntryCard = ({ entry }) => {
     }
   }, [entry.user_agent]);
 
-  // Analyser avec l'IA quand les détails sont ouverts
-  useEffect(() => {
-    if (isExpanded && !iaAnalysis && !loadingIA) {
-      analyserAvecIA();
-    }
-  }, [isExpanded]);
-
-  const analyserAvecIA = async () => {
+  const analyserAvecIA = useCallback(async () => {
     // 1. D'abord, essayer l'analyse rapide locale (instantanée)
     const quickResult = quickAnalysis(entry);
     if (quickResult) {
@@ -78,25 +70,14 @@ const AuditEntryCard = ({ entry }) => {
         setLoadingIA(false);
       }
     }
-  };
+  }, [entry]);
 
-  // Obtenir l'icône selon le type d'action
-  const getActionIcon = (action) => {
-    const icons = {
-      'connexion': UserCheck,
-      'deconnexion': UserCheck,
-      'validation': Key,
-      'creation': FileText,
-      'modification': Database,
-      'suppression': AlertTriangle,
-      'consultation': Eye,
-      'otp': Shield,
-      'mfa': Shield,
-    };
-    return icons[action?.toLowerCase()] || Activity;
-  };
-
-  // Fonction getActionEmoji supprimée - plus d'emojis dans l'interface
+  // Analyser avec l'IA quand les détails sont ouverts
+  useEffect(() => {
+    if (isExpanded && !iaAnalysis && !loadingIA) {
+      analyserAvecIA();
+    }
+  }, [isExpanded, iaAnalysis, loadingIA, analyserAvecIA]);
 
   // Obtenir le badge de couleur selon l'action
   const getActionBadge = (action) => {
@@ -112,27 +93,6 @@ const AuditEntryCard = ({ entry }) => {
     return badges[action?.toLowerCase()] || { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300' };
   };
 
-  // Générer une phrase de résumé intelligente
-  const getResumePhrase = () => {
-    if (iaAnalysis && iaAnalysis.action) {
-      const actionMap = {
-        'validation OTP': 'Validation de Code OTP',
-        'connexion': 'Connexion au système',
-        'authentification MFA': 'Authentification multi-facteurs',
-        'changement de mot de passe': 'Changement de mot de passe',
-        'suppression': 'Suppression de ressource',
-        'modification': 'Modification de ressource',
-        'creation': 'Création de ressource',
-      };
-      const actionLabel = actionMap[iaAnalysis.action] || iaAnalysis.action;
-      const statut = iaAnalysis.statut === 'succès' ? 'réussie' : iaAnalysis.statut === 'échec' ? 'échouée' : '';
-      return `${actionLabel} ${statut}`.trim();
-    }
-    
-    // Fallback vers l'action display
-    return entry.action_display || entry.action || 'Action système';
-  };
-
   // Formater la description pour les non-informaticiens
   const formatDescriptionForUsers = (description) => {
     if (!description) return null;
@@ -143,29 +103,12 @@ const AuditEntryCard = ({ entry }) => {
       details: []
     };
 
-    // Patterns améliorés pour extraire les informations
-    const patterns = {
-      // Utilisateur - plusieurs variantes
-      utilisateur: /(?:L'utilisateur|utilisateur|L'utilisateur|L'utilisateur|L'utilisateur)\s+([^a]+?)\s+(?:a|depuis|effectué)/i,
-      // Action - plusieurs variantes
-      action: /(?:a\s+)(modifié|créé|supprimé|consulté|connecté|validé|effectué|réalisé)\s+(?:la\s+)?(?:ressource|depuis|l'opération)/i,
-      // Ressource - plusieurs variantes
-      ressource: /(?:ressource\s+['"]?|la\s+ressource\s+['"]?|['"]?)([^'"]+?)(?:['"]?\s+depuis|['"]?\s*\.|['"]?\s*$)/i,
-      // IP - plusieurs variantes
-      ip: /(?:depuis\s+l'?adresse\s+IP\s+|IP\s+|adresse\s+IP\s+)([0-9.]+)/i,
-      // Détails techniques dans "Détails: info:"
-      detailsSection: /Détails:\s*info:\s*(.+?)(?:\.|$)/i,
-    };
-
-    // Extraire les informations principales
-    let mainDescription = description;
-
     // Extraire l'utilisateur (amélioré) - gérer "Système" et autres variantes
     const userMatch = description.match(/(?:L'utilisateur|utilisateur)\s+([A-Za-z0-9_@.]+|Système)/i);
     if (userMatch) {
       const userName = userMatch[1].trim();
       formatted.details.push({
-        label: '👤 Utilisateur',
+        label: 'Utilisateur',
         value: userName,
         icon: UserCheck
       });
@@ -173,7 +116,7 @@ const AuditEntryCard = ({ entry }) => {
       // Essayer de trouver "Système" directement
       if (description.match(/Système/i)) {
         formatted.details.push({
-          label: '👤 Utilisateur',
+          label: 'Utilisateur',
           value: 'Système',
           icon: UserCheck
         });
@@ -195,7 +138,7 @@ const AuditEntryCard = ({ entry }) => {
         'réalisé': 'Action réalisée'
       };
       formatted.details.push({
-        label: '⚡ Action',
+        label: 'Action',
         value: actionMap[actionText] || actionText,
         icon: Activity
       });
@@ -205,7 +148,7 @@ const AuditEntryCard = ({ entry }) => {
     const resourceMatch = description.match(/(?:ressource\s+['"]?|la\s+ressource\s+['"]?)([^'"]+?)(?:['"]?\s+depuis|['"]?\s*\.|['"]?\s*$)/i);
     if (resourceMatch) {
       formatted.details.push({
-        label: '📄 Ressource',
+        label: 'Ressource',
         value: resourceMatch[1].trim(),
         icon: FileText
       });
@@ -215,7 +158,7 @@ const AuditEntryCard = ({ entry }) => {
     const ipMatch = description.match(/(?:depuis\s+l'?adresse\s+IP\s+|IP\s+|adresse\s+IP\s+)([0-9.]+)/i);
     if (ipMatch) {
       formatted.details.push({
-        label: '🌐 Adresse IP',
+        label: 'Adresse IP',
         value: ipMatch[1].trim(),
         icon: MapPin
       });
@@ -237,15 +180,15 @@ const AuditEntryCard = ({ entry }) => {
           
           // Mapper les clés aux labels lisibles
           const keyMap = {
-            'username': { label: '👤 Nom d\'utilisateur', icon: UserCheck },
-            'email': { label: '📧 Email', icon: UserCheck },
-            'statut': { label: '✅ Statut', icon: CheckCircle },
-            'endpoint': { label: '🔗 Point d\'accès', icon: Server },
-            'methode_http': { label: '📡 Méthode HTTP', icon: Code },
-            'navigateur': { label: '🌐 Navigateur', icon: Globe },
-            'systeme': { label: '💻 Système', icon: Monitor },
-            'browser': { label: '🌐 Navigateur', icon: Globe },
-            'os': { label: '💻 Système', icon: Monitor },
+            'username': { label: 'Nom d\'utilisateur', icon: UserCheck },
+            'email': { label: 'Email', icon: UserCheck },
+            'statut': { label: 'Statut', icon: CheckCircle },
+            'endpoint': { label: 'Point d\'accès', icon: Server },
+            'methode_http': { label: 'Méthode HTTP', icon: Code },
+            'navigateur': { label: 'Navigateur', icon: Globe },
+            'systeme': { label: 'Système', icon: Monitor },
+            'browser': { label: 'Navigateur', icon: Globe },
+            'os': { label: 'Système', icon: Monitor },
           };
           
           const mapping = keyMap[key.toLowerCase()];
@@ -311,8 +254,6 @@ const AuditEntryCard = ({ entry }) => {
   const formattedDescription = formatDescriptionForUsers(descriptionToUse);
 
   const actionBadge = getActionBadge(entry.action);
-  const ActionIcon = getActionIcon(entry.action);
-  // Emoji supprimé - plus d'emojis dans l'interface
 
   // Fonction pour gérer la consultation (navigation vers la ressource)
   const handleView = () => {
@@ -323,7 +264,7 @@ const AuditEntryCard = ({ entry }) => {
     
     // Navigation selon le type de ressource
     if (resourceType.toLowerCase().includes('fiche') || resourceType.toLowerCase().includes('criminel')) {
-      navigate(`/criminels/fiches-criminelles/${resourceId}`);
+      navigate(`/fiches-criminelles/voir/${resourceId}`);
     } else if (resourceType.toLowerCase().includes('utilisateur')) {
       navigate(`/utilisateurs/${resourceId}`);
     } else if (resourceType.toLowerCase().includes('rapport')) {
@@ -610,7 +551,7 @@ const AuditEntryCard = ({ entry }) => {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {formattedDescription.details.slice(0, 4).map((detail, index) => (
                   <div key={index}>
-                    <span className="text-gray-500">{detail.label.replace(/[👤⚡📄🌐📧✅🔗📡💻]/g, '').trim()}: </span>
+                    <span className="text-gray-500">{detail.label}: </span>
                     <span className="text-gray-900">{detail.value}</span>
                   </div>
                 ))}

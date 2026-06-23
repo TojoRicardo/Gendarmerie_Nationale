@@ -20,7 +20,7 @@ const isLocalDevHost = (origin) => {
     const port = url.port || defaultPort
     const isDevPort = DEV_PORTS.has(port)
     return isLoopback && isDevPort
-  } catch (error) {
+  } catch (_error) {
     return false
   }
 }

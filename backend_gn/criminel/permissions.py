@@ -3,7 +3,6 @@ Permissions personnalisées pour les fiches criminelles
 """
 
 from rest_framework.permissions import BasePermission
-from rest_framework.exceptions import PermissionDenied
 from utilisateur.permissions import user_is_app_admin, has_permission
 
 

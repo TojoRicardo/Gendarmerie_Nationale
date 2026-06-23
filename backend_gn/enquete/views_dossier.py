@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 
 from .models import Enquete
 from .models_dossier import (
@@ -92,18 +92,26 @@ class DossierEnqueteVersementView(generics.CreateAPIView):
             )
 
             return Response(enquete_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError:
+            raise
         except Exception as e:
-            logger.error(f"Erreur lors du versement du dossier: {e}")
+            logger.error(f"Erreur lors du versement du dossier: {e}", exc_info=True)
             return Response(
-                {'detail': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {'detail': "Erreur interne lors du versement du dossier."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
 class DossierEnqueteDetailView(generics.RetrieveAPIView):
     """Récupère les détails complets d'un dossier d'enquête"""
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Enquete.objects.all()
+    queryset = Enquete.objects.select_related(
+        'type_enquete', 'dossier', 'enqueteur_principal', 'cree_par'
+    ).prefetch_related(
+        'personnes', 'infractions', 'preuves_enquete',
+        'rapports_complets', 'donnees_biometriques', 'audit_logs',
+        'criminels_lies__criminel',
+    )
     serializer_class = DossierEnqueteCompletSerializer
     lookup_field = 'id'
     lookup_url_kwarg = 'enquete_id'
@@ -130,7 +138,9 @@ class PersonneEnqueteViewSet(ModelViewSet):
     """ViewSet pour la gestion des personnes liées à l'enquête"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PersonneEnqueteSerializer
-    queryset = PersonneEnquete.objects.all()
+    queryset = PersonneEnquete.objects.select_related(
+        'enquete', 'fiche_criminelle', 'ajoute_par'
+    )
 
     def get_queryset(self):
         """Filtre par enquête si fourni"""
@@ -158,7 +168,7 @@ class InfractionEnqueteViewSet(ModelViewSet):
     """ViewSet pour la gestion des infractions liées à l'enquête"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = InfractionEnqueteSerializer
-    queryset = InfractionEnquete.objects.all()
+    queryset = InfractionEnquete.objects.select_related('enquete', 'ajoute_par')
 
     def get_queryset(self):
         """Filtre par enquête si fourni"""
@@ -186,7 +196,9 @@ class PreuveEnqueteViewSet(ModelViewSet):
     """ViewSet pour la gestion des preuves d'enquête"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PreuveEnqueteSerializer
-    queryset = PreuveEnquete.objects.all()
+    queryset = PreuveEnquete.objects.select_related(
+        'enquete', 'agent_collecteur', 'ajoute_par'
+    )
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -239,7 +251,9 @@ class RapportEnqueteCompletViewSet(ModelViewSet):
     """ViewSet pour la gestion des rapports d'enquête"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = RapportEnqueteCompletSerializer
-    queryset = RapportEnqueteComplet.objects.all()
+    queryset = RapportEnqueteComplet.objects.select_related(
+        'enquete', 'type_rapport_detail', 'redacteur', 'valide_par'
+    )
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -288,7 +302,9 @@ class BiometrieEnqueteViewSet(ModelViewSet):
     """ViewSet pour la gestion des données biométriques d'enquête"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = BiometrieEnqueteSerializer
-    queryset = BiometrieEnquete.objects.all()
+    queryset = BiometrieEnquete.objects.select_related(
+        'enquete', 'personne_enquete', 'ajoute_par'
+    )
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -317,7 +333,7 @@ class AuditLogEnqueteViewSet(ReadOnlyModelViewSet):
     """ViewSet pour consulter les journaux d'audit d'une enquête (lecture seule)"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = AuditLogEnqueteSerializer
-    queryset = AuditLogEnquete.objects.all()
+    queryset = AuditLogEnquete.objects.select_related('enquete', 'utilisateur')
 
     def get_queryset(self):
         """Filtre par enquête"""
@@ -333,7 +349,9 @@ class DecisionClotureViewSet(ModelViewSet):
     """ViewSet pour la gestion des décisions de clôture"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DecisionClotureSerializer
-    queryset = DecisionCloture.objects.all()
+    queryset = DecisionCloture.objects.select_related(
+        'enquete', 'autorite_validatrice', 'cree_par'
+    )
     parser_classes = [MultiPartParser, FormParser]
 
     def perform_create(self, serializer):

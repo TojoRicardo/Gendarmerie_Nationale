@@ -1,4 +1,4 @@
-﻿"""
+"""
 Vues API pour la gestion des utilisateurs
 """
 
@@ -8,19 +8,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.db import connection, transaction, models
+from django.db import connection, transaction
 from django.db.models import Q
 from django.db.utils import ProgrammingError, OperationalError
-from datetime import timedelta
 import jwt
-import uuid
 from django.conf import settings
 from rest_framework import serializers
 
-from .models import UtilisateurModel, UserProfile, PinAuditLog, Role, PermissionSGIC
+from .models import UtilisateurModel, UserProfile, Role, PermissionSGIC
 from .serializers import (
     LoginSerializer,
     UtilisateurReadSerializer,
@@ -36,13 +34,37 @@ from .pin_utils import (
     verify_user_pin,
     get_client_ip,
 )
-from .permissions import ROLES_PREDEFINIS, get_user_permissions, freeze_user_permissions
+from .jwt_utils import create_pre_auth_token
+from .authentication import PRE_AUTH_TOKEN_TYPE
+from .permissions import ROLES_PREDEFINIS, get_user_permissions
 from .permissions_backend import CanManageRoles, CanViewRoles, CanViewPermissions
+from .user_status import (
+    CONNECTION_ACTIVE_DAYS,
+    count_users_by_statut,
+    filter_users_by_statut,
+    is_suspended,
+)
 import logging
 
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+
+
+def filter_users_by_list_statut(queryset, statut, current_user=None):
+    """Alias rétrocompatible — délègue à user_status.filter_users_by_statut."""
+    return filter_users_by_statut(queryset, statut, current_user=current_user)
+
+
+def _user_is_admin(user) -> bool:
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+    if hasattr(user, 'is_application_admin') and user.is_application_admin():
+        return True
+    role = (getattr(user, 'role', None) or '').lower()
+    return role in ('admin', 'administrateur système', 'administrateur systeme')
 
 
 class UtilisateurViewSet(viewsets.ModelViewSet):
@@ -64,77 +86,111 @@ class UtilisateurViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def get_queryset(self):
+        """Filtre recherche, rôle et statut (connexion récente / suspendu)."""
+        queryset = super().get_queryset().order_by('-dateCreation', '-id')
+        params = self.request.query_params
+
+        statut = (params.get('statut') or '').strip()
+        if statut:
+            queryset = filter_users_by_list_statut(
+                queryset, statut, current_user=self.request.user,
+            )
+
+        role = (params.get('role') or '').strip()
+        if role:
+            queryset = queryset.filter(role__iexact=role)
+
+        search = (params.get('search') or params.get('q') or '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(nom__icontains=search)
+                | Q(prenom__icontains=search)
+                | Q(email__icontains=search)
+                | Q(matricule__icontains=search)
+                | Q(username__icontains=search)
+            )
+
+        return queryset
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """
-        Statistiques des utilisateurs
-        
-        IMPORTANT - Distinction entre différents types d'états :
-        - is_active (Django) : Compte activé/désactivé (permission d'accès au système)
-        - statut (personnalisé) : Statut applicatif (actif, inactif, suspendu)
-        - Utilisateur connecté : Utilisateur actuellement authentifié (session active)
-        - Utilisateur actif (stats) : Connecté dans les 30 derniers jours (basé sur derniereConnexion)
-        
-        Logique de calcul :
-        - Actifs: Utilisateurs connectés dans les 30 derniers jours (derniereConnexion >= date_limite)
-        - Inactifs: Utilisateurs sans connexion récente (derniereConnexion < date_limite ou null)
-        - L'utilisateur actuellement connecté est TOUJOURS considéré comme actif, même si sa 
-          derniereConnexion est ancienne (cas théorique, car la connexion met à jour derniereConnexion)
+        Statistiques utilisateurs (actif / inactif / suspendu).
+        Actif = connexion dans les 7 derniers jours. Suspendu = statut applicatif.
         """
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        total = UtilisateurModel.objects.count()
-        
-        # Date limite pour considérer un utilisateur comme actif (30 derniers jours)
-        date_limite_actif = timezone.now() - timedelta(days=30)
-        
-        # Exclure les utilisateurs suspendus du calcul
-        utilisateurs_non_suspendus = UtilisateurModel.objects.exclude(
-            statut__in=['suspendu', 'Suspendu']
-        )
-        
-        # Utilisateurs actifs: connectés dans les 30 derniers jours
-        # Basé uniquement sur derniereConnexion, indépendamment du statut (sauf suspendu)
-        actifs_queryset = utilisateurs_non_suspendus.filter(
-            derniereConnexion__gte=date_limite_actif
-        )
-        
-        # S'assurer que l'utilisateur actuellement connecté est inclus dans les actifs
-        # (cas théorique où sa derniereConnexion serait ancienne, mais normalement 
-        # la connexion met à jour derniereConnexion)
-        if request.user and request.user.is_authenticated:
-            # Si l'utilisateur connecté n'est pas déjà dans les actifs, l'ajouter
-            if not actifs_queryset.filter(id=request.user.id).exists():
-                # L'utilisateur connecté est toujours considéré comme actif
-                # (normalement ce cas ne devrait pas arriver car la connexion met à jour derniereConnexion)
-                pass  # On compte quand même, mais c'est un cas théorique
-        
-        actifs = actifs_queryset.count()
-        
-        # Utilisateurs inactifs: pas de connexion récente (plus de 30 jours ou jamais connecté)
-        # Basé uniquement sur derniereConnexion, indépendamment du statut (sauf suspendu)
-        # Exclure l'utilisateur actuellement connecté des inactifs
-        inactifs_queryset = utilisateurs_non_suspendus.filter(
-            Q(derniereConnexion__lt=date_limite_actif) | Q(derniereConnexion__isnull=True)
-        )
-        
-        # Exclure l'utilisateur actuellement connecté des inactifs
-        if request.user and request.user.is_authenticated:
-            inactifs_queryset = inactifs_queryset.exclude(id=request.user.id)
-        
-        inactifs = inactifs_queryset.count()
-        
-        # Utilisateurs suspendus (statut suspendu)
-        suspendus = UtilisateurModel.objects.filter(statut__in=['suspendu', 'Suspendu']).count()
-        
+        counts = count_users_by_statut(current_user=request.user)
         return Response({
-            'total': total,
-            'actifs': actifs,
-            'inactifs': inactifs,
-            'suspendus': suspendus,
-            'current_user_id': request.user.id if request.user and request.user.is_authenticated else None
+            **counts,
+            'current_user_id': request.user.id if request.user.is_authenticated else None,
+        })
+
+    @action(detail=True, methods=['post'], url_path='suspend')
+    def suspend(self, request, pk=None):
+        """Suspendre un utilisateur (conservation des données)."""
+        if not _user_is_admin(request.user):
+            return Response(
+                {'error': 'Seuls les administrateurs peuvent suspendre un utilisateur.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        user = self.get_object()
+        if user.pk == request.user.pk:
+            return Response(
+                {'error': 'Vous ne pouvez pas suspendre votre propre compte.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if is_suspended(user):
+            return Response(
+                {'message': 'Cet utilisateur est déjà suspendu.', 'user_suspended': True},
+                status=status.HTTP_200_OK,
+            )
+
+        user.statut = 'suspendu'
+        user.is_active = False
+        user.suspension_date = timezone.now()
+        user.save(update_fields=['statut', 'is_active', 'suspension_date'])
+
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+            for token in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=token)
+        except Exception as e:
+            logger.warning(f"Impossible de révoquer les tokens JWT pour l'utilisateur {user.pk}: {e}")
+
+        return Response({
+            'success': True,
+            'user_suspended': True,
+            'message': f"L'utilisateur {user.username} a été suspendu.",
+        })
+
+    @action(detail=True, methods=['post'], url_path='restaurer')
+    def restaurer(self, request, pk=None):
+        """Réactiver un utilisateur suspendu."""
+        if not _user_is_admin(request.user):
+            return Response(
+                {'error': 'Seuls les administrateurs peuvent restaurer un utilisateur.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        user = self.get_object()
+        if not is_suspended(user):
+            return Response(
+                {'error': "Cet utilisateur n'est pas suspendu."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.statut = 'actif'
+        user.is_active = True
+        user.suspension_date = None
+        user.save(update_fields=['statut', 'is_active', 'suspension_date'])
+
+        return Response({
+            'success': True,
+            'user_restored': True,
+            'message': f"L'utilisateur {user.username} a été restauré.",
         })
     
     @action(detail=False, methods=['get'], url_path='performance-stats')
@@ -281,6 +337,24 @@ class LoginView(APIView):
         try:
             serializer = LoginSerializer(data=request.data)
             if not serializer.is_valid():
+                try:
+                    from audit.audit_service import record_auth
+                    identifier = (
+                        request.data.get('username')
+                        or request.data.get('email')
+                        or 'inconnu'
+                    )
+                    errors = serializer.errors
+                    reason = str(errors)[:200]
+                    record_auth(
+                        request,
+                        None,
+                        'FAILED_LOGIN',
+                        username_attempt=str(identifier),
+                        details=f"Tentative échouée — identifiant « {identifier} » — {reason}",
+                    )
+                except Exception as audit_err:
+                    logger.warning(f"Erreur audit échec connexion: {audit_err}")
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
             user = serializer.validated_data.get('user')
@@ -291,12 +365,8 @@ class LoginView(APIView):
             
             # Vérifier si le PIN est requis
             if serializer.validated_data.get('pin_required'):
-                # Créer un AccessToken standard - il sera valide pour la vérification du PIN
-                token = AccessToken.for_user(user)
-                temp_token_str = str(token)
-                
-                from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
-                logger.info(f"Token temporaire généré pour l'utilisateur {user.id}, expiration dans {jwt_api_settings.ACCESS_TOKEN_LIFETIME}")
+                temp_token_str = create_pre_auth_token(user)
+                logger.info(f"Token temporaire généré pour l'utilisateur {user.id}")
                 
                 return Response({
                     'pin_required': True,
@@ -309,18 +379,13 @@ class LoginView(APIView):
             
             # Journaliser l'action de connexion
             try:
-                from audit.services import audit_log
-                # Simuler un utilisateur authentifié pour l'audit
+                from audit.audit_service import record_auth
                 request.user = user
-                audit_log(
-                    request=request,
-                    module="Authentification",
-                    action="Connexion utilisateur",
-                    ressource="Système SGIC",
-                    narration=(
-                        f"L'utilisateur {user.username} s'est authentifié avec succès "
-                        "au système SGIC via le mécanisme de sécurité JWT."
-                    )
+                record_auth(
+                    request,
+                    user,
+                    'LOGIN',
+                    details=f"Authentification JWT réussie — compte {user.username}",
                 )
             except Exception as e:
                 logger.warning(f"Erreur lors de l'enregistrement de l'audit pour connexion: {e}")
@@ -362,13 +427,13 @@ class VerifyPinView(APIView):
                     try:
                         data = json.loads(request.data)
                     except json.JSONDecodeError:
-                        logger.error(f"❌ Erreur verify-pin: request.data n'est pas un JSON valide: {request.data}")
+                        logger.error(f"Erreur verify-pin: request.data n'est pas un JSON valide: {request.data}")
                         return Response({
                             'success': False,
                             'message': 'Format de données invalide. JSON requis.'
                         }, status=status.HTTP_400_BAD_REQUEST)
                 else:
-                    logger.error(f"❌ Erreur verify-pin: request.data n'est pas un dict: {type(request.data)}")
+                    logger.error(f"Erreur verify-pin: request.data n'est pas un dict: {type(request.data)}")
                     return Response({
                         'success': False,
                         'message': 'Format de données invalide.'
@@ -390,7 +455,7 @@ class VerifyPinView(APIView):
             
             # Validation du token temporaire
             if not temp_token:
-                logger.error("❌ Erreur verify-pin: Token temporaire requis")
+                logger.error("Erreur verify-pin: Token temporaire requis")
                 return Response({
                     'success': False,
                     'message': 'Token temporaire requis'
@@ -398,7 +463,7 @@ class VerifyPinView(APIView):
             
             # Validation du format du PIN
             if not pin:
-                logger.error("❌ Erreur verify-pin: PIN requis")
+                logger.error("Erreur verify-pin: PIN requis")
                 return Response({
                     'success': False,
                     'message': 'PIN requis'
@@ -408,14 +473,14 @@ class VerifyPinView(APIView):
                 pin = str(pin)
             
             if len(pin) != 6:
-                logger.error(f"❌ Erreur verify-pin: PIN invalide (longueur: {len(pin)})")
+                logger.error(f"Erreur verify-pin: PIN invalide (longueur: {len(pin)})")
                 return Response({
                     'success': False,
                     'message': 'Le PIN doit contenir exactement 6 chiffres.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             if not pin.isdigit():
-                logger.error("❌ Erreur verify-pin: PIN contient des caractères non numériques")
+                logger.error("Erreur verify-pin: PIN contient des caractères non numériques")
                 return Response({
                     'success': False,
                     'message': 'Le PIN doit contenir uniquement des chiffres.'
@@ -431,13 +496,13 @@ class VerifyPinView(APIView):
                 if not isinstance(temp_token, str):
                     temp_token = str(temp_token)
                 
-                logger.info(f"Tentative de décodage du token: {temp_token[:50]}...")
+                logger.info("Tentative de décodage du token temporaire")
                 
                 # Cela lance une exception si le token est invalide ou expiré
                 try:
-                    untyped_token = UntypedToken(temp_token)
+                    UntypedToken(temp_token)
                 except (TokenError, InvalidToken) as e:
-                    logger.error(f"❌ Erreur verify-pin: Token invalide (UntypedToken): {str(e)}")
+                    logger.error(f"Erreur verify-pin: Token invalide (UntypedToken): {str(e)}")
                     return Response({
                         'success': False,
                         'message': 'Token temporaire invalide ou expiré. Veuillez vous reconnecter.'
@@ -456,13 +521,13 @@ class VerifyPinView(APIView):
                         options={"verify_signature": True, "verify_exp": True}
                     )
                 except jwt.ExpiredSignatureError:
-                    logger.error("❌ Erreur verify-pin: Token expiré")
+                    logger.error("Erreur verify-pin: Token expiré")
                     return Response({
                         'success': False,
                         'message': 'Token temporaire expiré. Veuillez vous reconnecter.'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 except jwt.InvalidTokenError as e:
-                    logger.error(f"❌ Erreur verify-pin: Token invalide (jwt.decode): {str(e)}")
+                    logger.error(f"Erreur verify-pin: Token invalide (jwt.decode): {str(e)}")
                     return Response({
                         'success': False,
                         'message': 'Token temporaire invalide. Veuillez vous reconnecter.'
@@ -470,18 +535,26 @@ class VerifyPinView(APIView):
                 
                 # Vérifier que decoded_token est bien un dictionnaire
                 if not isinstance(decoded_token, dict):
-                    logger.error(f"❌ Erreur verify-pin: decoded_token n'est pas un dict: {type(decoded_token)}, valeur: {decoded_token}")
+                    logger.error(f"Erreur verify-pin: decoded_token n'est pas un dict: {type(decoded_token)}, valeur: {decoded_token}")
                     return Response({
                         'success': False,
                         'message': 'Erreur lors du décodage du token'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
                 logger.info(f"Token décodé avec succès. Payload keys: {list(decoded_token.keys())}")
+
+                token_type = decoded_token.get('token_type')
+                if token_type != PRE_AUTH_TOKEN_TYPE:
+                    logger.error("Erreur verify-pin: token n'est pas un token de pré-authentification")
+                    return Response({
+                        'success': False,
+                        'message': 'Token temporaire invalide. Veuillez vous reconnecter.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
                 
                 user_id = decoded_token.get('user_id') if isinstance(decoded_token, dict) else None
                 
                 if not user_id:
-                    logger.error(f"❌ Erreur verify-pin: Token décodé mais user_id manquant. Payload: {decoded_token}")
+                    logger.error(f"Erreur verify-pin: Token décodé mais user_id manquant. Payload: {decoded_token}")
                     return Response({
                         'success': False,
                         'message': 'Token temporaire invalide - identifiant utilisateur manquant'
@@ -490,25 +563,25 @@ class VerifyPinView(APIView):
                 logger.info(f"Récupération de l'utilisateur avec ID: {user_id}")
                 user = UtilisateurModel.objects.get(id=user_id)
             except (TokenError, InvalidToken) as e:
-                logger.error(f"❌ Erreur verify-pin (TokenError/InvalidToken): {str(e)}")
+                logger.error(f"Erreur verify-pin (TokenError/InvalidToken): {str(e)}")
                 return Response({
                     'success': False,
                     'message': 'Token temporaire invalide ou expiré. Veuillez vous reconnecter.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, jwt.DecodeError) as e:
-                logger.error(f"❌ Erreur verify-pin (JWT): {str(e)}")
+                logger.error(f"Erreur verify-pin (JWT): {str(e)}")
                 return Response({
                     'success': False,
                     'message': 'Token temporaire invalide ou expiré. Veuillez vous reconnecter.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             except UtilisateurModel.DoesNotExist:
-                logger.error(f"❌ Erreur verify-pin: Utilisateur avec ID {user_id} non trouvé")
+                logger.error(f"Erreur verify-pin: Utilisateur avec ID {user_id} non trouvé")
                 return Response({
                     'success': False,
                     'message': 'Utilisateur non trouvé'
                 }, status=status.HTTP_404_NOT_FOUND)
             except Exception as token_error:
-                logger.error(f"❌ Erreur verify-pin (décodage token): {str(token_error)}")
+                logger.error(f"Erreur verify-pin (décodage token): {str(token_error)}")
                 import traceback
                 logger.error(traceback.format_exc())
                 return Response({
@@ -523,13 +596,13 @@ class VerifyPinView(APIView):
                 success, message = verify_user_pin(user, pin, ip_address, user_agent)
                 
                 if not success:
-                    logger.error(f"❌ Erreur verify-pin: PIN incorrect pour l'utilisateur {user.id}: {message}")
+                    logger.error(f"Erreur verify-pin: PIN incorrect pour l'utilisateur {user.id}: {message}")
                     return Response({
                         'success': False,
                         'message': message
                     }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as pin_error:
-                logger.error(f"❌ Erreur verify-pin (vérification PIN): {str(pin_error)}")
+                logger.error(f"Erreur verify-pin (vérification PIN): {str(pin_error)}")
                 import traceback
                 logger.error(traceback.format_exc())
                 return Response({
@@ -563,7 +636,7 @@ class VerifyPinView(APIView):
                     'user': user_serializer.data
                 }, status=status.HTTP_200_OK)
             except Exception as token_gen_error:
-                logger.error(f"❌ Erreur verify-pin (génération tokens): {str(token_gen_error)}")
+                logger.error(f"Erreur verify-pin (génération tokens): {str(token_gen_error)}")
                 import traceback
                 logger.error(traceback.format_exc())
                 return Response({
@@ -572,7 +645,7 @@ class VerifyPinView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
-            logger.error(f"❌ Erreur verify-pin (exception globale): {str(e)}")
+            logger.error(f"Erreur verify-pin (exception globale): {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             return Response({
@@ -671,62 +744,12 @@ class DashboardUserStatsView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from django.utils import timezone
-        from datetime import timedelta
-        from django.db.models import Q
-        
-        # Date limite pour considérer une connexion comme récente (7 derniers jours)
-        # Utiliser 7 jours au lieu de 30 pour être plus précis sur les utilisateurs vraiment actifs
-        date_limite_actif = timezone.now() - timedelta(days=7)
-        
-        # Total utilisateurs (tous les utilisateurs)
-        total_utilisateurs = UtilisateurModel.objects.count()
-        
-        # Utilisateurs actifs: last_login ou derniereConnexion dans les 30 derniers jours
-        # Utiliser last_login (champ Django standard) en priorité, 
-        # avec derniereConnexion comme fallback si last_login est null
-        # Cela permet de gérer les utilisateurs qui n'ont pas encore de last_login mis à jour
-        utilisateurs_actifs_queryset = UtilisateurModel.objects.filter(
-            Q(last_login__gte=date_limite_actif) | 
-            Q(
-                Q(last_login__isnull=True) & 
-                Q(derniereConnexion__gte=date_limite_actif)
-            )
-        )
-        
-        # S'assurer que l'utilisateur actuellement connecté est inclus dans les actifs
-        if request.user and request.user.is_authenticated:
-            # Si l'utilisateur connecté n'est pas déjà dans les actifs, l'ajouter
-            if not utilisateurs_actifs_queryset.filter(id=request.user.id).exists():
-                # L'utilisateur connecté est toujours considéré comme actif
-                # (normalement ce cas ne devrait pas arriver car la connexion met à jour last_login)
-                pass  # On compte quand même
-        
-        utilisateurs_actifs = utilisateurs_actifs_queryset.count()
-        
-        # Utilisateurs inactifs: pas de last_login ni derniereConnexion récent (null ou > 30 jours)
-        # Exclure l'utilisateur actuellement connecté des inactifs
-        inactifs_queryset = UtilisateurModel.objects.filter(
-            Q(
-                Q(last_login__lt=date_limite_actif) | Q(last_login__isnull=True)
-            ) & Q(
-                Q(derniereConnexion__lt=date_limite_actif) | Q(derniereConnexion__isnull=True)
-            )
-        )
-        
-        # Exclure l'utilisateur actuellement connecté des inactifs
-        if request.user and request.user.is_authenticated:
-            inactifs_queryset = inactifs_queryset.exclude(id=request.user.id)
-        
-        utilisateurs_inactifs = inactifs_queryset.count()
-        
-        # Rôles actifs: nombre de rôles distincts réellement attribués aux utilisateurs
-        # Compter uniquement les rôles non null et non vides
+        counts = count_users_by_statut(current_user=request.user)
+
         roles_actifs = UtilisateurModel.objects.exclude(
             Q(role__isnull=True) | Q(role='')
         ).values('role').distinct().count()
-        
-        # Informations de l'utilisateur actuellement connecté
+
         utilisateur_connecte = None
         if request.user and request.user.is_authenticated:
             utilisateur_connecte = {
@@ -737,13 +760,15 @@ class DashboardUserStatsView(APIView):
                 'nom': request.user.nom or None,
                 'prenom': request.user.prenom or None,
             }
-        
+
         return Response({
-            'total_utilisateurs': total_utilisateurs,
-            'utilisateurs_actifs': utilisateurs_actifs,
-            'utilisateurs_inactifs': utilisateurs_inactifs,
+            'total_utilisateurs': counts['total'],
+            'utilisateurs_actifs': counts['actifs'],
+            'utilisateurs_inactifs': counts['inactifs'],
+            'utilisateurs_suspendus': counts['suspendus'],
             'roles_actifs': roles_actifs,
-            'utilisateur_connecte': utilisateur_connecte
+            'utilisateur_connecte': utilisateur_connecte,
+            'periode_jours': CONNECTION_ACTIVE_DAYS,
         }, status=status.HTTP_200_OK)
 
 
@@ -754,26 +779,22 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        try:
-            refresh_token = request.data.get('refresh')
-            if refresh_token:
+        refresh_token = request.data.get('refresh') or request.data.get('refresh_token')
+        if refresh_token:
+            try:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-        except Exception:
-            pass
+            except Exception as e:
+                logger.warning(f"Erreur lors de la blacklist du token logout: {e}")
         
         # Journaliser l'action de déconnexion
         try:
-            from audit.services import audit_log
-            audit_log(
-                request=request,
-                module="Authentification",
-                action="Déconnexion utilisateur",
-                ressource="Système SGIC",
-                narration=(
-                    f"L'utilisateur {request.user.username} s'est déconnecté volontairement "
-                    "du système SGIC."
-                )
+            from audit.audit_service import record_auth
+            record_auth(
+                request,
+                request.user,
+                'LOGOUT',
+                details=f"Déconnexion volontaire — compte {request.user.username}",
             )
         except Exception as e:
             logger.warning(f"Erreur lors de l'enregistrement de l'audit pour déconnexion: {e}")
@@ -790,9 +811,9 @@ class PermissionsView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        # Implémentation simplifiée
+        permissions = get_user_permissions(request.user)
         return Response({
-            'permissions': []
+            'permissions': list(permissions) if permissions else []
         })
 
 
@@ -809,6 +830,13 @@ class ChangePasswordView(APIView):
         user = request.user
         user.set_password(serializer.validated_data['new_password'])
         user.save()
+
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+            for outstanding in OutstandingToken.objects.filter(user_id=user.id):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+        except Exception as e:
+            logger.warning(f"Erreur lors de l'invalidation des tokens après changement de mot de passe: {e}")
         
         return Response({
             'message': 'Mot de passe modifié avec succès'
@@ -979,11 +1007,10 @@ class RoleUpdateView(APIView):
             if role_name_normalized in ROLES_PREDEFINIS:
                 old_role_data = ROLES_PREDEFINIS[role_name_normalized].copy()
                 old_permissions = old_role_data.get('permissions', [])
-                old_description = old_role_data.get('description', '')
-                old_est_actif = old_role_data.get('estActif', True)
+                old_role_data.get('description', '')
+                old_role_data.get('estActif', True)
             else:
-                old_description = ''
-                old_est_actif = True
+                pass
             
             # Identifier les permissions ajoutées et retirées
             old_perms_set = set(old_permissions)
@@ -1078,7 +1105,7 @@ class RoleUpdateView(APIView):
                     action='UPDATE',
                     resource_type='Role',
                     resource_id=role_name_normalized,
-                    additional_info=audit_info
+                    additional_info=audit_info,
                 )
             except Exception as audit_error:
                 logger.warning(f"Erreur lors de l'enregistrement de l'audit: {audit_error}")
@@ -1331,7 +1358,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         old_role = self.get_object()
         old_permissions = set(old_role.permissions.values_list('code', flat=True))
         
-        old_role_data = {
+        {
             'name': old_role.name,
             'description': old_role.description,
             'is_active': old_role.is_active,

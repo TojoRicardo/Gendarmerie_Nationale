@@ -1,4 +1,3 @@
-import React from 'react'
 import { Image, FileText, Download, Pencil, Trash2 } from 'lucide-react'
 
 const TYPE_CONFIG = {
@@ -18,7 +17,7 @@ const formatDate = (value) => {
   if (!value) return '—'
   try {
     return new Date(value).toLocaleString()
-  } catch (error) {
+  } catch (_error) {
     return value
   }
 }

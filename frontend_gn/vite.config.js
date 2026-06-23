@@ -43,9 +43,9 @@ export default defineConfig(({ mode }) => {
       key: fs.readFileSync(KEY_FILE),
       cert: fs.readFileSync(CERT_FILE),
     }
-    console.log('🔐 HTTPS activé pour Vite sur https://localhost:3002')
+    console.log('HTTPS activé pour Vite sur https://localhost:3002')
   } else {
-    console.warn('⚠️  Certificats HTTPS introuvables. Lancez "npm run setup:https" pour les générer.')
+    console.warn('[ATTENTION] Certificats HTTPS introuvables. Lancez "npm run setup:https" pour les générer.')
   }
 
   return {

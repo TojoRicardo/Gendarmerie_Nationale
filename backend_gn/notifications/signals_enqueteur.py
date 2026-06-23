@@ -78,7 +78,7 @@ def _get_field_label(model_instance, field_name):
     try:
         field = model_instance._meta.get_field(field_name)
         return field.verbose_name if hasattr(field, 'verbose_name') else field_name.replace('_', ' ').title()
-    except:
+    except Exception:
         return field_name.replace('_', ' ').title()
 
 
@@ -163,7 +163,7 @@ try:
             numero_fiche = instance.numero_fiche or f"#{instance.id}"
             nom_suspect = f"{instance.nom} {instance.prenom}".strip() or "Non spécifié"
             
-            titre = f"Modification de fiche criminelle par un enquêteur"
+            titre = "Modification de fiche criminelle par un enquêteur"
             message = f"L'enquêteur {nom_utilisateur} a modifié la fiche criminelle {numero_fiche} (Suspect: {nom_suspect}).\n\n"
             message += "Modifications apportées:\n"
             
@@ -231,7 +231,7 @@ try:
             nom_utilisateur = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.username
             nom_criminel = f"{instance.criminel.nom} {instance.criminel.prenom}" if instance.criminel else "Non spécifié"
             
-            titre = f"Modification de photo biométrique par un enquêteur"
+            titre = "Modification de photo biométrique par un enquêteur"
             message = f"L'enquêteur {nom_utilisateur} a modifié une photo biométrique pour {nom_criminel}.\n\n"
             message += "Modifications apportées:\n"
             
@@ -296,7 +296,7 @@ try:
             nom_utilisateur = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.username
             nom_criminel = f"{instance.criminel.nom} {instance.criminel.prenom}" if instance.criminel else "Non spécifié"
             
-            titre = f"Modification d'empreinte digitale par un enquêteur"
+            titre = "Modification d'empreinte digitale par un enquêteur"
             message = f"L'enquêteur {nom_utilisateur} a modifié une empreinte digitale pour {nom_criminel}.\n\n"
             message += "Modifications apportées:\n"
             

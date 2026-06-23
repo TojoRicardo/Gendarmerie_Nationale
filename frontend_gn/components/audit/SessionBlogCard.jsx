@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Activity, ChevronDown, ChevronUp
 } from 'lucide-react';
@@ -48,13 +48,24 @@ const SessionBlogCard = ({ session }) => {
   
   // Actions de la session
   const actions = session.actions || session.details?.all_actions || [];
-  const actionsCount = session.actions_count || actions.length || 0;
   
-  // Actions de la session (filtrer les navigations)
-  const filteredActions = actions.filter(action => {
-    const actionType = action.action || '';
-    return actionType !== 'NAVIGATION';
-  });
+  // Actions de la session (filtrer les navigations, plus récentes en premier)
+  const filteredActions = [...actions]
+    .filter(action => {
+      const actionType = action.action || '';
+      return actionType !== 'NAVIGATION';
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.timestamp || a.date_action || 0).getTime();
+      const dateB = new Date(b.timestamp || b.date_action || 0).getTime();
+      return dateB - dateA;
+    });
+
+  const actionsSummary = session.actions_summary || filteredActions.reduce((acc, action) => {
+    const type = action.action_display || action.action || 'Action';
+    acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
@@ -170,7 +181,21 @@ const SessionBlogCard = ({ session }) => {
 
             {/* 4. Actions (liste avec date et heure explicites) */}
             <div className="border-b border-gray-200 pb-3">
-              <p className="text-xs text-gray-500 mb-3 font-semibold uppercase">Action :</p>
+              <p className="text-xs text-gray-500 mb-3 font-semibold uppercase">
+                Actions ({filteredActions.length}) :
+              </p>
+              {Object.keys(actionsSummary).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {Object.entries(actionsSummary).map(([type, count]) => (
+                    <span
+                      key={type}
+                      className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs font-semibold"
+                    >
+                      {count} × {type}
+                    </span>
+                  ))}
+                </div>
+              )}
               {filteredActions.length > 0 ? (
                 <div className="space-y-3">
                   {filteredActions.map((action, index) => {

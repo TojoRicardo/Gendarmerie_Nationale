@@ -7,8 +7,8 @@ en utilisant l'IA et l'apprentissage automatique.
 """
 
 import numpy as np
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from typing import Dict, Any
+from datetime import timedelta
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
 

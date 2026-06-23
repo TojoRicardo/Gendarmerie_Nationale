@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  User, Mail, Phone, MapPin, Calendar, ArrowLeft, Edit,
+  User, Mail, Calendar, ArrowLeft, Edit,
   Clock, Activity, Users, ShieldCheck, UserX, Trash2, UserCheck,
 } from 'lucide-react'
 import { useNotification } from '../context/NotificationContext'

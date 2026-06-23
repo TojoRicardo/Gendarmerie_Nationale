@@ -5,7 +5,7 @@ import { envoyerCaptureTempsReel } from './services/arcfaceService'
 import api from '../../services/api'
 
 const DEFAULT_STATUS =
-  'Cliquez sur « Démarrer la caméra » puis placez votre visage dans le cadre avant de lancer la capture.'
+  'Cliquez sur « Démarrer la caméra » puis placez votre visage dans le cadre avant de lancer la capture.'
 const DEFAULT_THRESHOLD = 0.7
 
 const waitForVideoReady = (videoElement) =>
@@ -50,8 +50,23 @@ const captureFrameFromVideo = (videoElement) => {
     throw new Error('Aucune source vidéo disponible pour la capture.')
   }
 
-  const width = videoElement.videoWidth || 1280
-  const height = videoElement.videoHeight || 720
+  // Utiliser la résolution native de la caméra quand c'est possible
+  let width = videoElement.videoWidth || 1280
+  let height = videoElement.videoHeight || 720
+
+  // Si les dimensions sont faibles, essayer de récupérer les réglages du track
+  const stream = videoElement.srcObject
+  if (stream instanceof MediaStream) {
+    const [videoTrack] = stream.getVideoTracks()
+    if (videoTrack && typeof videoTrack.getSettings === 'function') {
+      const settings = videoTrack.getSettings()
+      if (settings.width && settings.height) {
+        width = settings.width
+        height = settings.height
+      }
+    }
+  }
+
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
@@ -62,7 +77,8 @@ const captureFrameFromVideo = (videoElement) => {
   }
 
   context.drawImage(videoElement, 0, 0, width, height)
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+  // Qualité maximale pour limiter la compression JPEG
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.98)
 
   return {
     dataUrl,
@@ -92,16 +108,16 @@ const ReconnaissanceTempsReel = () => {
 
   // Fonction utilitaire pour forcer la libération de TOUS les streams média
   const forceReleaseAllMediaStreams = useCallback(async () => {
-    console.log('🔄 Libération forcée de tous les streams média...')
+    console.log('Libération forcée de tous les streams média...')
     
     // Libérer le stream courant
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         try {
           track.stop()
-          console.log('  ✅ Track arrêté:', track.kind, track.label || 'sans label')
+          console.log('  [OK] Track arrêté:', track.kind, track.label || 'sans label')
         } catch (error) {
-          console.warn('  ⚠️ Erreur arrêt track:', error)
+          console.warn('  [ATTENTION] Erreur arrêt track:', error)
         }
       })
       streamRef.current = null
@@ -115,20 +131,20 @@ const ReconnaissanceTempsReel = () => {
           stream.getTracks().forEach((track) => {
             try {
               track.stop()
-              console.log('  ✅ Track vidéo arrêté:', track.kind, track.label || 'sans label')
+              console.log('  [OK] Track vidéo arrêté:', track.kind, track.label || 'sans label')
             } catch (error) {
-              console.warn('  ⚠️ Erreur arrêt track vidéo:', error)
+              console.warn('  [ATTENTION] Erreur arrêt track vidéo:', error)
             }
           })
         }
       } catch (error) {
-        console.warn('  ⚠️ Erreur libération stream vidéo:', error)
+        console.warn('  [ATTENTION] Erreur libération stream vidéo:', error)
       }
       
       try {
         videoRef.current.pause()
         videoRef.current.load() // Force le rechargement de l'élément vidéo
-      } catch (error) {
+      } catch (_error) {
         // Ignorer les erreurs de pause
       }
       
@@ -144,9 +160,9 @@ const ReconnaissanceTempsReel = () => {
       try {
         // Cette méthode ne peut pas directement libérer les streams,
         // mais on peut au moins s'assurer que notre stream est libéré
-        console.log('  ✅ Tous les streams ont été libérés')
+        console.log('  [OK] Tous les streams ont été libérés')
       } catch (error) {
-        console.warn('  ⚠️ Erreur lors de la vérification des streams:', error)
+        console.warn('  [ATTENTION] Erreur lors de la vérification des streams:', error)
       }
     }
     
@@ -212,39 +228,17 @@ const ReconnaissanceTempsReel = () => {
         containerHeight
       })
       
-      // Fonction pour obtenir la couleur d'une zone selon l'index du point
-      const getLandmarkColor = (index) => {
-        // Contour du visage (0-16) - Bleu
-        if (index >= 0 && index <= 16) return { fill: '#3b82f6', stroke: '#1e40af', size: 2.5 }
-        // Sourcils (17-26) - Vert
-        if (index >= 17 && index <= 26) return { fill: '#10b981', stroke: '#047857', size: 2 }
-        // Nez (27-35) - Orange
-        if (index >= 27 && index <= 35) return { fill: '#f97316', stroke: '#c2410c', size: 2.5 }
-        // Yeux (36-47) - Violet
-        if (index >= 36 && index <= 47) return { fill: '#8b5cf6', stroke: '#6d28d9', size: 3 }
-        // Bouche extérieure (48-59) - Rose
-        if (index >= 48 && index <= 59) return { fill: '#ec4899', stroke: '#be185d', size: 2.5 }
-        // Bouche intérieure (60-67) - Rouge
-        if (index >= 60 && index <= 67) return { fill: '#ef4444', stroke: '#b91c1c', size: 2 }
-        // Autres points (68-105) - Jaune
-        return { fill: '#eab308', stroke: '#a16207', size: 2 }
-      }
-
-      // Calculer le ratio de mise à l'échelle pour object-contain
-      // L'image est affichée avec object-contain, donc on doit calculer les dimensions réelles
       const imgAspect = captureSize.width / captureSize.height
       const containerAspect = containerWidth / containerHeight
       
       let displayedWidth, displayedHeight, offsetX, offsetY
       
       if (imgAspect > containerAspect) {
-        // L'image est plus large que le conteneur
         displayedWidth = containerWidth
         displayedHeight = containerWidth / imgAspect
         offsetX = 0
         offsetY = (containerHeight - displayedHeight) / 2
       } else {
-        // L'image est plus haute que le conteneur
         displayedWidth = containerHeight * imgAspect
         displayedHeight = containerHeight
         offsetX = (containerWidth - displayedWidth) / 2
@@ -366,7 +360,7 @@ const ReconnaissanceTempsReel = () => {
       }
 
       // Étape 1: Libérer TOUS les streams existants AVANT de faire quoi que ce soit
-      console.log('🛑 Libération complète de tous les streams média...')
+      console.log('Libération complète de tous les streams média...')
       await forceReleaseAllMediaStreams()
       // Attendre plus longtemps pour que la caméra soit complètement libérée
       await new Promise(resolve => setTimeout(resolve, 1500))
@@ -377,12 +371,12 @@ const ReconnaissanceTempsReel = () => {
       
       try {
         // D'abord, obtenir les permissions en faisant une demande temporaire
-        console.log('🔐 Demande des permissions caméra...')
+        console.log('Demande des permissions caméra...')
         const tempStream = await navigator.mediaDevices.getUserMedia({ video: true })
         // Libérer immédiatement le stream temporaire
         tempStream.getTracks().forEach(track => {
           track.stop()
-          console.log('  ✅ Track temporaire arrêté:', track.kind)
+          console.log('  [OK] Track temporaire arrêté:', track.kind)
         })
         await new Promise(resolve => setTimeout(resolve, 300)) // Petit délai pour libération
         
@@ -424,31 +418,39 @@ const ReconnaissanceTempsReel = () => {
           ) && d.deviceId !== integratedCamera?.deviceId
         ) || (videoDevices.length >= 2 ? videoDevices[1] : null) // Par défaut, la deuxième est l'USB
         
-        console.log('🔍 Identification des caméras:')
+        console.log('Identification des caméras:')
         console.log('  Intégrée:', integratedCamera?.label || 'Non trouvée')
         console.log('  USB externe:', usbCamera?.label || 'Non trouvée')
         
         // Sélectionner la bonne caméra selon le choix
         if (selectedCameraId === '1') {
           selectedDevice = integratedCamera
-          console.log('✅ Sélection: Caméra intégrée -', selectedDevice?.label || 'Caméra 1')
+          console.log('[OK] Sélection: Caméra intégrée -', selectedDevice?.label || 'Caméra 1')
         } else if (selectedCameraId === '2') {
           selectedDevice = usbCamera || (videoDevices.length >= 2 ? videoDevices[1] : null)
-          console.log('✅ Sélection: Webcam USB externe -', selectedDevice?.label || 'Caméra 2')
+          console.log('[OK] Sélection: Webcam USB externe -', selectedDevice?.label || 'Caméra 2')
         }
         
         if (!selectedDevice) {
-          console.warn('⚠️ Caméra sélectionnée non trouvée, utilisation de la première disponible')
+          console.warn('[ATTENTION] Caméra sélectionnée non trouvée, utilisation de la première disponible')
           selectedDevice = videoDevices[0]
         }
       } catch (permError) {
-        console.warn('⚠️ Erreur lors de la détection des caméras:', permError)
+        console.warn('[ATTENTION] Erreur lors de la détection des caméras:', permError)
         // On continuera avec une approche de fallback sans deviceId
       }
       
       // Étape 3: Demander le stream avec plusieurs stratégies de fallback
       let stream = null
       let lastError = null
+
+      // Contraintes communes pour améliorer la netteté (préférence Full HD) sur toutes les caméras
+      const commonConstraints = {
+        width: { min: 640, ideal: 1920, max: 3840 },
+        height: { min: 480, ideal: 1080, max: 2160 },
+        aspectRatio: { ideal: 16 / 9 },
+        frameRate: { ideal: 30, max: 60 },
+      }
       
       // Stratégie 1: Essayer avec deviceId exact (si disponible)
       if (selectedDevice && selectedDevice.deviceId) {
@@ -456,12 +458,13 @@ const ReconnaissanceTempsReel = () => {
           console.log('🎥 Stratégie 1: Essai avec deviceId exact...')
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              deviceId: { exact: selectedDevice.deviceId }
+              ...commonConstraints,
+              deviceId: { exact: selectedDevice.deviceId },
             }
           })
-          console.log('✅ Stream obtenu avec deviceId exact')
+          console.log('[OK] Stream obtenu avec deviceId exact')
         } catch (exactError) {
-          console.warn('⚠️ Échec avec deviceId exact, essai avec ideal:', exactError.name)
+          console.warn('[ATTENTION] Échec avec deviceId exact, essai avec ideal:', exactError.name)
           lastError = exactError
           
           // Stratégie 2: Essayer avec deviceId ideal
@@ -469,12 +472,13 @@ const ReconnaissanceTempsReel = () => {
             console.log('🎥 Stratégie 2: Essai avec deviceId ideal...')
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
-                deviceId: { ideal: selectedDevice.deviceId }
+                ...commonConstraints,
+                deviceId: { ideal: selectedDevice.deviceId },
               }
             })
-            console.log('✅ Stream obtenu avec deviceId ideal')
+            console.log('[OK] Stream obtenu avec deviceId ideal')
           } catch (idealError) {
-            console.warn('⚠️ Échec avec deviceId ideal:', idealError.name)
+            console.warn('[ATTENTION] Échec avec deviceId ideal:', idealError.name)
             lastError = idealError
           }
         }
@@ -487,12 +491,13 @@ const ReconnaissanceTempsReel = () => {
           const facingMode = selectedCameraId === '2' ? 'environment' : 'user'
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              facingMode: { ideal: facingMode }
+              ...commonConstraints,
+              facingMode: { ideal: facingMode },
             }
           })
-          console.log('✅ Stream obtenu avec facingMode:', facingMode)
+          console.log('[OK] Stream obtenu avec facingMode:', facingMode)
         } catch (facingError) {
-          console.warn('⚠️ Échec avec facingMode:', facingError.name)
+          console.warn('[ATTENTION] Échec avec facingMode:', facingError.name)
           lastError = facingError
         }
       }
@@ -501,15 +506,15 @@ const ReconnaissanceTempsReel = () => {
       if (!stream) {
         try {
           console.log('🎥 Stratégie 4: Essai avec contraintes simples (dernier recours)...')
-          stream = await navigator.mediaDevices.getUserMedia({ video: true })
-          console.log('✅ Stream obtenu avec contraintes simples')
+          stream = await navigator.mediaDevices.getUserMedia({ video: commonConstraints })
+          console.log('[OK] Stream obtenu avec contraintes simples')
           
           if (selectedCameraId === '2' && videoDevices.length >= 2) {
-            console.warn('⚠️ Caméra USB non disponible, utilisation de la caméra par défaut')
+            console.warn('[ATTENTION] Caméra USB non disponible, utilisation de la caméra par défaut')
             setStatusMessage('Caméra USB non disponible, utilisation de la caméra par défaut.')
           }
         } catch (simpleError) {
-          console.error('❌ Échec même avec contraintes simples:', simpleError)
+          console.error('[ERREUR] Échec même avec contraintes simples:', simpleError)
           lastError = simpleError
           throw simpleError
         }
@@ -520,6 +525,26 @@ const ReconnaissanceTempsReel = () => {
       }
       
       streamRef.current = stream
+
+      // Tenter d'activer un mode de mise au point continue quand c'est supporté
+      try {
+        const [videoTrack] = stream.getVideoTracks()
+        if (videoTrack && typeof videoTrack.getCapabilities === 'function' && typeof videoTrack.applyConstraints === 'function') {
+          const capabilities = videoTrack.getCapabilities()
+          const advanced = []
+
+          if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+            advanced.push({ focusMode: 'continuous' })
+          }
+
+          if (advanced.length > 0) {
+            console.log('Application de contraintes avancées sur la caméra:', advanced)
+            await videoTrack.applyConstraints({ advanced })
+          }
+        }
+      } catch (capError) {
+        console.warn('[ATTENTION] Impossible d\'ajuster la mise au point de la caméra:', capError)
+      }
 
       const videoElement = videoRef.current
       if (!videoElement) {
@@ -533,13 +558,13 @@ const ReconnaissanceTempsReel = () => {
       await videoElement.play()
 
       setIsCameraActive(true)
-      setStatusMessage('Alignez votre visage avec le cadre transparent, puis cliquez sur « Scanner le visage ».')
+      setStatusMessage('Alignez votre visage avec le cadre transparent, puis cliquez sur « Scanner le visage ».')
 
       await waitForVideoReady(videoElement)
       setIsVideoReady(true)
-      setStatusMessage('Flux prêt. Alignez votre visage dans le cadre puis cliquez sur « Scanner le visage ».')
+      setStatusMessage('Flux prêt. Alignez votre visage dans le cadre puis cliquez sur « Scanner le visage ».')
     } catch (error) {
-      console.error('❌ Erreur démarrage caméra:', error)
+      console.error('[ERREUR] Erreur démarrage caméra:', error)
       console.error('  - Nom:', error.name)
       console.error('  - Message:', error.message)
       console.error('  - Stack:', error.stack)
@@ -705,7 +730,7 @@ const ReconnaissanceTempsReel = () => {
   }, [isCameraActive, isProcessing, isVideoReady])
 
   const similarityText = matchResult?.similarity
-    ? `${Number(matchResult.similarity).toFixed(1)} %`
+    ? `${Number(matchResult.similarity).toFixed(1)} %`
     : null
 
   const aspectRatioStyle = useMemo(() => {
@@ -964,7 +989,7 @@ const ReconnaissanceTempsReel = () => {
                   {[matchResult.nom, matchResult.prenom].filter(Boolean).join(' ') || 'Criminel identifié'}
                 </p>
                 {matchResult.numero_fiche && (
-                  <p className="text-emerald-800/80">Fiche : {matchResult.numero_fiche}</p>
+                  <p className="text-emerald-800/80">Fiche : {matchResult.numero_fiche}</p>
                 )}
                 {similarityText && (
                   <p className="font-medium">

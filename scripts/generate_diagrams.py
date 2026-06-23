@@ -14,7 +14,7 @@ def extract_plantuml_blocks(markdown_file):
         with open(markdown_file, 'r', encoding='utf-8') as f:
             content = f.read()
     except FileNotFoundError:
-        print(f"❌ Erreur : Fichier '{markdown_file}' introuvable")
+        print(f"Erreur : Fichier '{markdown_file}' introuvable")
         return []
     
     # Pattern pour trouver les blocs PlantUML
@@ -91,7 +91,7 @@ def generate_html_preview(blocks, output_file='diagrams/preview.html'):
     </style>
 </head>
 <body>
-    <h1>📊 Diagrammes PlantUML - SGIC</h1>
+    <h1>Diagrammes PlantUML - SGIC</h1>
 """
     
     for i, block in enumerate(blocks, 1):
@@ -106,7 +106,7 @@ def generate_html_preview(blocks, output_file='diagrams/preview.html'):
              alt="Diagramme {i}"
              onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5EaWFncmFtbWUgUGxhbnRVTEwgeyBpIH08L3RleHQ+PC9zdmc+'">
         <details style="margin-top: 10px;">
-            <summary style="cursor: pointer; color: #666;">📝 Voir le code</summary>
+            <summary style="cursor: pointer; color: #666;">Voir le code</summary>
             <pre class="code-block">{block.strip()}</pre>
         </details>
     </div>
@@ -184,7 +184,7 @@ def main():
     # Sauvegarder les fichiers .puml
     print("\nSauvegarde des fichiers .puml...")
     puml_dir = output_dir / 'plantuml'
-    saved_files = save_plantuml_files(blocks, str(puml_dir))
+    save_plantuml_files(blocks, str(puml_dir))
     
     # Générer le fichier HTML de prévisualisation
     print("\nGeneration du fichier HTML de previsualisation...")
@@ -199,14 +199,14 @@ def main():
     print("GENERATION TERMINEE")
     print("=" * 80)
     print(f"\n{len(blocks)} diagramme(s) traite(s)")
-    print(f"\nFichiers generes :")
+    print("\nFichiers generes :")
     print(f"   - Fichiers .puml : {puml_dir}/")
     print(f"   - Previsualisation HTML : {html_file}")
     print(f"   - Liens PlantUML : {links_file}")
-    print(f"\nPour visualiser :")
+    print("\nPour visualiser :")
     print(f"   1. Ouvrez '{html_file}' dans votre navigateur")
     print(f"   2. Ou utilisez les liens dans '{links_file}'")
-    print(f"   3. Ou installez l'extension PlantUML dans Cursor/VS Code")
+    print("   3. Ou installez l'extension PlantUML dans Cursor/VS Code")
 
 if __name__ == '__main__':
     main()

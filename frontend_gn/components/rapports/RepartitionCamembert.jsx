@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   PieChart as RechartsPie,
   Pie,
@@ -18,7 +18,16 @@ const PROVINCES_MADAGASCAR = [
   'Toliara',
 ]
 
-const PIE_COLORS = ['#0F52BA', '#2563EB', '#1D4ED8', '#0EA5E9', '#38BDF8', '#93C5FD']
+const PROVINCE_COLORS = {
+  Antananarivo: '#2563EB',
+  Toamasina: '#EF4444',
+  Antsiranana: '#FBBF24',
+  Mahajanga: '#F97316',
+  Fianarantsoa: '#10B981',
+  Toliara: '#8B5CF6',
+}
+
+const getProvinceColor = (name) => PROVINCE_COLORS[name] || '#6B7280'
 
 const formatNumber = (value, options = {}) => {
   const formatter = new Intl.NumberFormat('fr-FR', {
@@ -121,11 +130,8 @@ const RepartitionCamembert = () => {
                     `${name} • ${formatNumber(percent * 100, { maximumFractionDigits: 1 })}%`
                   }
                 >
-                  {data.map((entry, index) => (
-                    <Cell
-                      key={entry.ville}
-                      fill={PIE_COLORS[index % PIE_COLORS.length]}
-                    />
+                  {data.map((entry) => (
+                    <Cell key={entry.ville} fill={getProvinceColor(entry.ville)} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -137,7 +143,7 @@ const RepartitionCamembert = () => {
           </div>
 
           <div className="space-y-2">
-            {data.map((item, idx) => {
+            {data.map((item) => {
               const pourcentage = totalCas > 0 ? (item.cas / totalCas) * 100 : 0
               return (
                 <div
@@ -147,7 +153,7 @@ const RepartitionCamembert = () => {
                   <span className="flex items-center gap-2">
                     <span
                       className="inline-block w-3 h-3 rounded-full"
-                      style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
+                      style={{ backgroundColor: getProvinceColor(item.ville) }}
                     />
                     {item.ville}
                   </span>

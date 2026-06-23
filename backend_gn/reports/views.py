@@ -15,7 +15,7 @@ from reportlab.platypus import (  # type: ignore
     SimpleDocTemplate, Table, TableStyle, Paragraph, 
     Spacer, Image as RLImage, PageBreak
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT  # type: ignore
+from reportlab.lib.enums import TA_CENTER, TA_LEFT  # type: ignore
 from reportlab.lib.utils import ImageReader  # type: ignore
 import os
 from datetime import datetime
@@ -34,7 +34,7 @@ def add_cors_headers_to_pdf_response(response, request):
                 from urllib.parse import urlparse
                 parsed = urlparse(referer)
                 origin = f"{parsed.scheme}://{parsed.netloc}"
-            except:
+            except Exception:
                 pass
     
     # Autoriser toutes les origines locales
@@ -79,7 +79,7 @@ class FicheCriminellePDFView(APIView):
                     from urllib.parse import urlparse
                     parsed = urlparse(referer)
                     origin = f"{parsed.scheme}://{parsed.netloc}"
-                except:
+                except Exception:
                     pass
         
         # Ajouter tous les headers CORS nécessaires
@@ -130,7 +130,7 @@ class FicheCriminellePDFView(APIView):
         try:
             if criminel.photo and hasattr(criminel.photo, 'path') and os.path.exists(criminel.photo.path):
                 return criminel.photo.path
-        except:
+        except Exception:
             pass
         
         # Si pas de photo principale, essayer de récupérer la première photo biométrique de face
@@ -269,7 +269,6 @@ class FicheCriminellePDFView(APIView):
             photo_principale_path = self.get_photo_principale(criminel)
             
             # Créer un tableau pour la photo et les infos principales
-            main_data = []
             
             if photo_principale_path:
                 try:
@@ -1204,11 +1203,12 @@ class FicheCriminellePDFView(APIView):
             
             # Enregistrer dans l'audit
             try:
-                from audit.utils import log_action_simple
-                log_action_simple(
-                    action='DOWNLOAD',
-                    obj=criminel,
-                    additional_info=f"Téléchargement PDF - Fiche: {criminel.numero_fiche or criminel.id}"
+                from audit.audit_service import record_pdf_dactyloscopique
+                record_pdf_dactyloscopique(
+                    request,
+                    criminel,
+                    filename=filename,
+                    delivery='pdf',
                 )
             except Exception as e:
                 import logging

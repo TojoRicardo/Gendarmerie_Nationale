@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service d'analyse IA utilisant les données RÉELLES du système criminel.
 Utilise directement le modèle CriminalFicheCriminelle existant.
 """
@@ -6,11 +6,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 # Import du modèle RÉEL existant
-from criminel.models import CriminalFicheCriminelle, RefTypeInfraction
+from criminel.models import CriminalFicheCriminelle
 
 
 
@@ -102,7 +102,7 @@ def analyser_evolution_mensuelle_reelle(start_date, end_date, motif=None, foreca
 
 
 # ============================================================
-# 2️⃣ ANALYSE DÉTAILLÉE PAR MOTIF/INFRACTION RÉELLE
+# 2. ANALYSE DÉTAILLÉE PAR MOTIF/INFRACTION RÉELLE
 # ============================================================
 
 def analyser_par_motif_reel(start_date, end_date, motifs=None):
@@ -270,11 +270,9 @@ def analyser_repartition_geo_reelle(start_date, end_date, regions=None, include_
         total_cases += total
         # Comptage par province si correspondance
         lower = lieu.casefold()
-        matched = False
         for p in provinces_canon:
             if p.casefold() in lower:
                 province_counts[p] += total
-                matched = True
                 break
         # Collect brut pour retour éventuel
         geographic_data.append({

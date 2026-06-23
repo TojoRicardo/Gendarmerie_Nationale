@@ -225,7 +225,7 @@ const analyzeTimeDistribution = (entries) => {
           const hour = date.getHours();
           hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignorer les erreurs de parsing
       }
     }
@@ -264,7 +264,7 @@ const analyzeTimeDistribution = (entries) => {
 /**
  * Génère une analyse pour des données statistiques
  */
-const generateStatisticsAnalysis = (stats) => {
+const generateStatisticsAnalysis = (_stats) => {
   // À implémenter selon le format des statistiques
   return {
     presentation: "Analyse statistique en cours de développement.",
@@ -277,7 +277,7 @@ const generateStatisticsAnalysis = (stats) => {
 /**
  * Génère une analyse pour un graphique
  */
-const generateGraphAnalysis = (graphData) => {
+const generateGraphAnalysis = (_graphData) => {
   // À implémenter selon le type de graphique
   return {
     presentation: "Analyse graphique en cours de développement.",
@@ -290,7 +290,7 @@ const generateGraphAnalysis = (graphData) => {
 /**
  * Génère une analyse pour un tableau
  */
-const generateTableAnalysis = (tableData) => {
+const generateTableAnalysis = (_tableData) => {
   // À implémenter selon le format du tableau
   return {
     presentation: "Analyse tabulaire en cours de développement.",
@@ -303,7 +303,7 @@ const generateTableAnalysis = (tableData) => {
 /**
  * Génère une analyse générique
  */
-const generateGenericAnalysis = (data) => {
+const generateGenericAnalysis = (_data) => {
   return {
     presentation: "Les données fournies nécessitent une analyse spécifique selon leur type.",
     analysis: "Une analyse approfondie permettrait d'extraire des insights pertinents.",

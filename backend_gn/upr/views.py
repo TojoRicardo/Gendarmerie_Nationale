@@ -21,7 +21,6 @@ from .serializers import (
     UnidentifiedPersonSerializer,
     UnidentifiedPersonCreateSerializer,
     UnidentifiedPersonListSerializer,
-    MatchResultSerializer
 )
 from .services.face_processing import extract_face_data
 from .services.face_matching import find_matches_for_upr
@@ -141,7 +140,7 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
                 if profil_face_file and hasattr(profil_face_file, 'seek'):
                     try:
                         profil_face_file.seek(0)
-                    except:
+                    except Exception:
                         pass  # Si le fichier ne supporte pas seek, continuer quand même
                 
                 upr = serializer.save()  # Génère code_upr et nom_temporaire
@@ -161,15 +160,11 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
                 if upr.profil_face:
                     logger.info(f"Début extraction biométrique pour UPR {upr.code_upr}...")
                     
-                    # Extraction des données faciales
-                    extraction_result = extract_face_data(upr.profil_face)
+                    from upr.services.photo_verification import _get_or_create_upr_embedding
+                    embedding = _get_or_create_upr_embedding(upr, save=True)
                     
-                    if extraction_result.get("success"):
-                        # Sauvegarder les landmarks et l'embedding
-                        upr.landmarks_106 = extraction_result.get("landmarks")
-                        upr.face_embedding = extraction_result.get("embedding")
-                        upr.save(update_fields=['landmarks_106', 'face_embedding'])
-                        
+                    if embedding is not None:
+                        extraction_result = {"success": True}
                         logger.info(f"Extraction réussie pour UPR {upr.code_upr}")
                         
                         # Recherche automatique de correspondances
@@ -179,7 +174,6 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
                         logger.info(f"Recherche terminée: {matches_result.get('total_matches', 0)} correspondance(s)")
                         
                         # Recalculer les correspondances pour tous les autres UPR existants
-                        # pour qu'ils détectent ce nouvel UPR
                         logger.info("Recalcul des correspondances pour les autres UPR existants...")
                         from upr.models import UnidentifiedPerson
                         other_uprs = UnidentifiedPerson.objects.filter(
@@ -194,8 +188,11 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
                             except Exception as e:
                                 logger.warning(f"Erreur lors du recalcul des correspondances pour UPR {other_upr.code_upr}: {e}")
                     else:
-                        error_msg = extraction_result.get("error", "Erreur inconnue")
-                        logger.warning(f"Échec extraction pour UPR {upr.code_upr}: {error_msg}")
+                        extraction_result = {
+                            "success": False,
+                            "error": "Visage non détecté — utilisez une photo de face nette (min. 320 px).",
+                        }
+                        logger.warning(f"Échec extraction pour UPR {upr.code_upr}: empreinte faciale non générée")
                 
                 # Audit logging
                 log_action_detailed(
@@ -255,7 +252,7 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
                                 )
                         
                         response_data['duplicate_warning'] = {
-                            'message': f"⚠️ Doublon détecté ! Cette personne existe déjà dans la base de données.",
+                            'message': "[ATTENTION] Doublon détecté ! Cette personne existe déjà dans la base de données.",
                             'details': duplicate_messages,
                             'count': len(strict_upr_matches) + len(strict_criminel_matches)
                         }
@@ -607,7 +604,6 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         
         GET /upr/statistics/
         """
-        from django.db.models import Count, Q, Avg
         from django.utils import timezone
         from datetime import timedelta
         
@@ -632,7 +628,7 @@ class UnidentifiedPersonViewSet(viewsets.ModelViewSet):
         total_criminel_matches = CriminelMatchLog.objects.count()
         strict_matches = UPRMatchLog.objects.filter(is_strict_match=True).count() + CriminelMatchLog.objects.filter(is_strict_match=True).count()
         
-        thirty_days_ago = timezone.now() - timedelta(days=30)
+        timezone.now() - timedelta(days=30)
         evolution_data = []
         for i in range(30):
             date = timezone.now() - timedelta(days=29-i)

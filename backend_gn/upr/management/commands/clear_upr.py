@@ -1,4 +1,4 @@
-﻿"""
+"""
 Commande Django pour supprimer tous les UPR de la base de données.
 
 Usage:
@@ -33,7 +33,7 @@ class Command(BaseCommand):
         if not options['confirm']:
             self.stdout.write(
                 self.style.WARNING(
-                    '\n⚠️  ATTENTION: Cette commande va supprimer TOUS les UPR de la base de données!\n'
+                    '\n[ATTENTION]  ATTENTION: Cette commande va supprimer TOUS les UPR de la base de données!\n'
                     'Pour confirmer, utilisez: python manage.py clear_upr --confirm\n'
                 )
             )
@@ -50,7 +50,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.WARNING(
-                f'\n⚠️  Suppression de {upr_count} UPR(s), '
+                f'\n[ATTENTION]  Suppression de {upr_count} UPR(s), '
                 f'{match_log_count} log(s) de correspondance UPR, '
                 f'et {criminel_match_count} log(s) de correspondance Criminel...\n'
             )
@@ -76,28 +76,28 @@ class Command(BaseCommand):
                                 upr.profil_face.delete(save=False)
                             except Exception as e:
                                 self.stdout.write(
-                                    self.style.WARNING(f'  ⚠️  Impossible de supprimer profil_face de UPR {upr.id}: {e}')
+                                    self.style.WARNING(f'  [ATTENTION]  Impossible de supprimer profil_face de UPR {upr.id}: {e}')
                                 )
                         if upr.profil_left:
                             try:
                                 upr.profil_left.delete(save=False)
                             except Exception as e:
                                 self.stdout.write(
-                                    self.style.WARNING(f'  ⚠️  Impossible de supprimer profil_left de UPR {upr.id}: {e}')
+                                    self.style.WARNING(f'  [ATTENTION]  Impossible de supprimer profil_left de UPR {upr.id}: {e}')
                                 )
                         if upr.profil_right:
                             try:
                                 upr.profil_right.delete(save=False)
                             except Exception as e:
                                 self.stdout.write(
-                                    self.style.WARNING(f'  ⚠️  Impossible de supprimer profil_right de UPR {upr.id}: {e}')
+                                    self.style.WARNING(f'  [ATTENTION]  Impossible de supprimer profil_right de UPR {upr.id}: {e}')
                                 )
                         if upr.empreinte_digitale:
                             try:
                                 upr.empreinte_digitale.delete(save=False)
                             except Exception as e:
                                 self.stdout.write(
-                                    self.style.WARNING(f'  ⚠️  Impossible de supprimer empreinte_digitale de UPR {upr.id}: {e}')
+                                    self.style.WARNING(f'  [ATTENTION]  Impossible de supprimer empreinte_digitale de UPR {upr.id}: {e}')
                                 )
 
                 # Supprimer tous les UPR

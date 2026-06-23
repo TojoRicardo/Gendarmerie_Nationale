@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Camera, AlertCircle, Play, Square, RefreshCw, Settings, X, Monitor, Usb } from 'lucide-react';
 import api from '../../services/api';
-import SpinnerChargement from '../commun/SpinnerChargement';
-import Bouton from '../commun/Bouton';
+import SpinnerChargement from '../../../components/commun/SpinnerChargement';
+import Bouton from '../../../components/commun/Bouton';
 
 const MultiCameraDashboard = () => {
   const [cameras, setCameras] = useState([]);
@@ -15,21 +15,9 @@ const MultiCameraDashboard = () => {
   const [activeCameras, setActiveCameras] = useState(new Set());
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    loadCameras();
-    scanAvailableCameras();
-    connectWebSocket();
-    
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-    };
-  }, []);
+  const handleNewAlertRef = useRef(null);
+  const pollAlertsRef = useRef(null);
+  const alertsRef = useRef([]);
 
   const loadCameras = async () => {
     try {
@@ -51,52 +39,14 @@ const MultiCameraDashboard = () => {
     }
   };
 
-  const connectWebSocket = () => {
-    try {
-      const wsUrl = process.env.VITE_WS_URL || 'ws://localhost:8000/ws/alerts/';
-      const ws = new WebSocket(wsUrl);
-      
-      ws.onopen = () => {
-        console.log('✅ WebSocket connecté');
-      };
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'alert') {
-            handleNewAlert(data);
-          }
-        } catch (error) {
-          console.error('Erreur parsing WebSocket:', error);
-        }
-      };
-      
-      ws.onerror = (error) => {
-        console.error('Erreur WebSocket:', error);
-      };
-      
-      ws.onclose = () => {
-        console.log('WebSocket fermé, reconnexion dans 5s...');
-        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
-      };
-      
-      wsRef.current = ws;
-    } catch (error) {
-      console.error('Impossible de se connecter au WebSocket:', error);
-      // Fallback: polling toutes les 5 secondes
-      setInterval(pollAlerts, 5000);
-    }
-  };
-
   const pollAlerts = async () => {
     try {
       const response = await api.get('/upr/logs/?action=match_certain&limit=5');
-      // Le ViewSet retourne {count, results} ou une liste
       const logs = response.data.results || response.data || [];
       if (logs.length > 0) {
         const latest = logs[0];
-        if (!alerts.find(a => a.id === latest.id)) {
-          handleNewAlert({ data: latest });
+        if (!alertsRef.current.find((a) => a.id === latest.id)) {
+          handleNewAlertRef.current?.({ data: latest });
         }
       }
     } catch (error) {
@@ -136,6 +86,62 @@ const MultiCameraDashboard = () => {
       toast.remove();
     }, 5000);
   };
+
+  handleNewAlertRef.current = handleNewAlert;
+  pollAlertsRef.current = pollAlerts;
+  alertsRef.current = alerts;
+
+  useEffect(() => {
+    loadCameras();
+    scanAvailableCameras();
+
+    const connectWebSocket = () => {
+      try {
+        const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/alerts/';
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[OK] WebSocket connecté');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'alert') {
+              handleNewAlertRef.current?.(data);
+            }
+          } catch (error) {
+            console.error('Erreur parsing WebSocket:', error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('Erreur WebSocket:', error);
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket fermé, reconnexion dans 5s...');
+          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+        };
+
+        wsRef.current = ws;
+      } catch (error) {
+        console.error('Impossible de se connecter au WebSocket:', error);
+        setInterval(() => pollAlertsRef.current?.(), 5000);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const scanAvailableCameras = async () => {
     try {
@@ -186,7 +192,7 @@ const MultiCameraDashboard = () => {
       // Recharger la liste
       await loadCameras();
       
-      alert(`✅ Caméra ${camera.name} démarrée avec succès`);
+      alert(`[OK] Caméra ${camera.name} démarrée avec succès`);
     } catch (error) {
       console.error('Erreur démarrage caméra:', error);
       if (error.response?.status === 400) {
@@ -198,9 +204,9 @@ const MultiCameraDashboard = () => {
             await api.patch(`/api/cameras/${existing.id}/`, { active: true });
             setActiveCameras(prev => new Set([...prev, existing.id]));
             await loadCameras();
-            alert(`✅ Caméra ${existing.name} activée`);
+            alert(`[OK] Caméra ${existing.name} activée`);
           }
-        } catch (e) {
+        } catch (_e) {
           alert('Erreur lors de l\'activation de la caméra');
         }
       } else {
@@ -218,7 +224,7 @@ const MultiCameraDashboard = () => {
         return newSet;
       });
       await loadCameras();
-      alert('✅ Caméra arrêtée');
+      alert('[OK] Caméra arrêtée');
     } catch (error) {
       console.error('Erreur arrêt caméra:', error);
       alert('Erreur lors de l\'arrêt de la caméra');
@@ -601,7 +607,7 @@ const AlertModal = ({ alert, onClose, onAccept, onReject }) => {
                       {bestMatch.nom || ''} {bestMatch.prenom || ''}
                     </div>
                     <a
-                      href={`/criminels/${bestMatch.criminal_id}`}
+                      href={`/fiches-criminelles/voir/${bestMatch.criminal_id}`}
                       className="text-blue-600 hover:underline text-sm mt-2 inline-block"
                     >
                       Voir la fiche →

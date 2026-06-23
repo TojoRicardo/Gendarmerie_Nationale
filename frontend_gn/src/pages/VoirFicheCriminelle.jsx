@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { 
-  FileText, User, MapPin, Calendar, AlertTriangle, ArrowLeft, Edit,
-  Clock, Info, Shield, Download, Bell, X, Sparkles, Trash2, Edit2, ArchiveRestore
+  FileText, User, MapPin, Calendar, AlertTriangle, ArrowLeft,
+  Clock, Info, Shield, Download, Bell, X, Trash2, Edit2, ArchiveRestore
 } from 'lucide-react'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAuth } from '../context/AuthContext'
@@ -170,7 +170,7 @@ const VoirFicheCriminelle = () => {
     if (id) {
       fetchFicheData()
     }
-  }, [id, utilisateur])
+  }, [id, utilisateur, notification])
 
   // Initialize fiche data
   const [fiche, setFiche] = useState({

@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { 
   Save, X, Key, ArrowLeft, CheckSquare, ShieldCheck
 } from 'lucide-react'
-import { MESSAGES } from '../utils/notifications'
 import { useNotification } from '../context/NotificationContext'
 import { updateRole, getRoleById } from '../services/authService'
 
@@ -177,7 +176,7 @@ const ModifierRole = () => {
       }
       
       if (permissionsRemoved.length > 0) {
-        message += ` ⚠️ ${permissionsRemoved.length} permission(s) retirée(s) - non appliquée(s) aux utilisateurs existants.`
+        message += ` [ATTENTION] ${permissionsRemoved.length} permission(s) retirée(s) - non appliquée(s) aux utilisateurs existants.`
       }
       
       notification.showSuccess(message)

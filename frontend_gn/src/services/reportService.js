@@ -17,7 +17,7 @@ const reportService = {
       const response = await api.post('/rapports/creer/', data);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur génération rapport:', error);
+      console.error('[ERREUR] Erreur génération rapport:', error);
       throw error;
     }
   },
@@ -48,7 +48,7 @@ const reportService = {
       const response = await api.post('/rapports/generate/', payload);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur génération rapport simple:', error);
+      console.error('[ERREUR] Erreur génération rapport simple:', error);
       if (error.response) {
         throw {
           message: error.response.data?.message || 'Erreur lors de la génération du rapport',
@@ -61,46 +61,21 @@ const reportService = {
   },
 
   /**
-   * Récupère l'historique des rapports
-   * @param {number} limit - Nombre de rapports à récupérer
-   * @returns {Promise}
-   */
-  getHistorique: async (limit = 20) => {
-    try {
-      // Utiliser le nouveau système avec ReportViewSet
-      // Note: baseURL contient déjà /api, donc on ne met pas /api/ au début
-      const response = await api.get(`/rapports/reports/?page_size=${limit}`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur récupération historique:', error);
-      throw error;
-    }
-  },
-
-  /**
    * Récupère les types de rapports disponibles
    * @returns {Promise}
    */
-  getTypes: async () => {
-    try {
-      // Retourner les types statiques pour le nouveau système
-      return {
-        types_rapports: [
-          { value: 'criminel', label: 'Rapport Criminel' },
-          { value: 'enquete', label: 'Rapport d\'Enquête' },
-          { value: 'statistique', label: 'Rapport Statistique' },
-          { value: 'audit', label: 'Rapport d\'Audit' }
-        ],
-        formats_export: [
-          { value: 'pdf', label: 'PDF' },
-          { value: 'csv', label: 'CSV' }
-        ]
-      };
-    } catch (error) {
-      console.error('❌ Erreur récupération types:', error);
-      throw error;
-    }
-  },
+  getTypes: async () => ({
+    types_rapports: [
+      { value: 'criminel', label: 'Rapport Criminel' },
+      { value: 'enquete', label: 'Rapport d\'Enquête' },
+      { value: 'statistique', label: 'Rapport Statistique' },
+      { value: 'audit', label: 'Rapport d\'Audit' },
+    ],
+    formats_export: [
+      { value: 'pdf', label: 'PDF' },
+      { value: 'csv', label: 'CSV' },
+    ],
+  }),
 
   /**
    * Télécharge un rapport
@@ -117,7 +92,7 @@ const reportService = {
       });
       return response;
     } catch (error) {
-      console.error('❌ Erreur téléchargement rapport:', error);
+      console.error('[ERREUR] Erreur téléchargement rapport:', error);
       throw error;
     }
   },
@@ -134,7 +109,7 @@ const reportService = {
       const response = await api.get(`/rapports/reports/${rapportId}/`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur récupération détail rapport:', error);
+      console.error('[ERREUR] Erreur récupération détail rapport:', error);
       throw error;
     }
   },
@@ -151,7 +126,7 @@ const reportService = {
       const response = await api.delete(`/rapports/reports/${rapportId}/`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur suppression rapport:', error);
+      console.error('[ERREUR] Erreur suppression rapport:', error);
       throw error;
     }
   },
@@ -177,7 +152,7 @@ const reportService = {
       
       return true;
     } catch (error) {
-      console.error('❌ Erreur téléchargement et sauvegarde:', error);
+      console.error('[ERREUR] Erreur téléchargement et sauvegarde:', error);
       throw error;
     }
   },
@@ -213,7 +188,7 @@ const reportService = {
         !error.message?.includes('timeout') &&
         error.response?.status !== 500
       ) {
-        console.error('❌ Erreur récupération statistiques:', error);
+        console.error('[ERREUR] Erreur récupération statistiques:', error);
       }
       // Retourner un objet vide au lieu de throw pour éviter de casser l'UI
       return {

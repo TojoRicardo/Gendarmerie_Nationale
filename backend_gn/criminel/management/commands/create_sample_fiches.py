@@ -66,8 +66,6 @@ class Command(BaseCommand):
         # Les 6 provinces de Madagascar
         villes = ['Antananarivo', 'Fianarantsoa', 'Toamasina', 'Mahajanga', 'Toliara', 'Antsiranana']
         
-        statuts = [statut_en_cours, statut_cloture, statut_en_attente]
-        niveaux_danger = [1, 2, 3, 4, 5]  # 1=Faible, 2=Modéré, 3=Élevé, 4=Très Élevé, 5=Extrême
         sexes = ['H', 'F']
 
         # Déterminer le dernier numéro de fiche
@@ -79,7 +77,7 @@ class Command(BaseCommand):
         for i in range(count):
             # Générer une date aléatoire dans les 60 derniers jours
             jours_arriere = random.randint(0, 60)
-            date_creation = datetime.now() - timedelta(days=jours_arriere)
+            datetime.now() - timedelta(days=jours_arriere)
             
             # Sélectionner un statut avec une distribution réaliste
             # 60% en cours, 30% clôturé, 10% en attente
@@ -145,7 +143,7 @@ class Command(BaseCommand):
         clotures = CriminalFicheCriminelle.objects.filter(statut_fiche=statut_cloture).count()
         critiques = CriminalFicheCriminelle.objects.filter(niveau_danger__gte=4).count()  # Très Élevé et Extrême
         
-        self.stdout.write(self.style.SUCCESS(f'\nStatistiques actuelles:'))
+        self.stdout.write(self.style.SUCCESS('\nStatistiques actuelles:'))
         self.stdout.write(f'  - Total: {total}')
         self.stdout.write(f'  - En cours: {en_cours}')
         self.stdout.write(f'  - Clôturées: {clotures}')

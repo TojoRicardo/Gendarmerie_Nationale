@@ -1,20 +1,15 @@
-import { useState, useCallback, memo, useMemo, useEffect } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useCallback, memo, useMemo } from 'react'
+import { Outlet } from 'react-router-dom'
 import Entete from '../components/commun/Entete'
 import BarreLatérale from '../components/commun/BarreLatérale'
 import LoaderNavigation from '../components/ui/LoaderNavigation'
-import { useAuth } from './context/AuthContext' 
-import { getRoleRedirect, shouldRedirectToRoleRoute } from './utils/roleRedirection'
+import { useAuth } from './context/AuthContext'
 
 const Layout = memo(() => {
-  // Sidebar ouverte par défaut sur desktop, fermée sur mobile
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { utilisateur } = useAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
 
-  // Mémoïser les callbacks pour éviter les re-rendus
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen(prev => !prev)
   }, [])
@@ -27,7 +22,6 @@ const Layout = memo(() => {
     setSidebarCollapsed(prev => !prev)
   }, [])
 
-  // Mémoïser les props de la sidebar pour éviter les re-renders
   const sidebarProps = useMemo(() => ({
     isOpen: true,
     onClose: handleCloseSidebar,
@@ -39,24 +33,6 @@ const Layout = memo(() => {
     onClose: handleCloseSidebar,
     isCollapsed: sidebarCollapsed,
   }), [sidebarOpen, handleCloseSidebar, sidebarCollapsed])
-
-  useEffect(() => {
-    if (!utilisateur?.role) {
-      return
-    }
-
-    const currentPath = location.pathname || '/'
-
-    if (!shouldRedirectToRoleRoute(utilisateur.role, currentPath)) {
-      return
-    }
-
-    const roleConfig = getRoleRedirect(utilisateur.role)
-    navigate(roleConfig.route, {
-      replace: true,
-      state: { from: currentPath, reason: 'ROLE_BASED_REDIRECT' },
-    })
-  }, [location.pathname, utilisateur?.role, navigate])
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-blue-50/20">

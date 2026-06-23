@@ -4,8 +4,6 @@ Conformité INTERPOL - Respect vie privée et législation
 """
 
 from django.db import migrations, models
-from django.utils import timezone
-from dateutil.relativedelta import relativedelta
 
 
 class Migration(migrations.Migration):

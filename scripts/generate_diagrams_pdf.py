@@ -18,7 +18,7 @@ try:
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.lib.enums import TA_CENTER
     from reportlab.lib import colors
 except ImportError:
     print("ERREUR: reportlab n'est pas installe.")
@@ -101,7 +101,7 @@ def download_plantuml_image(code, output_dir='diagrams/temp'):
         
         url = f"http://www.plantuml.com/plantuml/png/{encoded}"
         
-        print(f"  Telechargement de l'image depuis PlantUML...")
+        print("  Telechargement de l'image depuis PlantUML...")
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0')
         response = urllib.request.urlopen(req, timeout=30)
@@ -117,10 +117,10 @@ def download_plantuml_image(code, output_dir='diagrams/temp'):
         return temp_file
     except Exception as e:
         print(f"  ERREUR lors du telechargement: {e}")
-        print(f"  Tentative avec URL alternative...")
+        print("  Tentative avec URL alternative...")
         # Essayer avec l'URL simple (moins fiable mais parfois ça marche)
         try:
-            simple_url = f"http://www.plantuml.com/plantuml/png/" + urllib.parse.quote(code, safe='')
+            simple_url = "http://www.plantuml.com/plantuml/png/" + urllib.parse.quote(code, safe='')
             req = urllib.request.Request(simple_url)
             req.add_header('User-Agent', 'Mozilla/5.0')
             response = urllib.request.urlopen(req, timeout=30)
@@ -129,7 +129,7 @@ def download_plantuml_image(code, output_dir='diagrams/temp'):
             temp_file = os.path.join(output_dir, f"temp_{abs(hash(code))}.png")
             img.save(temp_file, 'PNG')
             return temp_file
-        except:
+        except Exception:
             return None
 
 def generate_pdf_with_diagrams(blocks, output_file='diagrams/diagrammes.pdf'):
@@ -221,15 +221,15 @@ def generate_pdf_with_diagrams(blocks, output_file='diagrams/diagrammes.pdf'):
                 # Nettoyer le fichier temporaire
                 try:
                     os.remove(image_path)
-                except:
+                except Exception:
                     pass
                     
             except Exception as e:
                 print(f"  ERREUR lors de l'ajout de l'image: {e}")
-                elements.append(Paragraph(f"[Erreur: Impossible de charger l'image du diagramme]", 
+                elements.append(Paragraph("[Erreur: Impossible de charger l'image du diagramme]", 
                                          normal_style))
         else:
-            elements.append(Paragraph(f"[Erreur: Impossible de télécharger l'image]", normal_style))
+            elements.append(Paragraph("[Erreur: Impossible de télécharger l'image]", normal_style))
         
         # Saut de page sauf pour le dernier
         if i < len(blocks):
@@ -285,7 +285,7 @@ def main():
     print("=" * 80)
     print(f"\n{len(blocks)} diagramme(s) traite(s)")
     print(f"\nFichier PDF genere : {pdf_file}")
-    print(f"\nLe PDF contient tous les diagrammes avec leurs titres.")
+    print("\nLe PDF contient tous les diagrammes avec leurs titres.")
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import { AlertCircle, ChevronDown } from 'lucide-react';
 
 const Select = forwardRef(({

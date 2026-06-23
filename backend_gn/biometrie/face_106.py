@@ -6,9 +6,9 @@ de repère faciaux sur une image.
 
 import logging
 import threading
-from typing import List, Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union
 import numpy as np
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 import io
 
 from django.core.files.base import File
@@ -56,7 +56,7 @@ UploadedImage = Union[
 
 def _pil_to_bgr(image: Image.Image) -> np.ndarray:
     """Convertit une image PIL RGB en tableau numpy BGR pour OpenCV/InsightFace."""
-    rgb = image.convert("RGB")
+    rgb = ImageOps.exif_transpose(image).convert("RGB")
     array = np.asarray(rgb)
     return array[:, :, ::-1]  # RGB -> BGR
 

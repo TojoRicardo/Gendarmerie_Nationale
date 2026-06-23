@@ -5,11 +5,6 @@ Utilitaires pour le module Intelligence Artificielle
 Ce package contient des outils supplémentaires pour l'IA.
 """
 
-from .data_preprocessing import DataPreprocessingUtils
-from .visualisation import VisualisationUtils
+from .face_recognition_arcface import get_arcface_instance
 
-__all__ = [
-    'DataPreprocessingUtils',
-    'VisualisationUtils'
-]
-
+__all__ = ['get_arcface_instance']

@@ -8,8 +8,6 @@ comparaison avec la base criminelle et les autres UPR, et traçabilité complèt
 from django.db import models
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
-from django.utils import timezone
-import os
 
 
 def generate_upr_code():

@@ -6,14 +6,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from django.db.models import Count, Q, Avg, Max, Min
+from django.db.models import Count, Q, Avg
 from django.db.models.functions import TruncDay, TruncMonth, TruncWeek
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import timedelta
 from .models import (
     IAReconnaissanceFaciale, IAPrediction, IAPattern, IACorrelation
 )
-from criminel.models import CriminalFicheCriminelle
 
 
 class IAStatistiquesView(APIView):

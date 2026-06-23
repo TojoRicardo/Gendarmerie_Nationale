@@ -1,14 +1,81 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { 
-  Activity, TrendingUp, TrendingDown, Users, FileText, 
-  AlertTriangle, Clock, CheckCircle, MapPin, BarChart3, PieChart,
-  RefreshCw, Maximize2, Eye, ShieldCheck, KeyRound,
+import { TrendingUp, TrendingDown, Users, FileText, 
+  AlertTriangle, BarChart3,
+  RefreshCw, Maximize2, Eye, ShieldCheck,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import GraphiquesAvances from '../../components/rapports/GraphiquesAvances'
 import { getUsers } from '../services/authService'
-import { getDashboardStats } from '../services/statsService'
+import { getDashboardStats, getDashboardUserStats } from '../services/statsService'
+import {
+  getStatutEffectif,
+  countUsersByStatut,
+  filterUsersByStatut,
+  getStatutConfig,
+} from '../utils/userStatut'
+
+const DEFAULT_STATS = {
+  global: {
+    total_fiches: 1234,
+    evolution_fiches: '+12%',
+    evolution_fiches_positive: true,
+    fiches_ce_mois: 156,
+    total_roles: 8,
+    nouveaux_roles: 2,
+    total_permissions: 45,
+    alertes_en_cours: 23,
+    evolution_alertes: '+8%',
+    alertes_critiques: 5
+  },
+  users: {
+    actifs: 89,
+    inactifs: 12,
+    total: 101,
+    evolution: '+5%',
+    en_ligne: 24
+  },
+  recentActivity: [
+    {
+      description: 'Nouvelle fiche criminelle créée pour l\'affaire #2847',
+      user_name: 'M. Kaddour',
+      time_ago: '5 min',
+      type: 'fiche'
+    },
+    {
+      description: 'Utilisateur "F. Taleb" a été ajouté au système',
+      user_name: 'Admin',
+      time_ago: '23 min',
+      type: 'utilisateur'
+    },
+    {
+      description: 'Rapport mensuel validé et archivé',
+      user_name: 'O. Magistrat',
+      time_ago: '1 h',
+      type: 'rapport'
+    },
+    {
+      description: 'Permissions modifiées pour le rôle "Analyste"',
+      user_name: 'Admin',
+      time_ago: '2 h',
+      type: 'permission'
+    },
+    {
+      description: 'Analyse IA terminée : 5 correspondances trouvées',
+      user_name: 'Système IA',
+      time_ago: '3 h',
+      type: 'ia'
+    }
+  ],
+  onlineUsers: [
+    { name: 'Mohamed Kaddour', role: 'Enquêteur Principal', connected_since: '2h 15min' },
+    { name: 'Fatima Taleb', role: 'Analyste Judiciaire', connected_since: '45min' },
+    { name: 'Admin Système', role: 'Administrateur', connected_since: '5h 30min' },
+    { name: 'Omar Magistrat', role: 'Observateur Externe', connected_since: '1h 20min' },
+    { name: 'Sarah Benali', role: 'Enquêteur', connected_since: '35min' },
+    { name: 'Karim Hassani', role: 'Technicien Biométrie', connected_since: '3h 10min' }
+  ]
+}
 
 const Dashboard = () => {
   const { utilisateur } = useAuth()
@@ -17,72 +84,10 @@ const Dashboard = () => {
   const [error, setError] = useState(null)
   const [statsData, setStatsData] = useState(null)
   const [tousUtilisateurs, setTousUtilisateurs] = useState([])
+  const [userStats, setUserStats] = useState({ actifs: 0, inactifs: 0, suspendus: 0, total: 0 })
   const [filtreStatut, setFiltreStatut] = useState('tous')
   const [refreshKey, setRefreshKey] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
-
-  // Données par défaut avec plus de richesse
-  const defaultStats = {
-    global: {
-      total_fiches: 1234,
-      evolution_fiches: '+12%',
-      evolution_fiches_positive: true,
-      fiches_ce_mois: 156,
-      total_roles: 8,
-      nouveaux_roles: 2,
-      total_permissions: 45,
-      alertes_en_cours: 23,
-      evolution_alertes: '+8%',
-      alertes_critiques: 5
-    },
-    users: {
-      actifs: 89,
-      inactifs: 12,
-      total: 101,
-      evolution: '+5%',
-      en_ligne: 24
-    },
-    recentActivity: [
-      {
-        description: 'Nouvelle fiche criminelle créée pour l\'affaire #2847',
-        user_name: 'M. Kaddour',
-        time_ago: '5 min',
-        type: 'fiche'
-      },
-      {
-        description: 'Utilisateur "F. Taleb" a été ajouté au système',
-        user_name: 'Admin',
-        time_ago: '23 min',
-        type: 'utilisateur'
-      },
-      {
-        description: 'Rapport mensuel validé et archivé',
-        user_name: 'O. Magistrat',
-        time_ago: '1 h',
-        type: 'rapport'
-      },
-      {
-        description: 'Permissions modifiées pour le rôle "Analyste"',
-        user_name: 'Admin',
-        time_ago: '2 h',
-        type: 'permission'
-      },
-      {
-        description: 'Analyse IA terminée : 5 correspondances trouvées',
-        user_name: 'Système IA',
-        time_ago: '3 h',
-        type: 'ia'
-      }
-    ],
-    onlineUsers: [
-      { name: 'Mohamed Kaddour', role: 'Enquêteur Principal', connected_since: '2h 15min' },
-      { name: 'Fatima Taleb', role: 'Analyste Judiciaire', connected_since: '45min' },
-      { name: 'Admin Système', role: 'Administrateur', connected_since: '5h 30min' },
-      { name: 'Omar Magistrat', role: 'Observateur Externe', connected_since: '1h 20min' },
-      { name: 'Sarah Benali', role: 'Enquêteur', connected_since: '35min' },
-      { name: 'Karim Hassani', role: 'Technicien Biométrie', connected_since: '3h 10min' }
-    ]
-  }
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -91,7 +96,7 @@ const Dashboard = () => {
         setError(null)
         
         // Récupérer toutes les statistiques réelles depuis le backend
-        let stats = { ...defaultStats }
+        let stats = { ...DEFAULT_STATS }
         
         try {
           // Appeler le service qui récupère toutes les stats
@@ -101,15 +106,30 @@ const Dashboard = () => {
           const utilisateurs = await getUsers().catch(() => [])
           const utilisateursArray = Array.isArray(utilisateurs) ? utilisateurs : (utilisateurs.results || [])
           setTousUtilisateurs(utilisateursArray)
+
+          const dashUserStats = await getDashboardUserStats().catch(() => null)
+          if (dashUserStats) {
+            setUserStats({
+              total: dashUserStats.total_utilisateurs ?? utilisateursArray.length,
+              actifs: dashUserStats.utilisateurs_actifs ?? 0,
+              inactifs: dashUserStats.utilisateurs_inactifs ?? 0,
+              suspendus: dashUserStats.utilisateurs_suspendus ?? 0,
+            })
+          } else {
+            setUserStats(countUsersByStatut(utilisateursArray))
+          }
           
           // Compter les rôles uniques
           const rolesUniques = [...new Set(utilisateursArray.map(u => u.role).filter(Boolean))]
           const totalRoles = rolesUniques.length || dashboardData.global?.total_roles || 4
           
-          // Calculer les stats utilisateurs
-          const utilisateursActifs = utilisateursArray.filter(u => u.statut === 'actif' || u.statut === 'Actif').length
-          const utilisateursInactifs = utilisateursArray.filter(u => u.statut === 'inactif' || u.statut === 'Inactif').length
-          const totalUtilisateurs = utilisateursArray.length
+          const counts = dashUserStats
+            ? {
+                actifs: dashUserStats.utilisateurs_actifs,
+                inactifs: dashUserStats.utilisateurs_inactifs,
+                total: dashUserStats.total_utilisateurs,
+              }
+            : countUsersByStatut(utilisateursArray)
           
           // Construire l'objet de stats avec les vraies données
           stats = {
@@ -126,15 +146,15 @@ const Dashboard = () => {
               alertes_critiques: dashboardData.global?.alertes_critiques || dashboardData.global?.critical_alerts || 0
             },
             users: {
-              actifs: dashboardData.users?.actifs || utilisateursActifs || 0,
-              inactifs: dashboardData.users?.inactifs || utilisateursInactifs || 0,
-              total: dashboardData.users?.total || totalUtilisateurs || 0,
+              actifs: counts.actifs || 0,
+              inactifs: counts.inactifs || 0,
+              total: counts.total || utilisateursArray.length || 0,
               evolution: dashboardData.users?.evolution || '+0%',
               en_ligne: dashboardData.users?.en_ligne || dashboardData.users?.online || 0
             },
             recentActivity: dashboardData.recentActivity && dashboardData.recentActivity.length > 0 
               ? dashboardData.recentActivity 
-              : defaultStats.recentActivity,
+              : DEFAULT_STATS.recentActivity,
             onlineUsers: dashboardData.onlineUsers && dashboardData.onlineUsers.length > 0 
               ? dashboardData.onlineUsers 
               : [],
@@ -162,14 +182,14 @@ const Dashboard = () => {
           console.error('Erreur lors de la récupération des données depuis l\'API:', apiError)
           console.warn('Utilisation des données par défaut en attendant la connexion au backend')
           // En cas d'erreur API, utiliser les données par défaut
-          stats = defaultStats
+          stats = DEFAULT_STATS
         }
         
         setStatsData(stats)
       } catch (err) {
         console.error('Erreur lors du chargement des données:', err)
         setError(err.message || 'Erreur lors du chargement des données')
-        setStatsData(defaultStats)
+        setStatsData(DEFAULT_STATS)
       } finally {
         setLoading(false)
       }
@@ -407,11 +427,15 @@ const Dashboard = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
                 <div className="w-2 h-2 bg-gendarme-green rounded-full animate-pulse"></div>
-                <span className="text-white font-bold">{tousUtilisateurs.filter(u => u.is_active === true).length} actifs</span>
+                <span className="text-white font-bold">{userStats.actifs} actifs</span>
+              </div>
+              <div className="flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                <span className="text-white font-bold">{userStats.inactifs} inactifs</span>
               </div>
               <div className="flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
                 <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                <span className="text-white font-bold">{tousUtilisateurs.filter(u => u.is_active === false).length} inactifs</span>
+                <span className="text-white font-bold">{userStats.suspendus} suspendus</span>
               </div>
             </div>
           </div>
@@ -428,7 +452,7 @@ const Dashboard = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Tous ({tousUtilisateurs.length})
+              Tous ({userStats.total || tousUtilisateurs.length})
             </button>
             <button
               onClick={() => setFiltreStatut('actif')}
@@ -438,7 +462,7 @@ const Dashboard = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Actifs ({tousUtilisateurs.filter(u => (u.statut === 'actif' || (u.is_active === true && !u.statut))).length})
+              Actifs ({userStats.actifs})
             </button>
             <button
               onClick={() => setFiltreStatut('inactif')}
@@ -448,7 +472,7 @@ const Dashboard = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Inactifs ({tousUtilisateurs.filter(u => (u.statut === 'inactif' || (u.is_active === false && u.statut !== 'suspendu'))).length})
+              Inactifs ({userStats.inactifs})
             </button>
             <button
               onClick={() => setFiltreStatut('suspendu')}
@@ -458,58 +482,22 @@ const Dashboard = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              Suspendus ({tousUtilisateurs.filter(u => u.statut === 'suspendu').length})
+              Suspendus ({userStats.suspendus})
             </button>
           </div>
 
           {/* Liste des utilisateurs */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tousUtilisateurs.length > 0 ? (
-              tousUtilisateurs
-                .filter(user => {
-                  // Déterminer le statut réel de l'utilisateur
-                  const userStatut = user.statut?.toLowerCase() || (user.is_active ? 'actif' : 'inactif')
-                  
-                  if (filtreStatut === 'actif') return userStatut === 'actif'
-                  if (filtreStatut === 'inactif') return userStatut === 'inactif'
-                  if (filtreStatut === 'suspendu') return userStatut === 'suspendu'
-                  return true
-                })
+            {filterUsersByStatut(tousUtilisateurs, filtreStatut).length > 0 ? (
+              filterUsersByStatut(tousUtilisateurs, filtreStatut)
                 .map((user, i) => {
-                  // Déterminer le statut réel de l'utilisateur
-                  const userStatut = user.statut?.toLowerCase() || (user.is_active ? 'actif' : 'inactif')
-                  
-                  // Couleurs selon le statut
-                  const statusConfig = {
-                    actif: {
-                      bgGradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      dotColor: '#10b981',
-                      textColor: 'text-green-600',
-                      label: 'Actif',
-                      dotClass: 'bg-green-500 animate-pulse'
-                    },
-                    inactif: {
-                      bgGradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-                      dotColor: '#6b7280',
-                      textColor: 'text-gray-600',
-                      label: 'Inactif',
-                      dotClass: 'bg-gray-500'
-                    },
-                    suspendu: {
-                      bgGradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                      dotColor: '#ef4444',
-                      textColor: 'text-red-600',
-                      label: 'Suspendu',
-                      dotClass: 'bg-red-500'
-                    }
-                  }
-                  
-                  const config = statusConfig[userStatut] || statusConfig.inactif
+                  const userStatut = getStatutEffectif(user)
+                  const config = getStatutConfig(userStatut)
                   
                   return (
                   <div 
                     key={user.id || i}
-                    onClick={() => navigate(`/utilisateurs/${user.id}`)}
+                    onClick={() => navigate(`/utilisateurs/voir/${user.id}`)}
                     className="group bg-white rounded-xl border border-gray-200/60 hover:shadow-lg hover:shadow-blue-500/10 hover:border-blue-300 hover:-translate-y-0.5 transition-all duration-300 p-4 cursor-pointer"
                   >
                     <div className="flex items-center space-x-3">

@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import * as authService from '../services/authService'
 import connectionDetectionService from '../services/connectionDetectionService'
-import { getUserData, isAuthenticated, getCurrentSessionId } from '../utils/sessionStorage'
+import { getUserData, saveUserData, isAuthenticated, getCurrentSessionId } from '../utils/sessionStorage'
 
 const noop = async () => {
   throw new Error('AuthProvider non initialisé – assurez-vous de monter AuthProvider à la racine.')
@@ -87,7 +87,6 @@ export const AuthProvider = ({ children }) => {
                 // Marquer que le serveur est indisponible pour éviter les requêtes répétées
                 sessionStorage.setItem('server_unavailable', 'true')
                 // Ne pas logger - c'est normal si le serveur n'est pas démarré
-              } else if (!isNetworkError) {
               }
             }
           }
@@ -186,9 +185,7 @@ export const AuthProvider = ({ children }) => {
 
       // Détecter et enregistrer la connexion
       try {
-        const detectionResult = await connectionDetectionService.detectConnection()
-        if (detectionResult.success) {
-        }
+        await connectionDetectionService.detectConnection()
       } catch (detectionError) {
         console.warn('Erreur lors de la détection de connexion (non-bloquant):', detectionError)
         // Ne pas bloquer la connexion si la détection échoue
@@ -229,16 +226,10 @@ export const AuthProvider = ({ children }) => {
     try {
       // Enregistrer la déconnexion (optionnel, non-bloquant)
       try {
-        const disconnectResult = await connectionDetectionService.disconnect()
-        if (disconnectResult.success) {
-          // Seulement logger si l'endpoint existe et fonctionne
-          if (process.env.NODE_ENV === 'development') {
-          }
-        }
-        // Si l'endpoint n'existe pas (404), on ignore silencieusement
+        await connectionDetectionService.disconnect()
       } catch (detectionError) {
-        // Ignorer silencieusement - l'endpoint peut ne pas exister
-        if (process.env.NODE_ENV === 'development' && detectionError.response?.status !== 404) {
+        if (import.meta.env.DEV && detectionError.response?.status !== 404) {
+          console.debug('Déconnexion non enregistrée côté serveur:', detectionError)
         }
       }
       
@@ -292,7 +283,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       setUtilisateur(userDataWithPermissions)
-      // Cache refresh
+      saveUserData(userDataWithPermissions)
       return userDataWithPermissions
     } catch (error) {
       console.error('Erreur lors de la mise à jour directe des données utilisateur:', error)
@@ -339,7 +330,7 @@ export const AuthProvider = ({ children }) => {
       
       throw error
     }
-  }, [deconnexion, utilisateur?.id])
+  }, [deconnexion, utilisateur])
 
   // Stabiliser l'objet utilisateur pour éviter les changements de référence inutiles
   const stableUtilisateur = useMemo(() => {
@@ -355,20 +346,11 @@ export const AuthProvider = ({ children }) => {
       grade: utilisateur.grade,
       matricule: utilisateur.matricule,
       statut: utilisateur.statut,
+      telephone: utilisateur.telephone || null,
+      photo_profil: utilisateur.photo_profil || null,
       permissions: utilisateur.permissions ? [...utilisateur.permissions].sort() : [],
     }
-  }, [
-    utilisateur?.id,
-    utilisateur?.email,
-    utilisateur?.username,
-    utilisateur?.nom,
-    utilisateur?.prenom,
-    utilisateur?.role,
-    utilisateur?.grade,
-    utilisateur?.matricule,
-    utilisateur?.statut,
-    utilisateur?.permissions?.join(','), // Comparer les permissions comme string
-  ])
+  }, [utilisateur])
 
   // Mémoïser le value pour éviter les re-rendus inutiles
   const value = useMemo(() => ({

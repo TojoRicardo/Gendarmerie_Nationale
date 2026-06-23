@@ -16,7 +16,7 @@ Structure des URLs (legacy):
     /api/ai-analysis/activite_temps_reel/    - CRUD + IA activité temps réel
 """
 
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .urls_donnees_reelles import urlpatterns as real_urls

@@ -3,7 +3,6 @@
  * Affiche la liste des rapports et permet la génération de nouveaux rapports
  */
 
-import React from 'react';
 import ReportDashboard from '../components/ReportDashboard';
 
 const Rapports = () => {

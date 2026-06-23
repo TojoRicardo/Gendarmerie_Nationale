@@ -56,13 +56,13 @@ class Command(RunserverCommand):
             if available_port != start_port:
                 self.stdout.write(
                     style.WARNING(
-                        f'\n⚠️  Le port {start_port} n\'est pas disponible.\n'
-                        f'🔄 Utilisation du port {available_port} à la place.\n'
+                        f'\n[ATTENTION]  Le port {start_port} n\'est pas disponible.\n'
+                        f' Utilisation du port {available_port} à la place.\n'
                     )
                 )
             else:
                 self.stdout.write(
-                    style.SUCCESS(f'\n✅ Port {available_port} disponible.\n')
+                    style.SUCCESS(f'\n[OK] Port {available_port} disponible.\n')
                 )
             
             # Définir le port trouvé
@@ -80,7 +80,7 @@ class Command(RunserverCommand):
                 port = parts[-1]
                 self.stdout.write(
                     style.SUCCESS(
-                        f'\n✅ Serveur démarré avec succès sur http://{host}:{port}\n'
+                        f'\n[OK] Serveur démarré avec succès sur http://{host}:{port}\n'
                     )
                 )
 

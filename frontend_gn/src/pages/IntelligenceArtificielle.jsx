@@ -9,24 +9,17 @@ import {
   Upload,
   X,
   AlertCircle,
-  AlertTriangle,
   CheckCircle,
-  Camera,
   MonitorPlay,
   BarChart3,
-  TrendingUp,
   Image as ImageIcon,
   ChevronDown,
   ChevronUp,
-  Activity,
-  Lightbulb,
-  Users,
-  Clock,
   RefreshCw,
-  MapPin,
 } from 'lucide-react'
 import { rechercherCorrespondance } from '../sections/IA/services/arcfaceService'
 import ReconnaissanceTempsReelStandalone from '../sections/IA/ReconnaissanceTempsReel.jsx'
+import AnalysePredictiveResultats from '../components/intelligence-artificielle/AnalysePredictiveResultats'
 import api from '../services/api'
 import { useParams } from 'react-router-dom'
 
@@ -60,7 +53,6 @@ const IntelligenceArtificielle = () => {
   const [statusMessage, setStatusMessage] = useState('Aucune correspondance trouvée dans la base de données')
   const [elapsed, setElapsed] = useState(0)
   const [errorMessage, setErrorMessage] = useState(null)
-  const [history, setHistory] = useState([])
   const [landmarks106, setLandmarks106] = useState(null)
   
   
@@ -73,97 +65,13 @@ const IntelligenceArtificielle = () => {
   const canvasRef = useRef(null)
   const imageRef = useRef(null)
 
+  useEffect(() => {
+    if (ficheId) {
+      setSelectedNumeroFiche(ficheId)
+    }
+  }, [ficheId])
+
   const thresholdPercent = Math.round(threshold * 100)
-
-  // Fonction pour obtenir les connexions du maillage facial (106 landmarks)
-  const getFaceMeshConnections = () => {
-    const connections = []
-    
-    // Contour du visage (jawline) - points 0-16
-    for (let i = 0; i < 16; i++) {
-      connections.push([i, i + 1])
-    }
-    
-    // Sourcil droit - points 17-21
-    for (let i = 17; i < 21; i++) {
-      connections.push([i, i + 1])
-    }
-    
-    // Sourcil gauche - points 22-26
-    for (let i = 22; i < 26; i++) {
-      connections.push([i, i + 1])
-    }
-    
-    // Nez - points 27-35
-    for (let i = 27; i < 35; i++) {
-      connections.push([i, i + 1])
-    }
-    
-    // Œil droit - points 36-41
-    for (let i = 36; i < 41; i++) {
-      connections.push([i, i + 1])
-    }
-    connections.push([41, 36]) // Fermer l'œil
-    
-    // Œil gauche - points 42-47
-    for (let i = 42; i < 47; i++) {
-      connections.push([i, i + 1])
-    }
-    connections.push([47, 42]) // Fermer l'œil
-    
-    // Bouche extérieure - points 48-59
-    for (let i = 48; i < 59; i++) {
-      connections.push([i, i + 1])
-    }
-    connections.push([59, 48]) // Fermer la bouche
-    
-    // Bouche intérieure - points 60-67
-    for (let i = 60; i < 67; i++) {
-      connections.push([i, i + 1])
-    }
-    connections.push([67, 60]) // Fermer la bouche intérieure
-    
-    // Lignes verticales pour créer un maillage
-    connections.push([27, 30]) // Nez
-    connections.push([30, 33]) // Nez
-    connections.push([33, 51]) // Vers la bouche
-    connections.push([51, 57]) // Vers la bouche
-    
-    // Lignes horizontales
-    connections.push([36, 42]) // Entre les yeux
-    connections.push([39, 45]) // Entre les yeux
-    
-    // Lignes diagonales pour le maillage
-    connections.push([0, 36]) // Mâchoire vers œil droit
-    connections.push([16, 45]) // Mâchoire vers œil gauche
-    
-    // Maillage supplémentaire pour le contour
-    for (let i = 0; i < 16; i += 2) {
-      if (i + 2 <= 16) {
-        connections.push([i, i + 2])
-      }
-    }
-    
-    return connections
-  }
-
-  // Fonction pour obtenir la couleur d'une zone selon l'index du point
-  const getLandmarkColor = (index) => {
-    // Contour du visage (0-16) - Bleu
-    if (index >= 0 && index <= 16) return { fill: '#3b82f6', stroke: '#1e40af', size: 3.5 }
-    // Sourcils (17-26) - Vert
-    if (index >= 17 && index <= 26) return { fill: '#10b981', stroke: '#047857', size: 3 }
-    // Nez (27-35) - Orange
-    if (index >= 27 && index <= 35) return { fill: '#f97316', stroke: '#c2410c', size: 3.5 }
-    // Yeux (36-47) - Violet
-    if (index >= 36 && index <= 47) return { fill: '#8b5cf6', stroke: '#6d28d9', size: 4 }
-    // Bouche extérieure (48-59) - Rose
-    if (index >= 48 && index <= 59) return { fill: '#ec4899', stroke: '#be185d', size: 3.5 }
-    // Bouche intérieure (60-67) - Rouge
-    if (index >= 60 && index <= 67) return { fill: '#ef4444', stroke: '#b91c1c', size: 3 }
-    // Autres points (68-105) - Jaune
-    return { fill: '#eab308', stroke: '#a16207', size: 3 }
-  }
 
   // Dessiner les landmarks ArcFace avec améliorations
   useEffect(() => {
@@ -264,7 +172,7 @@ const IntelligenceArtificielle = () => {
         setErrorMessage('La détection des landmarks a dépassé le délai de 30 secondes. Le modèle peut être en cours d\'initialisation ou l\'image est trop complexe.')
       } else if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
         // Utiliser le gestionnaire d'erreurs centralisé
-        const { getErrorMessage, isNetworkError } = await import('../utils/errorHandler')
+        const { getErrorMessage } = await import('../utils/errorHandler')
         const errorInfo = getErrorMessage(error)
         setStatusMessage('Photo prête. Serveur non accessible.')
         setErrorMessage(errorInfo.message)
@@ -306,17 +214,6 @@ const IntelligenceArtificielle = () => {
         setResults(matches)
         setStatusMessage(`${matches.length} criminel(s) trouvé(s) dans la base de données.`)
       }
-
-      setHistory((prev) => [
-        {
-          id: `photo-${Date.now()}`,
-          time: new Date(),
-          mode: 'photo',
-          matches: matches.length,
-          threshold: analysis.thresholdPercent ?? thresholdPercent,
-        },
-        ...prev,
-      ])
     } catch (error) {
       console.error('Erreur recherche photo:', error)
       const end = performance.now()
@@ -686,262 +583,7 @@ const IntelligenceArtificielle = () => {
             )}
           </button>
 
-          {caseAnalysis && (
-            <div className="mt-6 space-y-6">
-              {/* Score de risque global - Carte principale */}
-              <div className="relative overflow-hidden rounded-2xl border-2 bg-gradient-to-br from-purple-50 to-indigo-50 p-6 shadow-lg">
-                <div className="relative z-10">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 p-2.5">
-                        <Activity className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold uppercase tracking-wide text-gray-600">Risque Global</p>
-                        <p className="text-xs text-gray-500">Score de confiance: {caseAnalysis.score_confiance?.toFixed(1)}%</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-4xl font-extrabold text-gray-900">
-                        {caseAnalysis.score_risque_global?.toFixed(1)}
-                      </p>
-                      <p className="text-lg font-bold text-gray-600">%</p>
-                    </div>
-                  </div>
-                  {/* Barre de progression */}
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-gray-200">
-                    <div 
-                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 transition-all duration-1000 ease-out"
-                      style={{ width: `${Math.min(caseAnalysis.score_risque_global || 0, 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Grille de mini-cartes */}
-              {caseAnalysis.resultats && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Risque de récidive - Mini carte */}
-                  {caseAnalysis.resultats.recidive && (
-                    <div className="group relative overflow-hidden rounded-xl border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-5 shadow-md transition-all hover:scale-105 hover:shadow-xl">
-                      <div className="relative">
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-orange-500 p-1.5">
-                              <TrendingUp className="h-4 w-4 text-white" />
-                            </div>
-                            <h3 className="text-sm font-bold text-gray-900">Récidive</h3>
-                          </div>
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
-                            caseAnalysis.resultats.recidive.niveau_risque === 'élevé' || caseAnalysis.resultats.recidive.niveau_risque === 'eleve' 
-                              ? 'bg-red-100 text-red-700' 
-                              : caseAnalysis.resultats.recidive.niveau_risque === 'modéré' || caseAnalysis.resultats.recidive.niveau_risque === 'modere'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {caseAnalysis.resultats.recidive.niveau_risque?.charAt(0).toUpperCase() + caseAnalysis.resultats.recidive.niveau_risque?.slice(1)}
-                          </span>
-                        </div>
-                        <p className="mb-3 text-4xl font-extrabold text-gray-900">
-                          {caseAnalysis.resultats.recidive.risque_recidive?.toFixed(1)}<span className="text-xl text-gray-600">%</span>
-                        </p>
-                        {/* Barre de progression */}
-                        <div className="mb-3 h-2 overflow-hidden rounded-full bg-orange-200">
-                          <div 
-                            className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-1000 ease-out"
-                            style={{ width: `${Math.min(caseAnalysis.resultats.recidive.risque_recidive || 0, 100)}%` }}
-                          ></div>
-                        </div>
-                        {caseAnalysis.resultats.recidive.facteurs && caseAnalysis.resultats.recidive.facteurs.length > 0 && (
-                          <div className="mt-3 rounded-lg bg-white/60 p-2.5 backdrop-blur-sm overflow-hidden">
-                            <p className="mb-2 text-xs font-semibold text-gray-600">Facteurs clés:</p>
-                            <div className="space-y-1.5">
-                              {caseAnalysis.resultats.recidive.facteurs.slice(0, 2).map((facteur, idx) => (
-                                <div key={idx} className="flex items-start gap-2 text-xs">
-                                  <div className="h-1.5 w-1.5 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></div>
-                                  <span className="text-gray-700 font-medium break-words flex-1">{facteur.facteur}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Profil de dangerosité - Mini carte */}
-                  {caseAnalysis.resultats.dangerosite && (
-                    <div className="group relative overflow-hidden rounded-xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-rose-50 p-5 shadow-md transition-all hover:scale-105 hover:shadow-xl">
-                      <div className="relative">
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-red-500 p-1.5">
-                              <AlertTriangle className="h-4 w-4 text-white" />
-                            </div>
-                            <h3 className="text-sm font-bold text-gray-900">Dangerosité</h3>
-                          </div>
-                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
-                            caseAnalysis.resultats.dangerosite.niveau_dangerosite === 'élevé' || caseAnalysis.resultats.dangerosite.niveau_dangerosite === 'eleve'
-                              ? 'bg-red-100 text-red-700' 
-                              : caseAnalysis.resultats.dangerosite.niveau_dangerosite === 'modéré' || caseAnalysis.resultats.dangerosite.niveau_dangerosite === 'modere'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {caseAnalysis.resultats.dangerosite.niveau_dangerosite?.charAt(0).toUpperCase() + caseAnalysis.resultats.dangerosite.niveau_dangerosite?.slice(1)}
-                          </span>
-                        </div>
-                        <p className="mb-3 text-4xl font-extrabold text-gray-900">
-                          {caseAnalysis.resultats.dangerosite.score_global?.toFixed(1)}<span className="text-xl text-gray-600">%</span>
-                        </p>
-                        {/* Barre de progression */}
-                        <div className="mb-3 h-2 overflow-hidden rounded-full bg-red-200">
-                          <div 
-                            className="h-full rounded-full bg-gradient-to-r from-red-500 to-rose-500 transition-all duration-1000 ease-out"
-                            style={{ width: `${Math.min(caseAnalysis.resultats.dangerosite.score_global || 0, 100)}%` }}
-                          ></div>
-                        </div>
-                        {caseAnalysis.resultats.dangerosite.scores_detailles && (
-                          <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-white/60 p-2.5 backdrop-blur-sm">
-                            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                              <span className="text-xs font-semibold text-gray-500">Violence</span>
-                              <p className="text-sm font-bold text-red-600">{caseAnalysis.resultats.dangerosite.scores_detailles.violence?.toFixed(0)}%</p>
-                            </div>
-                            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                              <span className="text-xs font-semibold text-gray-500">Fréquence</span>
-                              <p className="text-sm font-bold text-orange-600">{caseAnalysis.resultats.dangerosite.scores_detailles.frequence?.toFixed(0)}%</p>
-                            </div>
-                            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                              <span className="text-xs font-semibold text-gray-500">Gravité</span>
-                              <p className="text-sm font-bold text-amber-600">{caseAnalysis.resultats.dangerosite.scores_detailles.gravite?.toFixed(0)}%</p>
-                            </div>
-                            <div className="rounded-lg bg-white px-3 py-2 shadow-sm">
-                              <span className="text-xs font-semibold text-gray-500">Évolution</span>
-                              <p className="text-sm font-bold text-purple-600">{caseAnalysis.resultats.dangerosite.scores_detailles.evolution?.toFixed(0)}%</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Zones à risque - Mini carte */}
-                  {caseAnalysis.resultats.zones_risque && caseAnalysis.resultats.zones_risque.zones_risque && (
-                    <div className="group relative overflow-hidden rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-5 shadow-md transition-all hover:scale-105 hover:shadow-xl">
-                      <div className="relative">
-                        <div className="mb-3 flex items-center gap-2">
-                          <div className="rounded-lg bg-blue-500 p-1.5">
-                            <MapPin className="h-4 w-4 text-white" />
-                          </div>
-                          <h3 className="text-sm font-bold text-gray-900">Zones à risque</h3>
-                        </div>
-                          <div className="space-y-2">
-                            {caseAnalysis.resultats.zones_risque.zones_risque.slice(0, 3).map((zone, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 rounded-lg bg-white/80 p-2.5 shadow-sm backdrop-blur-sm">
-                                <span className="text-xs font-semibold text-gray-800 break-words flex-1">{zone.lieu}</span>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <div className="h-2 w-16 overflow-hidden rounded-full bg-blue-100">
-                                    <div 
-                                      className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
-                                      style={{ width: `${Math.min(zone.probabilite || 0, 100)}%` }}
-                                    ></div>
-                                  </div>
-                                  <span className="rounded-full bg-blue-500 px-2.5 py-0.5 text-xs font-bold text-white min-w-[3rem] text-center whitespace-nowrap">
-                                    {zone.probabilite?.toFixed(0)}%
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          {caseAnalysis.resultats.zones_risque.zones_risque.length > 3 && (
-                            <p className="text-center text-xs font-medium text-gray-500">+{caseAnalysis.resultats.zones_risque.zones_risque.length - 3} autre(s)</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Associations criminelles - Mini carte */}
-                  {caseAnalysis.resultats.associations && (
-                    <div className="group relative overflow-hidden rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 p-5 shadow-md transition-all hover:scale-105 hover:shadow-xl">
-                      <div className="relative">
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-lg bg-indigo-500 p-1.5">
-                              <Users className="h-4 w-4 text-white" />
-                            </div>
-                            <h3 className="text-sm font-bold text-gray-900">Associations</h3>
-                          </div>
-                          <span className="rounded-full bg-indigo-500 px-3 py-1 text-xs font-bold text-white">
-                            {caseAnalysis.resultats.associations.nb_associations || 0} détectée(s)
-                          </span>
-                        </div>
-                        {caseAnalysis.resultats.associations.associations && caseAnalysis.resultats.associations.associations.length > 0 ? (
-                          <div className="space-y-2">
-                            {caseAnalysis.resultats.associations.associations.slice(0, 3).map((asso, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 rounded-lg bg-white/80 p-2.5 shadow-sm backdrop-blur-sm">
-                                <span className="text-xs font-semibold text-gray-800 break-words flex-1">{asso.nom_complet}</span>
-                                <span className="rounded-full bg-indigo-500 px-2.5 py-0.5 text-xs font-bold text-white min-w-[3rem] text-center whitespace-nowrap flex-shrink-0">
-                                  {asso.probabilite?.toFixed(0)}%
-                                </span>
-                              </div>
-                            ))}
-                            {caseAnalysis.resultats.associations.associations.length > 3 && (
-                              <p className="text-center text-xs font-medium text-gray-500">+{caseAnalysis.resultats.associations.associations.length - 3} autre(s)</p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center py-6">
-                            <div className="mb-2 rounded-full bg-indigo-100 p-3">
-                              <Users className="h-6 w-6 text-indigo-400" />
-                            </div>
-                            <p className="text-sm font-medium text-gray-500">Aucune association détectée</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Recommandations - Section séparée */}
-              {caseAnalysis.recommandations && caseAnalysis.recommandations.length > 0 && (
-                <div className="mt-6 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-6 shadow-lg">
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 p-2.5">
-                      <Lightbulb className="h-5 w-5 text-white" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900">Recommandations</h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {caseAnalysis.recommandations.map((rec, idx) => (
-                      <div key={idx} className="flex items-start gap-4 rounded-xl bg-white/80 p-6 shadow-sm backdrop-blur-sm">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 shadow-md">
-                          <span className="text-lg font-bold text-white">{idx + 1}</span>
-                        </div>
-                        <p className="text-base font-medium leading-relaxed text-gray-800 pt-1.5">
-                          {rec}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Liens détectés - Mini carte */}
-              {caseAnalysis.liens_detectes && caseAnalysis.liens_detectes.length > 0 && (
-                <div className="mt-6 rounded-2xl border-2 border-teal-200 bg-gradient-to-br from-teal-50 to-emerald-50 p-6 shadow-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 p-2.5">
-                      <Users className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">Liens détectés</h3>
-                      <p className="text-sm text-gray-600">{caseAnalysis.liens_detectes.length} connexion(s) identifiée(s)</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {caseAnalysis && <AnalysePredictiveResultats caseAnalysis={caseAnalysis} />}
         </div>
       </div>
     </div>

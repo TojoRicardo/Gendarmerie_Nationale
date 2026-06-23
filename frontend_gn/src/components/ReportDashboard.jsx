@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Download, Plus, X, Calendar, Clock, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
+import reportService from '../services/reportService';
 
 const formatDateFR = (dateString) => {
   if (!dateString) return '';
@@ -29,13 +30,6 @@ const ReportDashboard = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, reportId: null, reportTitle: null });
   const [deleting, setDeleting] = useState(false);
-
-  const reportTypes = [
-    { value: 'statistique', label: 'Rapport Statistique', icon: FileText },
-    { value: 'criminel', label: 'Rapport Criminel', icon: FileText },
-    { value: 'enquete', label: 'Rapport d\'Enquête', icon: FileText },
-    { value: 'audit', label: 'Rapport d\'Audit', icon: FileText },
-  ];
 
   const periodeTypes = [
     { value: 'journalier', label: 'Journalier', description: 'Rapport du jour' },
@@ -102,13 +96,13 @@ const ReportDashboard = () => {
   const loadReports = async () => {
     try {
       setLoading(true);
-      console.log('🔵 [ReportDashboard] Début du chargement des rapports...');
+      console.log('[ReportDashboard] Début du chargement des rapports...');
       // Utiliser /rapports/reports/ car le router DRF génère les routes sous le préfixe 'reports'
-      console.log('🔵 [ReportDashboard] URL appelée:', '/rapports/reports/');
+      console.log('[ReportDashboard] URL appelée:', '/rapports/reports/');
       
       const response = await api.get('/rapports/reports/');
       
-      console.log('✅ [ReportDashboard] Réponse reçue du serveur:');
+      console.log('[OK] [ReportDashboard] Réponse reçue du serveur:');
       console.log('   - Status:', response.status);
       console.log('   - Headers:', response.headers);
       console.log('   - Content-Type:', response.headers['content-type']);
@@ -118,7 +112,7 @@ const ReportDashboard = () => {
       // Vérifier que la réponse est bien en JSON
       const contentType = response.headers['content-type'] || '';
       if (!contentType.includes('application/json')) {
-        console.warn('⚠️ [ReportDashboard] Attention: Content-Type n\'est pas application/json:', contentType);
+        console.warn('[ATTENTION] [ReportDashboard] Attention: Content-Type n\'est pas application/json:', contentType);
       }
       
       // Extraire les données
@@ -126,31 +120,31 @@ const ReportDashboard = () => {
       if (response.data) {
         if (response.data.results) {
           // Format paginé DRF
-          console.log('📄 [ReportDashboard] Format paginé détecté (results)');
+          console.log('[ReportDashboard] Format paginé détecté (results)');
           reportsData = response.data.results;
           console.log('   - Nombre de résultats:', reportsData.length);
           console.log('   - Données complètes:', response.data);
         } else if (Array.isArray(response.data)) {
           // Format array direct
-          console.log('📄 [ReportDashboard] Format array direct détecté');
+          console.log('[ReportDashboard] Format array direct détecté');
           reportsData = response.data;
           console.log('   - Nombre de rapports:', reportsData.length);
         } else if (typeof response.data === 'object') {
           // Format objet
-          console.log('📄 [ReportDashboard] Format objet détecté');
+          console.log('[ReportDashboard] Format objet détecté');
           console.log('   - Clés disponibles:', Object.keys(response.data));
           reportsData = [];
         }
       }
       
-      console.log('📊 [ReportDashboard] Données des rapports extraites:');
+      console.log('[ReportDashboard] Données des rapports extraites:');
       console.log('   - Type:', Array.isArray(reportsData) ? 'Array' : typeof reportsData);
       console.log('   - Nombre:', reportsData.length);
       console.log('   - Contenu:', JSON.stringify(reportsData, null, 2));
       
       // Vérifier chaque rapport
       if (Array.isArray(reportsData) && reportsData.length > 0) {
-        console.log('📋 [ReportDashboard] Détails des rapports:');
+        console.log('[ReportDashboard] Détails des rapports:');
         reportsData.forEach((report, index) => {
           console.log(`   Rapport ${index + 1}:`, {
             id: report.id,
@@ -164,11 +158,11 @@ const ReportDashboard = () => {
       }
       
       const finalReports = Array.isArray(reportsData) ? reportsData : [];
-      console.log('✅ [ReportDashboard] Rapports finaux à afficher:', finalReports.length);
+      console.log('[OK] [ReportDashboard] Rapports finaux à afficher:', finalReports.length);
       setReports(finalReports);
       
     } catch (err) {
-      console.error('❌ [ReportDashboard] Erreur lors du chargement des rapports:');
+      console.error('[ERREUR] [ReportDashboard] Erreur lors du chargement des rapports:');
       console.error('   - Type d\'erreur:', err.name);
       console.error('   - Message:', err.message);
       console.error('   - Code:', err.code);
@@ -254,7 +248,7 @@ const ReportDashboard = () => {
           try {
             // Utiliser directement l'URL du fichier si disponible (plus fiable que l'endpoint)
             const fileUrl = response.data.url_fichier;
-            console.log('🔵 [ReportDashboard] Téléchargement direct depuis URL:', fileUrl);
+            console.log('[ReportDashboard] Téléchargement direct depuis URL:', fileUrl);
             const link = document.createElement('a');
             link.href = fileUrl;
             link.setAttribute('download', `rapport_${rapportId}.pdf`);
@@ -364,7 +358,7 @@ const ReportDashboard = () => {
     try {
       // Vérifier que reportId est bien défini et n'est pas une chaîne littérale
       if (!reportId || reportId === '{uuid}' || reportId === '{reportId}' || reportId === '{rapportId}') {
-        console.error('❌ [ReportDashboard] Erreur: reportId invalide:', reportId);
+        console.error('[ERREUR] [ReportDashboard] Erreur: reportId invalide:', reportId);
         alert('Erreur: ID de rapport invalide. Veuillez réessayer.');
         return;
       }
@@ -372,7 +366,7 @@ const ReportDashboard = () => {
       // Chercher le rapport dans la liste pour obtenir l'URL du fichier directement
       const report = reports.find(r => r.id === reportId);
       if (report && report.url_fichier) {
-        console.log('🔵 [ReportDashboard] Téléchargement direct depuis URL du rapport:', report.url_fichier);
+        console.log('[ReportDashboard] Téléchargement direct depuis URL du rapport:', report.url_fichier);
         const link = document.createElement('a');
         link.href = report.url_fichier;
         link.setAttribute('download', `rapport_${reportId}.${format}`);
@@ -383,7 +377,7 @@ const ReportDashboard = () => {
         return;
       }
       
-      console.log('🔵 [ReportDashboard] Téléchargement via endpoint:', {
+      console.log('[ReportDashboard] Téléchargement via endpoint:', {
         reportId: reportId,
         format: format,
         url: `/rapports/telecharger/${reportId}/`
@@ -429,7 +423,7 @@ const ReportDashboard = () => {
               } else {
                 errorMessage = text || 'Le fichier du rapport n\'a pas été trouvé';
               }
-            } catch (parseErr) {
+            } catch (_parseErr) {
               errorMessage = 'Le fichier du rapport n\'a pas été trouvé. Le rapport peut ne pas avoir été généré correctement.';
             }
           } else if (typeof err.response.data === 'object' && err.response.data !== null) {
@@ -446,7 +440,7 @@ const ReportDashboard = () => {
             } else {
               errorMessage = text || `Erreur ${err.response.status}`;
             }
-          } catch (parseErr) {
+          } catch (_parseErr) {
             errorMessage = `Erreur ${err.response.status}: Impossible de lire le message d'erreur`;
           }
         } else if (typeof err.response.data === 'object' && err.response.data !== null) {
@@ -483,7 +477,7 @@ const ReportDashboard = () => {
 
     setDeleting(true);
     try {
-      await api.delete(`/rapports/${deleteConfirm.reportId}/`);
+      await reportService.supprimerRapport(deleteConfirm.reportId);
       // Recharger la liste des rapports après suppression
       await loadReports();
       setDeleteConfirm({ show: false, reportId: null, reportTitle: null });

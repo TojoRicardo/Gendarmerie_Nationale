@@ -1,4 +1,3 @@
-import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import ListeFichesCriminelles from '../../components/fiches-criminelles/ListeFichesCriminelles'
 import { AlertTriangle } from 'lucide-react'
@@ -12,7 +11,7 @@ const FichesCriminelles = () => {
   const navigate = useNavigate()
   const notification = useNotification()
   const { utilisateur } = useAuth()
-  const { hasPermission, canModify, canDelete, displayRestrictions, isObservateur, isAnalyste, isEnqueteurPrincipal, isAdmin } = usePermissions()
+  const { hasPermission, canModify, canDelete, isObservateur, isAnalyste, isEnqueteurPrincipal, isAdmin } = usePermissions()
   const handleCreer = () => {
     navigate('/fiches-criminelles/creer')
   }

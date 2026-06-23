@@ -10,7 +10,7 @@ import numpy as np
 from collections import defaultdict
 from datetime import timedelta
 from typing import Dict, Any
-from django.db.models import Count, Avg
+from django.db.models import Count
 from django.utils import timezone
 
 from criminel.models import (

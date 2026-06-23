@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { FileText, Brain, TrendingUp, BarChart3, Download, X } from 'lucide-react';
 import { generateAnalysisReport, formatAnalysisReport } from '../../src/services/auditAnalysisReportService';
 import { downloadAuditAnalysisPDF } from '../../src/utils/pdfGenerator';

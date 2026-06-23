@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false, reportArgumentType=false
 import logging
 import os
 import zipfile
@@ -96,7 +97,7 @@ class EnqueteDownloadService:
                 fiche_filename = fiche_filename.replace('/', '_').replace('\\', '_').replace(':', '_')
                 zip_path_fiche = f"enquete_{enquete.id}/fiche_criminelle/{fiche_filename}"
                 zip_file.writestr(zip_path_fiche, pdf_content)
-                logger.info(f"✓ Fiche criminelle PDF ajoutée: {zip_path_fiche} ({len(pdf_content)} bytes)")
+                logger.info(f"[OK] Fiche criminelle PDF ajoutée: {zip_path_fiche} ({len(pdf_content)} bytes)")
                 
                 preuves_count = EnqueteDownloadService._add_preuves(zip_file, criminel, enquete.id)
                 rapports_count = EnqueteDownloadService._add_rapports(zip_file, criminel, enquete.id)
@@ -109,10 +110,10 @@ class EnqueteDownloadService:
             
             with zipfile.ZipFile(zip_buffer, 'r') as test_zip:
                 file_list = test_zip.namelist()
-                logger.info(f"✓✓✓ Archive ZIP créée avec succès ({len(file_list)} fichiers)")
+                logger.info(f"[OK] Archive ZIP créée avec succès ({len(file_list)} fichiers)")
                 for file_name in sorted(file_list):
                     file_info = test_zip.getinfo(file_name)
-                    logger.info(f"  ✓ {file_name} ({file_info.file_size} bytes)")
+                    logger.info(f"  [OK] {file_name} ({file_info.file_size} bytes)")
             
             zip_buffer.seek(0)
             return zip_buffer
@@ -138,11 +139,11 @@ class EnqueteDownloadService:
                             zip_path = f"enquete_{enquete_id}/fiche_criminelle/pieces_jointes/preuves/{safe_file_name}"
                             zip_file.write(file_path, zip_path)
                             preuves_count += 1
-                            logger.info(f"  ✓ Preuve {preuve.id} ajoutée: {safe_file_name}")
+                            logger.info(f"  [OK] Preuve {preuve.id} ajoutée: {safe_file_name}")
                         else:
-                            logger.warning(f"  ⚠ Fichier preuve {preuve.id} introuvable: {file_path}")
+                            logger.warning(f"  [WARNING] Fichier preuve {preuve.id} introuvable: {file_path}")
                     except Exception as e:
-                        logger.warning(f"  ⚠ Impossible d'ajouter la preuve {preuve.id}: {e}")
+                        logger.warning(f"  [WARNING] Impossible d'ajouter la preuve {preuve.id}: {e}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout des preuves: {e}", exc_info=True)
         
@@ -179,9 +180,9 @@ CONTENU:
                     zip_path = f"enquete_{enquete_id}/fiche_criminelle/pieces_jointes/rapports/{rapport_filename}"
                     zip_file.writestr(zip_path, rapport_content.encode('utf-8'))
                     rapports_count += 1
-                    logger.info(f"  ✓ Rapport {rapport.id} ajouté: {rapport_filename}")
+                    logger.info(f"  [OK] Rapport {rapport.id} ajouté: {rapport_filename}")
                 except Exception as e:
-                    logger.warning(f"  ⚠ Impossible d'ajouter le rapport {rapport.id}: {e}")
+                    logger.warning(f"  [WARNING] Impossible d'ajouter le rapport {rapport.id}: {e}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout des rapports: {e}", exc_info=True)
         
@@ -216,9 +217,9 @@ TEXTE:
                     zip_path = f"enquete_{enquete_id}/fiche_criminelle/pieces_jointes/observations/{observation_filename}"
                     zip_file.writestr(zip_path, observation_content.encode('utf-8'))
                     observations_count += 1
-                    logger.info(f"  ✓ Observation {observation.id} ajoutée: {observation_filename}")
+                    logger.info(f"  [OK] Observation {observation.id} ajoutée: {observation_filename}")
                 except Exception as e:
-                    logger.warning(f"  ⚠ Impossible d'ajouter l'observation {observation.id}: {e}")
+                    logger.warning(f"  [WARNING] Impossible d'ajouter l'observation {observation.id}: {e}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout des observations: {e}", exc_info=True)
         
@@ -253,7 +254,7 @@ TEXTE:
             enquete_json = json.dumps(enquete_data, ensure_ascii=False, indent=2, default=str)
             zip_path = f"enquete_{enquete.id}/donnees_enquete.json"
             zip_file.writestr(zip_path, enquete_json.encode('utf-8'))
-            logger.info(f"✓ Données enquête JSON ajoutées: {zip_path}")
+            logger.info(f"[OK] Données enquête JSON ajoutées: {zip_path}")
         except Exception as e:
             logger.error(f"Erreur lors de l'ajout des données JSON: {e}", exc_info=True)
     
@@ -307,7 +308,7 @@ Aucun fichier ne peut être téléchargé hors de son contexte légal.
 """
             zip_path = f"enquete_{enquete.id}/README.txt"
             zip_file.writestr(zip_path, readme_content.encode('utf-8'))
-            logger.info(f"✓ README ajouté: {zip_path}")
+            logger.info(f"[OK] README ajouté: {zip_path}")
         except Exception as e:
             logger.warning(f"Erreur lors de la création du README: {e}")
     
@@ -354,7 +355,7 @@ Aucun fichier ne peut être téléchargé hors de son contexte légal.
                 response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
                 response['Content-Length'] = str(len(zip_buffer.getvalue()))
                 
-                logger.info(f"✓ Archive ZIP prête: {zip_filename} ({len(zip_buffer.getvalue())} bytes)")
+                logger.info(f"[OK] Archive ZIP prête: {zip_filename} ({len(zip_buffer.getvalue())} bytes)")
                 return response
             else:
                 logger.warning(f"Aucune enquête trouvée pour criminel {criminel_id}, retour du PDF seul")

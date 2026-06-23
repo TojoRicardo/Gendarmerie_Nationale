@@ -27,7 +27,7 @@ export const useTokenRefresh = () => {
     }
 
     console.log(' Système de rafraîchissement automatique du token démarré')
-    console.log(`⏱ Vérification toutes les ${ENV.TOKEN_REFRESH_INTERVAL / 60000} minutes`)
+    console.log(`Vérification toutes les ${ENV.TOKEN_REFRESH_INTERVAL / 60000} minutes`)
 
     // Vérifier immédiatement au montage
     checkAndRefreshToken()

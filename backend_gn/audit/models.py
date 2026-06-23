@@ -9,9 +9,19 @@ from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.auth import get_user_model
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import logging
 import json
+
+from .typing_helpers import (
+    as_datetime,
+    as_dict,
+    as_optional_str,
+    as_str,
+    format_time,
+    is_user_authenticated,
+    related_username,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +38,7 @@ class UserSession(models.Model):
         related_name='user_sessions',
         verbose_name='Utilisateur'
     )
+
     session_key = models.CharField(
         max_length=255,
         unique=True,
@@ -66,8 +77,8 @@ class UserSession(models.Model):
             models.Index(fields=['session_key']),
         ]
     
-    def __str__(self):
-        return f"Session {self.user.username if self.user else 'Anonyme'} - {self.start_time}"
+    def __str__(self) -> str:
+        return f"Session {related_username(getattr(self, 'user', None), 'Anonyme')} - {self.start_time}"
     
     def close(self):
         """Ferme la session en enregistrant l'heure de fin."""
@@ -81,6 +92,9 @@ class AuditLog(models.Model):
     Modèle professionnel pour enregistrer toutes les actions des utilisateurs.
     Format compatible avec les systèmes d'audit des organisations policières.
     """
+
+    if TYPE_CHECKING:
+        objects: models.Manager
     
     # Types d'actions possibles
     ACTION_CHOICES = [
@@ -385,7 +399,7 @@ class AuditLog(models.Model):
     
     # Statut
     reussi = models.BooleanField(
-        default=True,
+        default=True,  # pyright: ignore[reportArgumentType]
         verbose_name='Action réussie',
         help_text='Indique si l\'action a été effectuée avec succès'
     )
@@ -446,7 +460,7 @@ class AuditLog(models.Model):
         if self.user_agent and (not self.browser or not self.os):
             try:
                 from .user_agent_parser import parse_user_agent
-                ua_info = parse_user_agent(self.user_agent)
+                ua_info = parse_user_agent(as_optional_str(self.user_agent))
                 if not self.browser and ua_info.get('navigateur'):
                     self.browser = ua_info['navigateur']
                 if not self.os and ua_info.get('systeme'):
@@ -465,11 +479,9 @@ class AuditLog(models.Model):
         Format structuré et narratif sans emojis.
         """
         try:
+            user_display = "Système"
             # Formater la date en français
-            if self.timestamp:
-                dt = self.timestamp
-            else:
-                dt = timezone.now()
+            dt = as_datetime(self.timestamp)
             
             months = {
                 1: "janvier", 2: "février", 3: "mars", 4: "avril",
@@ -486,13 +498,9 @@ class AuditLog(models.Model):
             lines.append(f"Date : {date_str}")
             
             # Utilisateur
-            if self.user and self.user.is_authenticated:
-                full_name = f"{self.user.first_name} {self.user.last_name}".strip()
-                if full_name:
-                    user_display = full_name
-                else:
-                    user_display = self.user.username
-                
+            if is_user_authenticated(getattr(self, 'user', None)):
+                from .audit_service import get_user_display_name
+                user_display = get_user_display_name(self.user)
                 if self.user_role:
                     lines.append(f"Utilisateur : {self.user_role} {user_display}")
                 else:
@@ -502,16 +510,17 @@ class AuditLog(models.Model):
             
             lines.append("")
             
-            if self.session:
-                start = self.session.start_time.strftime('%H:%M:%S') if self.session.start_time else 'N/A'
-                end = self.session.end_time.strftime('%H:%M:%S') if self.session.end_time else 'En cours'
+            session = getattr(self, 'session', None)
+            if session is not None:
+                start = format_time(getattr(session, 'start_time', None), '%H:%M:%S')
+                end = format_time(getattr(session, 'end_time', None), '%H:%M:%S', 'En cours')
                 lines.append(f"Session : {start} → {end}")
             elif self.start_time and self.end_time:
-                start = self.start_time.strftime('%H:%M:%S')
-                end = self.end_time.strftime('%H:%M:%S')
+                start = format_time(self.start_time, '%H:%M:%S')
+                end = format_time(self.end_time, '%H:%M:%S')
                 lines.append(f"Session : {start} → {end}")
             elif self.start_time:
-                start = self.start_time.strftime('%H:%M:%S')
+                start = format_time(self.start_time, '%H:%M:%S')
                 lines.append(f"Session : {start} → En cours")
             
             lines.append("")
@@ -547,7 +556,8 @@ class AuditLog(models.Model):
                 'PIN_FAILED': 'Échec de validation PIN',
                 'ACCESS_DENIED': 'Accès refusé',
             }
-            action_fr = action_map.get(self.action, self.action.replace('_', ' ').title())
+            action_key = as_str(self.action)
+            action_fr = action_map.get(action_key, action_key.replace('_', ' ').title())
             
             # Ressource
             if self.content_type:
@@ -563,11 +573,11 @@ class AuditLog(models.Model):
             
             # Extraire les détails de la requête si disponibles (copie pour ne pas modifier les données originales)
             request_details = None
-            before_data = self.before or self.changes_before or self.data_before
-            after_data = self.after or self.changes_after or self.data_after
-            if isinstance(after_data, dict) and '_request_details' in after_data:
+            before_data = as_dict(self.before or self.changes_before or self.data_before)
+            after_data = as_dict(self.after or self.changes_after or self.data_after)
+            if '_request_details' in after_data:
                 request_details = after_data.get('_request_details')
-            elif isinstance(before_data, dict) and '_request_details' in before_data:
+            elif '_request_details' in before_data:
                 request_details = before_data.get('_request_details')
             
             lines.append(f"Action : {action_fr}")
@@ -764,30 +774,39 @@ class AuditLog(models.Model):
             if self.reference:
                 ref_audit = self.reference
             else:
-                # Format de fallback si la référence n'est pas générée
-                date_ref = dt.strftime('%Y-%m-%d')
-                ref_audit = f"SGIC-AUDIT-{date_ref}-{self.object_id or self.id}"
+                ref_audit = f"SGIC-AUDIT-{dt.strftime('%Y-%m-%d')}-{getattr(self, 'pk', None) or self.object_id}"
             lines.append(f"Référence audit : {ref_audit}")
             
             # Assembler la description finale
             self.description = "\n".join(lines)
             
-            # Créer aussi une version courte pour l'affichage en liste avec action explicite
-            explicit_action = self._generate_explicit_action()
-            date_short = dt.strftime("%d/%m/%Y à %H:%M:%S")
-            self.description_short = f"{explicit_action} par {user_display if self.user else 'Système'} le {date_short}"
-            
-            # Créer un texte narratif court et explicite
-            self.narrative_text = self._generate_narrative_text()
+            # Format standard prioritaire si fourni par audit_service
+            audit_meta = {}
+            if '_audit' in after_data:
+                audit_meta = after_data['_audit']
+            else:
+                additional_info = as_str(self.additional_info)
+                if additional_info and ' — ' in additional_info:
+                    audit_meta = {'standard_line': additional_info}
+
+            if audit_meta.get('standard_line'):
+                self.description_short = as_str(audit_meta.get('standard_line'))[:500]
+                self.narrative_text = as_str(audit_meta.get('standard_line'))[:1000]
+            else:
+                explicit_action = self._generate_explicit_action()
+                date_short = dt.strftime("%d/%m/%Y à %H:%M:%S")
+                self.description_short = f"{explicit_action} par {user_display if self.user else 'Système'} le {date_short}"
+                self.narrative_text = self._generate_narrative_text()
             
         except Exception as e:
             logger.error(f"Erreur lors de la génération de la description: {e}", exc_info=True)
             # Description de fallback
-            user_display = self.user.username if self.user else "Système"
-            action_fr = self.action.replace('_', ' ').title()
+            user_display = related_username(getattr(self, 'user', None))
+            action_fr = as_str(self.action).replace('_', ' ').title()
             date_str = timezone.now().strftime('%d/%m/%Y à %H:%M:%S')
-            self.description = f"Date : {date_str}\nUtilisateur : {user_display}\nAction : {action_fr}\nRessource : {self.resource_type or 'Ressource'}"
-            self.description_short = f"{action_fr} - {self.resource_type or 'Ressource'} par {user_display}"
+            resource_type = as_str(self.resource_type, 'Ressource')
+            self.description = f"Date : {date_str}\nUtilisateur : {user_display}\nAction : {action_fr}\nRessource : {resource_type}"
+            self.description_short = f"{action_fr} - {resource_type} par {user_display}"
     
     def _generate_explicit_action(self) -> str:
         """
@@ -815,7 +834,8 @@ class AuditLog(models.Model):
             'NAVIGATION': 'a navigué vers',
         }
         
-        base_action = action_map.get(self.action, f"a effectué l'action {self.action.replace('_', ' ').lower()} sur")
+        action_key = as_str(self.action)
+        base_action = action_map.get(action_key, f"a effectué l'action {action_key.replace('_', ' ').lower()} sur")
         
         # Déterminer le type de ressource de manière explicite
         resource_type_display = None
@@ -854,7 +874,7 @@ class AuditLog(models.Model):
                 'Système': 'le système',
                 'Navigation': 'la navigation',
             }
-            resource_type_display = resource_map.get(self.resource_type, f"la ressource {self.resource_type.lower()}")
+            resource_type_display = resource_map.get(as_str(self.resource_type), f"la ressource {as_str(self.resource_type).lower()}")
             resource_id_display = self.resource_id
         
         # Construire la description explicite
@@ -925,20 +945,20 @@ class AuditLog(models.Model):
         Format: "Le [date] à [heure], [utilisateur] a [action explicite] depuis l'adresse IP [ip]."
         """
         if self.timestamp:
-            dt = self.timestamp
+            dt = as_datetime(self.timestamp)
         else:
             dt = timezone.now()
         
         date_str = dt.strftime("%d/%m/%Y")
         time_str = dt.strftime("%H:%M:%S")
         
-        # Nom de l'utilisateur
-        if self.user and self.user.is_authenticated:
-            full_name = f"{self.user.first_name} {self.user.last_name}".strip()
+        user_obj = getattr(self, 'user', None)
+        if is_user_authenticated(user_obj):
+            full_name = f"{getattr(user_obj, 'first_name', '')} {getattr(user_obj, 'last_name', '')}".strip()
             if full_name:
                 user_display = full_name
             else:
-                user_display = self.user.username
+                user_display = related_username(user_obj, "le système")
         else:
             user_display = "le système"
         
@@ -980,7 +1000,7 @@ class AuditLog(models.Model):
             return "Modification standard"
     
     def __str__(self):
-        user_display = self.user.username if self.user else "Système"
+        user_display = related_username(getattr(self, 'user', None))
         if self.content_type:
             resource_display = f"{self.content_type.model}#{self.object_id}" if self.object_id else str(self.content_type)
         else:
@@ -990,7 +1010,7 @@ class AuditLog(models.Model):
     @property
     def action_display(self):
         """Retourne le libellé de l'action."""
-        return self.get_action_display()
+        return dict(self.ACTION_CHOICES).get(as_str(self.action), as_str(self.action))
     
     # Alias pour compatibilité avec l'ancien code
     @property
@@ -1050,9 +1070,10 @@ class AuditLog(models.Model):
         if self.message_erreur:
             status_str = f"{status_str}: {self.message_erreur}"
         
+        user_obj = getattr(self, 'user', None)
         return {
-            "user_id": str(self.user.id) if self.user else "",
-            "email": self.user.email if self.user and hasattr(self.user, 'email') else "",
+            "user_id": str(getattr(user_obj, 'id', '')) if user_obj else "",
+            "email": str(getattr(user_obj, 'email', '')) if user_obj else "",
             "role": self.user_role or "",
             "action": self.action or "",
             "description": self.description or "",
@@ -1066,7 +1087,7 @@ class AuditLog(models.Model):
             "route": self.endpoint or "",
             "method": self.method or "",
             "status": status_str,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else ""
+            "timestamp": as_datetime(self.timestamp).isoformat() if self.timestamp else ""
         }
 
 
@@ -1154,7 +1175,7 @@ class JournalAudit(models.Model):
         ]
     
     def __str__(self):
-        user_display = self.utilisateur.username if self.utilisateur else "Système"
+        user_display = related_username(getattr(self, 'utilisateur', None))
         return f"{user_display} | {self.action}"
     
     @property
@@ -1215,7 +1236,7 @@ class JournalAuditNarratif(models.Model):
     
     # Statut du journal
     est_cloture = models.BooleanField(
-        default=False,
+        default=False,  # pyright: ignore[reportArgumentType]
         verbose_name='Journal clôturé',
         help_text='Indique si le journal est clôturé (session terminée)'
     )
@@ -1265,8 +1286,8 @@ class JournalAuditNarratif(models.Model):
         ]
     
     def __str__(self):
-        user_display = self.user.username if self.user else 'Anonyme'
-        debut_str = self.date_debut.strftime('%d/%m/%Y %H:%M') if self.date_debut else 'N/A'
+        user_display = related_username(getattr(self, 'user', None), 'Anonyme')
+        debut_str = format_time(self.date_debut, '%d/%m/%Y %H:%M')
         status = 'Clôturé' if self.est_cloture else 'En cours'
         return f"Journal {user_display} - {debut_str} ({status})"
     
@@ -1289,13 +1310,16 @@ class JournalAuditNarratif(models.Model):
             return False
         
         # Ajouter la phrase avec formatage
-        if self.description_narrative:
+        narrative = as_str(self.description_narrative)
+        if narrative:
             if ajouter_nouvelle_ligne:
-                self.description_narrative += "\n\n" + phrase
+                narrative += "\n\n" + phrase
             else:
-                self.description_narrative += " " + phrase
+                narrative += " " + phrase
         else:
-            self.description_narrative = phrase
+            narrative = phrase
+        
+        self.description_narrative = narrative
         
         # Sauvegarder automatiquement
         self.save(update_fields=['description_narrative', 'derniere_mise_a_jour'])
@@ -1313,10 +1337,10 @@ class JournalAuditNarratif(models.Model):
         self.date_fin = timezone.now()
         
         # Ajouter la phrase de clôture
-        if self.description_narrative:
-            heure_fin = self.date_fin.strftime('%Hh%M')
+        if narrative := as_str(self.description_narrative):
+            heure_fin = format_time(self.date_fin, '%Hh%M', timezone.now().strftime('%Hh%M'))
             phrase_cloture = f"L'utilisateur s'est déconnecté à {heure_fin}."
-            self.description_narrative += "\n\n" + phrase_cloture
+            self.description_narrative = narrative + "\n\n" + phrase_cloture
         
         self.save(update_fields=['est_cloture', 'date_fin', 'description_narrative', 'derniere_mise_a_jour'])
     
@@ -1326,8 +1350,9 @@ class JournalAuditNarratif(models.Model):
         if not self.date_debut:
             return None
         
-        date_fin = self.date_fin if self.date_fin else timezone.now()
-        return date_fin - self.date_debut
+        date_debut = as_datetime(self.date_debut)
+        date_fin = as_datetime(self.date_fin) if self.date_fin else timezone.now()
+        return date_fin - date_debut
     
     def save(self, *args, **kwargs):
         """

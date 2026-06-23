@@ -82,7 +82,7 @@ class RapportSerializer(serializers.ModelSerializer):
             try:
                 type_display = instance.get_type_rapport_display() if hasattr(instance, 'get_type_rapport_display') else 'Statistique'
                 statut_display = instance.get_statut_display() if hasattr(instance, 'get_statut_display') else 'En attente'
-            except:
+            except Exception:
                 type_display = 'Statistique'
                 statut_display = 'En attente'
             

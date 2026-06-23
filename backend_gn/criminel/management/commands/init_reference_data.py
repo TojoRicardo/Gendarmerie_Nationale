@@ -87,6 +87,6 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.NOTICE(f'  - Statut d\'affaire existe déjà : {statut.libelle} ({statut.code})'))
         
-        self.stdout.write(self.style.SUCCESS(f'\n✅ Initialisation terminée. {created_count} élément(s) créé(s).'))
+        self.stdout.write(self.style.SUCCESS(f'\n[OK] Initialisation terminée. {created_count} élément(s) créé(s).'))
         self.stdout.write(self.style.NOTICE('\nLes données de référence sont maintenant disponibles pour les statistiques.'))
 

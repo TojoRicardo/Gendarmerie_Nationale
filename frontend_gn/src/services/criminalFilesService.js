@@ -3,7 +3,7 @@
  * Gère toutes les opérations CRUD sur les fiches criminelles
  */
 
-import { get, post, put, patch, del } from './apiGlobal'
+import { get, post, patch, del } from './apiGlobal'
 
 /**
  * Récupérer la liste de toutes les fiches criminelles
@@ -267,39 +267,6 @@ export const getCriminalFilesStats = async () => {
 }
 
 /**
- * Récupérer l'historique d'une fiche
- * @param {number} fileId - ID de la fiche
- * @returns {Promise<Array>} Historique
- */
-export const getCriminalFileHistory = async (fileId) => {
-  try {
-    const response = await get(`/criminel/fiches-criminelles/${fileId}/history/`)
-    return response.data
-  } catch (error) {
-    console.error('Erreur récupération historique:', error)
-    throw error
-  }
-}
-
-/**
- * Exporter des fiches criminelles
- * @param {object} params - Paramètres d'export {format, filters}
- * @returns {Promise<Blob>} Fichier d'export
- */
-export const exportCriminalFiles = async (params = {}) => {
-  try {
-    const response = await get('/criminel/fiches-criminelles/export/', {
-      params,
-      responseType: 'blob'
-    })
-    return response.data
-  } catch (error) {
-    console.error('Erreur export fiches:', error)
-    throw error
-  }
-}
-
-/**
  * Récupérer la liste des nationalités
  */
 export const getNationalities = async () => {
@@ -354,8 +321,6 @@ export default {
   deleteCriminalFile,
   searchCriminalFiles,
   getCriminalFilesStats,
-  getCriminalFileHistory,
-  exportCriminalFiles,
   getNationalities,
   getCountries,
 }

@@ -11,15 +11,15 @@ def check_python_version():
     """Vérifie la version de Python"""
     version = sys.version_info
     if version.major >= 3 and version.minor >= 10:
-        print(f"✅ Python {version.major}.{version.minor}.{version.micro}")
+        print(f"[OK] Python {version.major}.{version.minor}.{version.micro}")
         return True
     else:
-        print(f"❌ Python {version.major}.{version.minor}.{version.micro} (3.10+ requis)")
+        print(f"[ERREUR] Python {version.major}.{version.minor}.{version.micro} (3.10+ requis)")
         return False
 
 def check_imports():
     """Vérifie les imports essentiels"""
-    print("\n📦 Vérification des imports...")
+    print("\nVérification des imports...")
     
     modules = {
         'cv2': 'opencv-python-headless',
@@ -32,27 +32,27 @@ def check_imports():
     for module, package in modules.items():
         try:
             __import__(module)
-            print(f"  ✅ {module}")
+            print(f"  [OK] {module}")
         except ImportError:
-            print(f"  ❌ {module} (installer: pip install {package})")
+            print(f"  [ERREUR] {module} (installer: pip install {package})")
             all_ok = False
     
     return all_ok
 
 def check_env_file():
     """Vérifie le fichier .env"""
-    print("\n⚙️  Vérification de la configuration...")
+    print("\nVérification de la configuration...")
     
     env_file = Path('.env')
     env_example = Path('env.example')
     
     if not env_file.exists():
-        print(f"  ⚠️  Fichier .env non trouvé")
+        print("  [ATTENTION] Fichier .env non trouvé")
         if env_example.exists():
-            print(f"  💡 Copier env.example vers .env: cp env.example .env")
+            print("  Copier env.example vers .env: cp env.example .env")
         return False
     
-    print(f"  ✅ Fichier .env trouvé")
+    print("  [OK] Fichier .env trouvé")
     
     # Charger et vérifier les variables essentielles
     from dotenv import load_dotenv
@@ -69,9 +69,9 @@ def check_env_file():
     for var, default in required_vars.items():
         value = os.getenv(var, default)
         if value and value != 'change-me-to-secure-key':
-            print(f"  ✅ {var}: {value[:50]}...")
+            print(f"  [OK] {var}: {value[:50]}...")
         else:
-            print(f"  ⚠️  {var}: Non configuré ou valeur par défaut")
+            print(f"  [ATTENTION] {var}: Non configuré ou valeur par défaut")
             if var == 'UPR_API_KEY':
                 all_ok = False
     
@@ -79,7 +79,7 @@ def check_env_file():
 
 def check_django_models():
     """Vérifie les modèles Django"""
-    print("\n🗄️  Vérification des modèles Django...")
+    print("\nVérification des modèles Django...")
     
     try:
         # Ajouter le chemin backend
@@ -92,8 +92,8 @@ def check_django_models():
             django.setup()
             
             from upr.models import Camera, UPRLog
-            print(f"  ✅ Modèle Camera: {Camera}")
-            print(f"  ✅ Modèle UPRLog: {UPRLog}")
+            print(f"  [OK] Modèle Camera: {Camera}")
+            print(f"  [OK] Modèle UPRLog: {UPRLog}")
             
             # Vérifier si les tables existent
             from django.db import connection
@@ -102,27 +102,27 @@ def check_django_models():
                 tables = [row[0] for row in cursor.fetchall()]
                 
                 if 'sgic_camera' in tables:
-                    print(f"  ✅ Table sgic_camera existe")
+                    print("  [OK] Table sgic_camera existe")
                 else:
-                    print(f"  ⚠️  Table sgic_camera n'existe pas (exécuter: python manage.py migrate)")
+                    print("  [ATTENTION] Table sgic_camera n'existe pas (exécuter: python manage.py migrate)")
                 
                 if 'sgic_uprlog' in tables:
-                    print(f"  ✅ Table sgic_uprlog existe")
+                    print("  [OK] Table sgic_uprlog existe")
                 else:
-                    print(f"  ⚠️  Table sgic_uprlog n'existe pas (exécuter: python manage.py migrate)")
+                    print("  [ATTENTION] Table sgic_uprlog n'existe pas (exécuter: python manage.py migrate)")
             
             return True
         else:
-            print(f"  ⚠️  Dossier backend_gn non trouvé")
+            print("  [ATTENTION] Dossier backend_gn non trouvé")
             return False
             
     except Exception as e:
-        print(f"  ❌ Erreur: {e}")
+        print(f"  [ERREUR] Erreur: {e}")
         return False
 
 def check_cameras():
     """Vérifie l'accès aux caméras"""
-    print("\n📹 Vérification des caméras...")
+    print("\nVérification des caméras...")
     
     try:
         import cv2
@@ -136,25 +136,25 @@ def check_cameras():
                 ret, _ = cap.read()
                 if ret:
                     cameras_found.append(idx)
-                    print(f"  ✅ Caméra USB {idx} détectée")
+                    print(f"  [OK] Caméra USB {idx} détectée")
                 cap.release()
         
         if cameras_found:
-            print(f"  ✅ {len(cameras_found)} caméra(s) USB trouvée(s)")
+            print(f"  [OK] {len(cameras_found)} caméra(s) USB trouvée(s)")
         else:
-            print(f"  ⚠️  Aucune caméra USB détectée (normal si pas de caméra connectée)")
+            print("  [ATTENTION] Aucune caméra USB détectée (normal si pas de caméra connectée)")
         
         return True
     except ImportError:
-        print(f"  ⚠️  OpenCV non disponible")
+        print("  [ATTENTION] OpenCV non disponible")
         return False
     except Exception as e:
-        print(f"  ⚠️  Erreur: {e}")
+        print(f"  [ATTENTION] Erreur: {e}")
         return False
 
 def main():
     """Fonction principale"""
-    print("🔍 Vérification de la configuration du système multi-caméras\n")
+    print("Vérification de la configuration du système multi-caméras\n")
     print("=" * 60)
     
     results = {
@@ -166,11 +166,11 @@ def main():
     }
     
     print("\n" + "=" * 60)
-    print("📋 Résumé:")
+    print("Résumé:")
     
     all_ok = True
     for check, result in results.items():
-        status = "✅" if result else "❌"
+        status = "[OK]" if result else "[ERREUR]"
         print(f"  {status} {check}")
         if not result:
             all_ok = False
@@ -178,11 +178,11 @@ def main():
     print("\n" + "=" * 60)
     
     if all_ok:
-        print("✅ Toutes les vérifications sont passées!")
-        print("💡 Vous pouvez maintenant lancer: python multi_camera_service/main.py")
+        print("[OK] Toutes les vérifications sont passées!")
+        print("Vous pouvez maintenant lancer: python multi_camera_service/main.py")
     else:
-        print("⚠️  Certaines vérifications ont échoué")
-        print("💡 Consultez TROUBLESHOOTING.md pour plus d'aide")
+        print("[ATTENTION] Certaines vérifications ont échoué")
+        print("Consultez TROUBLESHOOTING.md pour plus d'aide")
     
     return 0 if all_ok else 1
 

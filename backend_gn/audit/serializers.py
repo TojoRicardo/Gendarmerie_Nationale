@@ -3,9 +3,8 @@ Serializers pour le Journal d'Audit Professionnel
 """
 
 from rest_framework import serializers
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import AuditLog, JournalAudit, UserSession, JournalAuditNarratif  # JournalAudit est un alias
+from .models import AuditLog, JournalAuditNarratif  # JournalAudit est un alias
 import logging
 
 logger = logging.getLogger(__name__)
@@ -441,7 +440,9 @@ class AuditLogCreateSerializer(serializers.ModelSerializer):
         from .utils import log_action
         
         request = self.context.get('request')
-        
+        data_before = validated_data.get('before') or validated_data.get('data_before')
+        data_after = validated_data.get('after') or validated_data.get('data_after')
+
         # Utiliser log_action pour créer l'entrée avec toutes les informations
         audit_entry = log_action(
             request=request,
@@ -454,10 +455,8 @@ class AuditLogCreateSerializer(serializers.ModelSerializer):
             user_agent=validated_data.get('user_agent'),
             browser=validated_data.get('browser'),
             os=validated_data.get('os'),
-            before=validated_data.get('before') or validated_data.get('data_before'),
-            after=validated_data.get('after') or validated_data.get('data_after'),
-            data_before=validated_data.get('data_before'),
-            data_after=validated_data.get('data_after'),
+            data_before=data_before,
+            data_after=data_after,
             reussi=validated_data.get('reussi', True),
             message_erreur=validated_data.get('message_erreur'),
         )
@@ -485,6 +484,7 @@ class SessionAuditSerializer(serializers.Serializer):
     end_time = serializers.DateTimeField(read_only=True)
     duration_minutes = serializers.IntegerField(read_only=True)
     actions_count = serializers.IntegerField(read_only=True)
+    actions_count_total = serializers.IntegerField(read_only=True, required=False)
     actions = AuditLogSerializer(many=True, read_only=True)
     actions_summary = serializers.SerializerMethodField()
     description_short = serializers.SerializerMethodField()
@@ -501,11 +501,13 @@ class SessionAuditSerializer(serializers.Serializer):
         return "Système"
     
     def get_actions_summary(self, obj):
-        """Retourne un résumé des actions de la session."""
+        """Retourne un résumé des actions de la session (hors navigation)."""
         actions = obj.get('actions', [])
         summary = {}
         for action in actions:
             action_type = action.action if hasattr(action, 'action') else action.get('action', 'UNKNOWN')
+            if action_type == 'NAVIGATION':
+                continue
             summary[action_type] = summary.get(action_type, 0) + 1
         return summary
     
@@ -525,9 +527,14 @@ class AuditLogStatistiquesSerializer(serializers.Serializer):
     """Serializer pour les statistiques du Journal d'Audit."""
     
     total_actions = serializers.IntegerField()
+    total_actions_visibles = serializers.IntegerField(required=False)
+    navigation_actions = serializers.IntegerField(required=False)
     actions_aujourdhui = serializers.IntegerField()
+    actions_aujourdhui_visibles = serializers.IntegerField(required=False)
     actions_7_jours = serializers.IntegerField()
+    actions_7_jours_visibles = serializers.IntegerField(required=False)
     actions_30_jours = serializers.IntegerField()
+    actions_30_jours_visibles = serializers.IntegerField(required=False)
     
     par_action = serializers.DictField()
     par_ressource = serializers.DictField()

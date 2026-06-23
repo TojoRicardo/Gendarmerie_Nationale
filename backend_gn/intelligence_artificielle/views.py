@@ -1,15 +1,37 @@
 ﻿import logging
+import json
+import time
 from typing import Any, Dict, List, Optional
 
+import cv2
+import numpy as np
+from django.core.files.base import ContentFile
+from django.db.models import Q
+from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import Q
-from django.utils import timezone
+from rest_framework.views import APIView
+
+from backend.ia.exceptions import (
+    FaceModelUnavailableError,
+    FaceRecognitionError,
+    InvalidImageError,
+    NoFaceDetectedError,
+    NoMatchFoundError,
+)
+from backend.ia.photo_search import search_criminal_by_photo
+from backend.ia.realtime_capture import analyze_realtime_capture
+from biometrie.arcface_service import ArcFaceService
+from biometrie.models import Biometrie
+from criminel.models import CriminalFicheCriminelle
+
 from .models import (
     IAReconnaissanceFaciale, IAAnalyseStatistique, IAMatchBiometrique, 
-    IAPrediction, IAPattern, IACorrelation
+    IAPrediction, IAPattern, IACorrelation, RechercheIA
 )
 from .serializers import (
     IAReconnaissanceFacialeSerializer, IAReconnaissanceFacialeCreateSerializer,
@@ -19,6 +41,10 @@ from .serializers import (
     IAPatternSerializer, IAPatternCreateSerializer,
     IACorrelationSerializer, IACorrelationCreateSerializer
 )
+from . import services
+from .ia_service import FaceRecognitionIAService, FaceRecognitionUnavailable
+
+logger = logging.getLogger(__name__)
 
 
 class IAReconnaissanceFacialeViewSet(viewsets.ModelViewSet):
@@ -413,25 +439,6 @@ class IACorrelationViewSet(viewsets.ModelViewSet):
 
 
 #NOUVEAUX ENDPOINTS IA FONCTIONNELS
-
-from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-import numpy as np
-import cv2
-import json
-import time
-from django.core.files.base import ContentFile
-from django.utils import timezone
-from django.db import transaction
-from django.urls import reverse
-
-from biometrie.arcface_service import ArcFaceService
-from biometrie.models import Biometrie
-from criminel.models import CriminalFicheCriminelle
-from .models import RechercheIA
-from . import services
-from .ia_service import FaceRecognitionIAService, FaceRecognitionUnavailable
-
 
 class ReconnaissanceViewSet(APIView):
     """Endpoint pour la recherche par photo basée sur les embeddings ArcFace."""
@@ -1497,22 +1504,6 @@ class StatistiquesIAViewSet(APIView):
 
 
 #RECONNAISSANCE FACIALE ARCFACE
-
-from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.core.files.base import ContentFile
-from criminel.models import CriminalFicheCriminelle
-
-from backend.ia.photo_search import search_criminal_by_photo
-from backend.ia.realtime_capture import analyze_realtime_capture
-from backend.ia.exceptions import (
-    FaceModelUnavailableError,
-    FaceRecognitionError,
-    InvalidImageError,
-    NoFaceDetectedError,
-    NoMatchFoundError,
-)
-
 
 class FaceRecognitionView(APIView):
     """

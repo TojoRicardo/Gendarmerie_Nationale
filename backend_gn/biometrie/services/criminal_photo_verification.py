@@ -5,13 +5,11 @@ Compare automatiquement les nouvelles photos avec les existantes via ArcFace.
 
 import logging
 import numpy as np
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from django.core.files.uploadedfile import UploadedFile
-from django.core.files.base import File
 
 from biometrie.models import BiometriePhoto
 from biometrie.arcface_service import get_shared_arcface_service, ArcFaceService
-from criminel.models import CriminalFicheCriminelle
 
 logger = logging.getLogger(__name__)
 

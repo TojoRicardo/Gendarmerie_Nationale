@@ -4,9 +4,6 @@ avec support des bounding boxes et points faciaux
 """
 
 import logging
-import numpy as np
-from typing import Dict, List, Optional, Any
-from datetime import datetime
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -14,16 +11,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
-from django.db import transaction
-from django.core.files.base import ContentFile
 
 from .models import (
-    IACaseAnalysis, IAModelTraining,
-    RechercheIA
+    IACaseAnalysis, IAModelTraining
 )
 from .ai_services.analyse_predictive import AnalysePredictiveService
-from biometrie.arcface_service import ArcFaceService
-from biometrie.models import Biometrie
 from criminel.models import CriminalFicheCriminelle
 
 logger = logging.getLogger(__name__)
@@ -169,10 +161,11 @@ class CaseAnalysisAPIView(APIView):
             # Effectuer l'analyse selon le type
             resultats = {}
             score_risque_global = 0.0
-            scores_confiance = []  # Liste pour collecter tous les scores de confiance
+            scores_risque = []
+            scores_confiance = []
             liens_detectes = []
             recommandations = []
-            features_utilisees = []
+            avertissements = []
             
             # Extraire les features pour calculer la confiance globale
             try:
@@ -181,45 +174,59 @@ class CaseAnalysisAPIView(APIView):
                 logger.error(f"Erreur lors de l'extraction des features: {str(e)}", exc_info=True)
                 features = {}
             
+            qualite_donnees = predictive_service.evaluer_qualite_donnees(fiche, features)
+            
             try:
                 if type_analyse in ['complet', 'recidive']:
                     pred_recidive = predictive_service.predire_risque_recidive(fiche)
                     if pred_recidive.get('success'):
                         resultats['recidive'] = pred_recidive
-                        score_risque_global = max(score_risque_global, pred_recidive.get('risque_recidive', 0))
+                        scores_risque.append(pred_recidive.get('risque_recidive', 0))
                         recommandations.extend(pred_recidive.get('recommandations', []))
-                        # Utiliser le score de confiance de la prédiction
                         if 'confiance_prediction' in pred_recidive:
                             scores_confiance.append(pred_recidive['confiance_prediction'])
+                    else:
+                        avertissements.append(
+                            pred_recidive.get('error', 'Analyse de récidive indisponible')
+                        )
                 
                 if type_analyse in ['complet', 'dangerosite']:
                     pred_dangerosite = predictive_service.predire_profil_dangerosite(fiche)
                     if pred_dangerosite.get('success'):
                         resultats['dangerosite'] = pred_dangerosite
-                        score_risque_global = max(score_risque_global, pred_dangerosite.get('score_global', 0))
-                        # Calculer confiance basée sur le nombre d'infractions analysées
+                        scores_risque.append(pred_dangerosite.get('score_global', 0))
                         nb_infractions = pred_dangerosite.get('nb_infractions_analysees', 0)
                         confiance_danger = 60 + min(nb_infractions * 3, 30)
                         scores_confiance.append(confiance_danger)
+                    else:
+                        avertissements.append(
+                            pred_dangerosite.get('error', 'Analyse de dangerosité indisponible')
+                        )
                 
                 if type_analyse in ['complet', 'zones_risque']:
                     pred_zones = predictive_service.predire_zone_risque(fiche)
                     if pred_zones.get('success'):
                         resultats['zones_risque'] = pred_zones
-                        # Confiance basée sur le nombre de lieux analysés
                         nb_lieux = pred_zones.get('nb_lieux_analyses', 0)
                         confiance_zones = 50 + min(nb_lieux * 5, 40)
                         scores_confiance.append(confiance_zones)
+                    else:
+                        avertissements.append(
+                            pred_zones.get('error', 'Analyse géographique indisponible')
+                        )
                 
                 if type_analyse in ['complet', 'associations']:
                     pred_associations = predictive_service.predire_association_criminelle(fiche)
                     if pred_associations.get('success'):
                         resultats['associations'] = pred_associations
                         liens_detectes = pred_associations.get('associations', [])
-                        # Confiance basée sur le nombre d'associations trouvées
                         nb_associations = pred_associations.get('nb_associations', 0)
                         confiance_assoc = 55 + min(nb_associations * 2, 35)
                         scores_confiance.append(confiance_assoc)
+                    else:
+                        avertissements.append(
+                            pred_associations.get('error', 'Analyse des associations indisponible')
+                        )
             except Exception as e:
                 logger.error(f"Erreur lors de l'exécution de l'analyse prédictive: {str(e)}", exc_info=True)
                 return Response(
@@ -232,19 +239,61 @@ class CaseAnalysisAPIView(APIView):
             
             # Calculer le score de confiance global basé sur les données réelles
             if scores_confiance:
-                # Moyenne pondérée des scores de confiance
                 score_confiance = sum(scores_confiance) / len(scores_confiance)
             else:
-                # Fallback: calculer la confiance basée sur les features disponibles
                 score_confiance = predictive_service._calculer_confiance(features)
+
+            # Score global : moyenne pondérée des analyses de risque
+            if scores_risque:
+                score_risque_global = round(sum(scores_risque) / len(scores_risque), 2)
+            else:
+                score_risque_global = 0.0
+
+            # Ajuster la confiance selon la qualité des données
+            score_confiance = round(
+                min(score_confiance * 0.7 + qualite_donnees['score'] * 0.3, 95), 2
+            )
+
+            # Dédupliquer les recommandations
+            seen_rec = set()
+            recommandations_uniques = []
+            for rec in recommandations:
+                if rec not in seen_rec:
+                    seen_rec.add(rec)
+                    recommandations_uniques.append(rec)
+            recommandations = recommandations_uniques
+
+            if not resultats:
+                return Response(
+                    {
+                        'success': False,
+                        'message': 'Aucune analyse n\'a pu être effectuée. '
+                                   + (avertissements[0] if avertissements else 'Données insuffisantes.'),
+                        'avertissements': avertissements,
+                        'qualite_donnees': qualite_donnees,
+                    },
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
+
+            synthese = predictive_service.generer_synthese_globale(
+                fiche, resultats, score_risque_global, score_confiance
+            )
+
+            niveau_alerte = (
+                'critique' if score_risque_global >= 70
+                else 'élevé' if score_risque_global >= 50
+                else 'modéré' if score_risque_global >= 30
+                else 'faible'
+            )
             
-            # Extraire les features utilisées
             features_utilisees = [
                 'nb_infractions',
                 'niveau_danger',
                 'antecedents',
                 'age',
-                'historique_geographique'
+                'historique_geographique',
+                'types_infractions',
+                'tendance_temporelle',
             ]
             
             # Créer l'analyse
@@ -266,9 +315,20 @@ class CaseAnalysisAPIView(APIView):
                     'message': 'Analyse terminée avec succès',
                     'analysis_id': case_analysis.id,
                     'uuid': str(case_analysis.uuid),
+                    'fiche': {
+                        'id': fiche.id,
+                        'numero_fiche': fiche.numero_fiche,
+                        'nom_complet': f"{fiche.nom} {fiche.prenom}".strip(),
+                        'niveau_danger': fiche.niveau_danger,
+                    },
+                    'type_analyse': type_analyse,
                     'resultats': resultats,
                     'score_risque_global': score_risque_global,
                     'score_confiance': score_confiance,
+                    'niveau_alerte': niveau_alerte,
+                    'synthese': synthese,
+                    'qualite_donnees': qualite_donnees,
+                    'avertissements': avertissements,
                     'liens_detectes': liens_detectes,
                     'recommandations': recommandations,
                     'timestamp': timezone.now().isoformat()

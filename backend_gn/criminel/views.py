@@ -1,9 +1,9 @@
-﻿import logging
+import logging
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Q
 from django.db import transaction
@@ -11,6 +11,34 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from datetime import datetime, timedelta
 from calendar import monthrange
+
+from .models import (
+    RefStatutFiche,
+    RefTypeInfraction,
+    RefStatutAffaire,
+    CriminalFicheCriminelle,
+    InvestigationAssignment,
+    AssignmentStatus,
+    CriminalTypeInfraction,
+    CriminalInfraction,
+)
+from .views_biometric import BiometricPhotoUploadMixin
+from .serializers import (
+    RefStatutFicheSerializer,
+    RefTypeInfractionSerializer,
+    RefStatutAffaireSerializer,
+    CriminalFicheCriminelleSerializer,
+    CriminalTypeInfractionSerializer,
+    CriminalInfractionSerializer,
+    InvestigationAssignmentSerializer,
+)
+from enquete.services import recalculate_progression
+
+# Importer le serializer complet
+try:
+    from .serializers_complet import CriminalFicheCriminelleCompleteSerializer
+except ImportError:
+    CriminalFicheCriminelleCompleteSerializer = None
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +57,7 @@ def add_cors_headers_to_response(response, request):
                 from urllib.parse import urlparse
                 parsed = urlparse(referer)
                 origin = f"{parsed.scheme}://{parsed.netloc}"
-            except:
+            except Exception:
                 pass
     
     # Autoriser toutes les origines locales
@@ -59,37 +87,6 @@ def subtract_months(reference_date, months):
     day = min(reference_date.day, monthrange(year, month)[1])
     return reference_date.replace(year=year, month=month, day=day)
 
-from .models import (
-    RefStatutFiche,
-    RefTypeInfraction,
-    RefStatutAffaire,
-    CriminalFicheCriminelle,
-    InvestigationAssignment,
-    AssignmentStatus,
-    CriminalTypeInfraction,
-    CriminalInfraction,
-)
-from .views_biometric import BiometricPhotoUploadMixin
-
-from .serializers import (
-    RefStatutFicheSerializer,
-    RefTypeInfractionSerializer,
-    RefStatutAffaireSerializer,
-    CriminalFicheCriminelleSerializer,
-    CriminalTypeInfractionSerializer,
-    CriminalInfractionSerializer,
-    InvestigationAssignmentSerializer,
-)
-from .pagination import StableCursorPagination
-
-# Importer le serializer complet
-try:
-    from .serializers_complet import CriminalFicheCriminelleCompleteSerializer
-except ImportError:
-    CriminalFicheCriminelleCompleteSerializer = None
-
-from enquete.services import recalculate_progression
-
 
 User = get_user_model()
 
@@ -97,19 +94,19 @@ User = get_user_model()
 class RefStatutFicheViewSet(viewsets.ModelViewSet):
     queryset = RefStatutFiche.objects.all().order_by('ordre')  # type: ignore[attr-defined]
     serializer_class = RefStatutFicheSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 
 class RefTypeInfractionViewSet(viewsets.ModelViewSet):
     queryset = RefTypeInfraction.objects.all().order_by('ordre')  # type: ignore[attr-defined]
     serializer_class = RefTypeInfractionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 
 class RefStatutAffaireViewSet(viewsets.ModelViewSet):
     queryset = RefStatutAffaire.objects.all().order_by('ordre')  # type: ignore[attr-defined]
     serializer_class = RefStatutAffaireSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 
 class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelViewSet):
@@ -333,7 +330,8 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
         
         try:
             # Récupérer la fiche avec toutes les relations optimisées
-            queryset = CriminalFicheCriminelle.objects.select_related(
+            queryset = CriminalFicheCriminelle.objects.select_related(  # type: ignore[attr-defined]
+
                 'statut_fiche',
                 'created_by',
             ).prefetch_related(
@@ -464,7 +462,7 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         
         if serializer.is_valid():
-            updated_instance = self.perform_update(serializer, old_values=old_values)
+            self.perform_update(serializer, old_values=old_values)
             # Message de succès selon le rôle
             message = "Modification effectuée avec succès."
             if user_role in ['Enquêteur Principal', 'Enquêteur', 'Enquêteur Junior']:
@@ -838,7 +836,7 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
                         date_creation__lt=date_limite_30j
                     ).count()
                     evolution_en_cours = self._calculer_evolution(en_cours_ce_mois, en_cours_mois_dernier)
-                except:
+                except Exception:
                     evolution_en_cours = "0%"
             else:
                 evolution_en_cours = "0%"
@@ -856,7 +854,7 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
                         date_creation__lt=date_limite_30j
                     ).count()
                     evolution_clotures = self._calculer_evolution(clotures_ce_mois, clotures_mois_dernier)
-                except:
+                except Exception:
                     evolution_clotures = "0%"
             else:
                 evolution_clotures = "0%"
@@ -1103,6 +1101,15 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
             result = []
             mois_noms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 
                         'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+
+            # Si aucune fiche dans la période, retourner tout de même des mois avec 0
+            if not fiches_par_mois:
+                # Construire la liste des `months` derniers mois avec total = 0
+                base_months = []
+                for i in range(months - 1, -1, -1):
+                    mois_date = subtract_months(now, i).replace(day=1)
+                    base_months.append({'mois': mois_date, 'total': 0})
+                fiches_par_mois = base_months
             
             for item in fiches_par_mois:
                 mois_date = item['mois']
@@ -1138,7 +1145,7 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
                 
                 # Parmi ces fiches sans assignation, certaines peuvent être clôturées
                 # Si resolus_from_fiches > closed, cela signifie qu'il y a des fiches clôturées sans assignation "closed"
-                fiches_cloturees_deja_comptees = min(resolus_from_assignments, resolus_from_fiches)  # Partie commune
+                min(resolus_from_assignments, resolus_from_fiches)  # Partie commune
                 fiches_cloturees_sans_assignation = max(0, resolus_from_fiches - resolus_from_assignments)
                 
                 # Les fiches sans assignation qui ne sont pas clôturées doivent aller dans "en attente"
@@ -1250,6 +1257,14 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
             else:
                 en_cours_dict = {}
             
+            # Si aucune fiche dans la période, retourner tout de même des mois avec 0
+            if not fiches_par_mois:
+                base_months = []
+                for i in range(months - 1, -1, -1):
+                    mois_date = subtract_months(now, i).replace(day=1)
+                    base_months.append({'mois': mois_date, 'total': 0})
+                fiches_par_mois = base_months
+
             # Formater les données
             result = []
             mois_noms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 
@@ -1397,17 +1412,45 @@ class CriminalFicheCriminelleViewSet(BiometricPhotoUploadMixin, viewsets.ModelVi
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=["get"], url_path="enquetes")
+    def enquetes(self, request, pk=None):
+        """Retourne les enquêtes liées à un criminel via la table EnqueteCriminel"""
+        from enquete.models import EnqueteCriminel
+        fiche = self.get_object()
+        liens = (
+            EnqueteCriminel.objects
+            .filter(criminel=fiche)
+            .select_related('enquete', 'ajoute_par')
+            .order_by('-date_ajout')
+        )
+        data = [
+            {
+                'id': lien.id,
+                'enquete_id': str(lien.enquete.id),
+                'numero_enquete': lien.enquete.numero_enquete,
+                'titre': lien.enquete.titre,
+                'statut': lien.enquete.statut,
+                'role': lien.role,
+                'role_display': lien.get_role_display(),
+                'date_ajout': lien.date_ajout,
+            }
+            for lien in liens
+        ]
+        return Response(data)
+
 
 class CriminalTypeInfractionViewSet(viewsets.ModelViewSet):
     queryset = CriminalTypeInfraction.objects.all().order_by('-gravite')  # type: ignore[attr-defined]
     serializer_class = CriminalTypeInfractionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 
 class CriminalInfractionViewSet(viewsets.ModelViewSet):
-    queryset = CriminalInfraction.objects.all().order_by('-date_infraction')  # type: ignore[attr-defined]
+    queryset = CriminalInfraction.objects.select_related(  # type: ignore[attr-defined]
+        'fiche', 'type_infraction', 'statut_affaire'
+    ).order_by('-date_infraction')
     serializer_class = CriminalInfractionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class InvestigationAssignmentViewSet(viewsets.ModelViewSet):
@@ -1501,7 +1544,7 @@ class InvestigationAssignmentViewSet(viewsets.ModelViewSet):
                 is_overdue = assignment.due_date < today
                 message += f"Date limite (échéance): {assignment.due_date.strftime('%d/%m/%Y')}"
                 if is_overdue:
-                    message += " ⚠️ ÉCHÉANCE DÉPASSÉE"
+                    message += " [ATTENTION] ÉCHÉANCE DÉPASSÉE"
                 message += "\n\n"
             
             message += "Veuillez confirmer cette assignation pour commencer l'enquête."
@@ -1514,9 +1557,9 @@ class InvestigationAssignmentViewSet(viewsets.ModelViewSet):
                 titre=titre,
                 message=message,
                 type=notification_type,
-                lien=f'/assignations'
+                lien='/assignations'
             )
-        except Exception as e:
+        except Exception:
             logger.exception("Erreur lors de la création de la notification d'assignation.")
 
     def perform_update(self, serializer):
@@ -1694,9 +1737,9 @@ class InvestigationAssignmentViewSet(viewsets.ModelViewSet):
                     titre=titre,
                     message=message,
                     type='success',
-                    lien=f'/assignations'
+                    lien='/assignations'
                 )
-        except Exception as e:
+        except Exception:
             logger.exception("Erreur lors de la création de la notification de confirmation.")
 
         serializer = self.get_serializer(assignment)

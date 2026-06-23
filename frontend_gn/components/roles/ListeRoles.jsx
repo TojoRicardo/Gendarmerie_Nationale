@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Shield, X } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Filter, Shield, X } from 'lucide-react';
 import CarteRole from './CarteRole';
 import Tableau from '../commun/Tableau';
 import Pagination from '../commun/Pagination';
-import Bouton from '../commun/Bouton';
 import ChampTexte from '../commun/ChampTexte';
 import Select from '../commun/Select';
 import SpinnerChargement from '../commun/SpinnerChargement';
 import { getUsers } from '../../src/services/authService';
 
-const ListeRoles = ({ onCreer, onModifier, onSupprimer, onVoir }) => {
+const ListeRoles = ({ onCreer: _onCreer, onModifier, onSupprimer, onVoir }) => {
   const [roles, setRoles] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [recherche, setRecherche] = useState('');
@@ -22,16 +21,7 @@ const ListeRoles = ({ onCreer, onModifier, onSupprimer, onVoir }) => {
   const [totalElements, setTotalElements] = useState(0);
   const elementsParPage = 12;
 
-  useEffect(() => {
-    chargerRoles();
-  }, [pageActuelle, recherche, filtreStatut]);
-
-  // Réinitialiser la page à 1 quand les filtres changent
-  useEffect(() => {
-    setPageActuelle(1);
-  }, [recherche, filtreStatut]);
-
-  const chargerRoles = async () => {
+  const chargerRoles = useCallback(async () => {
     setChargement(true);
     try {
       // Récupérer les utilisateurs pour calculer le nombre réel par rôle
@@ -135,7 +125,16 @@ const ListeRoles = ({ onCreer, onModifier, onSupprimer, onVoir }) => {
     } finally {
       setChargement(false);
     }
-  };
+  }, [pageActuelle, recherche, filtreStatut, elementsParPage]);
+
+  useEffect(() => {
+    chargerRoles();
+  }, [chargerRoles]);
+
+  // Réinitialiser la page à 1 quand les filtres changent
+  useEffect(() => {
+    setPageActuelle(1);
+  }, [recherche, filtreStatut]);
 
   const reinitialiserFiltres = () => {
     setRecherche('');

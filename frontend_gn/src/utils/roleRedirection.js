@@ -23,7 +23,7 @@ const OBSERVATEUR_CONFIG = {
     '/fiches-criminelles',
     '/rapports',
     '/rapports/dashboard',
-    '/analytics',
+    '/rapports/generer',
     '/ia',
     '/notifications'
   ],
@@ -45,9 +45,6 @@ const ENQUETEUR_CONFIG = {
     '/enquete/avancement',
     '/fiches-criminelles',
     '/biometrie',
-    '/biometrie-criminelle',
-    '/photos-biometriques',
-    '/analytics',
     '/ia',
     '/rapports',
     '/rapports/dashboard',
@@ -55,21 +52,20 @@ const ENQUETEUR_CONFIG = {
   ],
     color: 'blue'
 }
-  
+
 const ANALYSTE_CONFIG = {
-    route: '/rapports/dashboard',
-    primaryRoute: '/rapports',
-    message: 'Bienvenue, Analyste. Module de rapports et analyses.',
-    features: ['Rapports', 'Statistiques', 'IA Prédictive'],
+  route: '/rapports/dashboard',
+  primaryRoute: '/rapports',
+  message: 'Bienvenue, Analyste. Module de rapports et analyses.',
+  features: ['Rapports', 'Statistiques', 'IA Prédictive'],
   allowedRoutes: [
     '/dashboard',
     '/rapports',
     '/rapports/dashboard',
     '/rapports/generer',
-    '/analytics',
     '/ia',
   ],
-    color: 'purple'
+  color: 'purple'
 }
 
 export const ROLE_REDIRECTS = {

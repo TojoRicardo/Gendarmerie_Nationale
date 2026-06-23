@@ -29,6 +29,8 @@ from django.core.files.base import File
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.db import transaction
 
+from .models import Biometrie, BiometrieHistorique
+
 import os
 import warnings
 
@@ -41,8 +43,6 @@ try:  # pragma: no cover - dépend de l'installation locale
     import onnxruntime as ort
 except Exception:  # pragma: no cover - onnxruntime optionnel
     ort = None
-
-from .models import Biometrie, BiometrieHistorique
 
 logger = logging.getLogger(__name__)
 
@@ -449,7 +449,8 @@ class ArcFaceService:
     # Utilitaires internes
     @staticmethod
     def _pil_to_bgr(image: Image.Image) -> np.ndarray:
-        rgb = image.convert("RGB")
+        from PIL import ImageOps
+        rgb = ImageOps.exif_transpose(image).convert("RGB")
         array = np.asarray(rgb)
         return array[:, :, ::-1]  # RGB -> BGR
 

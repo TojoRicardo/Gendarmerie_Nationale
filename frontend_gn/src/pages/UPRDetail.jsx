@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Calendar, FileText, UserSearch, Eye, Loader2, CheckCircle2, XCircle, TrendingDown, Fingerprint, Clock, User, Edit, Trash2, Archive, RotateCcw } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, FileText, UserSearch, Eye, Loader2, CheckCircle2, XCircle, TrendingDown, Fingerprint, Clock, User, Edit, Archive, RotateCcw } from "lucide-react";
 import api from "../services/api";
 import Button from "../components/commun/Button";
 import { useNotification } from "../context/NotificationContext";
@@ -16,23 +16,7 @@ export default function UPRDetail() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
-
-  const fetchUPR = async () => {
-    try {
-      const uprRes = await api.get(`/upr/${id}/`);
-      if (uprRes.data) {
-        setUpr(uprRes.data);
-      }
-    } catch (err) {
-      console.error("Erreur lors du chargement de l'UPR:", err);
-      setError(err.response?.data?.error || "Erreur lors du chargement de l'UPR");
-    }
-  };
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -59,7 +43,7 @@ export default function UPRDetail() {
           
           // Vérifier si le fichier image est valide
           if (uprRes.data.profil_face && (uprRes.data.profil_face === '1' || uprRes.data.profil_face === 1 || !uprRes.data.profil_face_url)) {
-            console.warn('⚠️ UPR a un fichier image invalide. Le fichier n\'a probablement pas été correctement sauvegardé lors de la création.');
+            console.warn('[ATTENTION] UPR a un fichier image invalide. Le fichier n\'a probablement pas été correctement sauvegardé lors de la création.');
           }
           
           setUpr(uprRes.data);
@@ -127,7 +111,11 @@ export default function UPRDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -163,41 +151,6 @@ export default function UPRDetail() {
       </div>
     );
   }
-
-  const getImageUrl = (url) => {
-    if (!url) return null;
-    
-    // Si l'URL est déjà complète
-    if (url.startsWith('http')) {
-      // Si l'URL est en HTTP et qu'on est en HTTPS
-      if (url.startsWith('http://') && window.location.protocol === 'https:') {
-        // Si c'est une URL de média locale, utiliser le proxy Vite (URL relative)
-        if (url.includes('/media/')) {
-          const mediaMatch = url.match(/\/media\/.*/);
-          if (mediaMatch) {
-            return mediaMatch[0]; // Retourner juste le chemin relatif pour utiliser le proxy
-          }
-        }
-        // Sinon, convertir en HTTPS
-        return url.replace('http://', 'https://');
-      }
-      return url;
-    }
-    
-    // Pour les URLs relatives commençant par /media/, les retourner telles quelles
-    // Le proxy Vite les servira via HTTPS
-    if (url.startsWith('/media/')) {
-      return url;
-    }
-    
-    // Pour les autres URLs relatives, construire l'URL avec le protocole de la page
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    const port = host === 'localhost' ? ':8000' : '';
-    const baseUrl = `${protocol}//${host}${port}`;
-    
-    return `${baseUrl}${url.startsWith('/') ? url : '/' + url}`;
-  };
 
   // Fonction helper pour normaliser les URLs d'images (gère HTTP -> HTTPS et utilise le proxy)
   const normalizeImageUrl = (url) => {
@@ -334,7 +287,7 @@ export default function UPRDetail() {
       });
       
       // Recharger les données de l'UPR
-      await fetchUPR();
+      await loadData();
       setDeleting(false);
     } catch (err) {
       console.error("Erreur lors de la restauration:", err);
@@ -356,10 +309,10 @@ export default function UPRDetail() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate('/upr')}
-                className="p-2.5 hover:bg-blue-50 rounded-lg transition-all duration-200 hover:scale-105 text-gray-600 hover:text-blue-600"
-                title="Retour à la liste"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-blue-50 hover:text-blue-600"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4" />
+                Retour
               </button>
               <div>
                 <div className="flex items-center gap-3 mb-1">

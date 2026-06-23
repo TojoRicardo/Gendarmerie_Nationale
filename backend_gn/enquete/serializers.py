@@ -7,7 +7,7 @@ from criminel.models import (
     InvestigationAssignment,
 )
 
-from .models import Avancement, Enquete, EnqueteCriminel, Observation, Preuve, RapportEnquete, TypeEnquete
+from .models import Avancement, DocumentEnquete, Enquete, EnqueteCriminel, Observation, Preuve, RapportEnquete, TypeEnquete
 
 SUPERVISOR_ROLES = {"Administrateur Système", "Enquêteur Principal"}
 
@@ -337,8 +337,8 @@ class EnqueteSerializer(serializers.ModelSerializer):
         }
     
     def get_criminels_lies(self, obj):
-        """Retourne la liste des criminels liés à l'enquête"""
-        criminels_lies = obj.criminels_lies.select_related('criminel', 'ajoute_par').all()
+        """Retourne la liste des criminels liés à l'enquête (prefetch from queryset)"""
+        criminels_lies = obj.criminels_lies.all()
         return [
             {
                 'id': ec.id,
@@ -347,40 +347,57 @@ class EnqueteSerializer(serializers.ModelSerializer):
                 'nom': ec.criminel.nom,
                 'prenom': ec.criminel.prenom,
                 'role': ec.role,
+                'role_display': ec.get_role_display(),
                 'date_ajout': ec.date_ajout,
             }
             for ec in criminels_lies
         ]
     
+    @staticmethod
+    def _valider_fiche_criminelle(dossier):
+        """Vérifie que la fiche criminelle a les champs obligatoires remplis"""
+        champs_manquants = []
+        if not dossier.nom:
+            champs_manquants.append('nom')
+        if not dossier.prenom:
+            champs_manquants.append('prénom')
+        if not dossier.date_naissance:
+            champs_manquants.append('date de naissance')
+        if not dossier.cin:
+            champs_manquants.append('numéro CIN')
+        if champs_manquants:
+            raise serializers.ValidationError({
+                'dossier': (
+                    f"La fiche criminelle « {dossier.nom or ''} {dossier.prenom or ''} » "
+                    f"est incomplète. Champs manquants : {', '.join(champs_manquants)}. "
+                    f"Veuillez compléter la fiche avant de créer une enquête."
+                )
+            })
+
     def validate(self, attrs):
-        """Validation selon le type d'enquête"""
+        """Validation selon le type d'enquête + vérification fiche criminelle"""
+        dossier = attrs.get('dossier')
+        if dossier:
+            self._valider_fiche_criminelle(dossier)
+
         type_code = attrs.get('type_enquete_code')
         type_enquete_fk = attrs.get('type_enquete')
         
-        # Si on utilise le nouveau système avec TypeEnquete (ForeignKey),
-        # on ne force pas les validations strictes pour les champs spécifiques
-        # Ces champs peuvent être remplis plus tard ou sont optionnels
         if type_enquete_fk:
-            # Utilisation du nouveau système avec TypeEnquete
-            # Les champs spécifiques (plaignant_nom, etc.) sont optionnels
             return attrs
         
-        # Si on utilise l'ancien système avec type_enquete_code uniquement,
-        # on applique les validations strictes
         if type_code == 'plainte':
             if not attrs.get('plaignant_nom'):
                 raise serializers.ValidationError({
                     'plaignant_nom': 'Le nom du plaignant est requis pour une plainte.'
                 })
         
-        # Validation pour Dénonciation
         elif type_code == 'denonciation':
             if not attrs.get('denonciateur_nom'):
                 raise serializers.ValidationError({
                     'denonciateur_nom': 'Le nom du dénonciateur est requis pour une dénonciation.'
                 })
         
-        # Validation pour Constatation directe
         elif type_code == 'constatation_directe':
             if not attrs.get('constatateur_nom'):
                 raise serializers.ValidationError({
@@ -411,6 +428,9 @@ class EnqueteCriminelSerializer(serializers.ModelSerializer):
     enquete_detail = serializers.SerializerMethodField()
     criminel_detail = serializers.SerializerMethodField()
     ajoute_par_detail = serializers.SerializerMethodField()
+    role_display = serializers.CharField(
+        source='get_role_display', read_only=True
+    )
     
     class Meta:
         model = EnqueteCriminel
@@ -421,6 +441,7 @@ class EnqueteCriminelSerializer(serializers.ModelSerializer):
             'criminel',
             'criminel_detail',
             'role',
+            'role_display',
             'date_ajout',
             'ajoute_par',
             'ajoute_par_detail',
@@ -455,8 +476,91 @@ class EnqueteCriminelSerializer(serializers.ModelSerializer):
             'full_name': obj.ajoute_par.get_full_name() or obj.ajoute_par.username,
         }
     
+    def validate_criminel(self, criminel):
+        """Vérifie que la fiche criminelle a les champs obligatoires"""
+        champs_manquants = []
+        if not criminel.nom:
+            champs_manquants.append('nom')
+        if not criminel.prenom:
+            champs_manquants.append('prénom')
+        if not criminel.date_naissance:
+            champs_manquants.append('date de naissance')
+        if not criminel.cin:
+            champs_manquants.append('numéro CIN')
+        if champs_manquants:
+            raise serializers.ValidationError(
+                f"La fiche « {criminel.nom or ''} {criminel.prenom or ''} » "
+                f"est incomplète. Champs manquants : {', '.join(champs_manquants)}. "
+                f"Veuillez compléter la fiche avant de la lier à une enquête."
+            )
+        return criminel
+
     def create(self, validated_data):
         """Assignation automatique de l'utilisateur qui ajoute"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['ajoute_par'] = request.user
+        return super().create(validated_data)
+
+
+class DocumentEnqueteSerializer(serializers.ModelSerializer):
+    ajoute_par_detail = serializers.SerializerMethodField()
+    fichier_url = serializers.SerializerMethodField()
+    nom_fichier_original = serializers.SerializerMethodField()
+    categorie_display = serializers.CharField(
+        source='get_categorie_display', read_only=True
+    )
+
+    class Meta:
+        model = DocumentEnquete
+        fields = [
+            'id',
+            'categorie',
+            'categorie_display',
+            'enquete',
+            'nom',
+            'type_document',
+            'fichier',
+            'fichier_url',
+            'nom_fichier_original',
+            'taille_fichier',
+            'description',
+            'ajoute_par',
+            'ajoute_par_detail',
+            'date_ajout',
+            'date_modification',
+        ]
+        read_only_fields = [
+            'id',
+            'taille_fichier',
+            'ajoute_par',
+            'date_ajout',
+            'date_modification',
+        ]
+
+    def get_ajoute_par_detail(self, obj):
+        if not obj.ajoute_par:
+            return None
+        return {
+            'id': obj.ajoute_par.id,
+            'full_name': obj.ajoute_par.get_full_name() or obj.ajoute_par.username,
+        }
+
+    def get_fichier_url(self, obj):
+        if obj.fichier:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.fichier.url)
+            return obj.fichier.url
+        return None
+
+    def get_nom_fichier_original(self, obj):
+        if obj.fichier:
+            import os
+            return os.path.basename(obj.fichier.name)
+        return None
+
+    def create(self, validated_data):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['ajoute_par'] = request.user

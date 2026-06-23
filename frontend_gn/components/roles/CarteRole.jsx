@@ -1,9 +1,8 @@
-import React from 'react';
-import { Shield, Users, Key, Edit, Trash2, MoreVertical, ShieldCheck, BarChart3, Eye, FileSearch, Settings } from 'lucide-react';
-import Bouton from '../commun/Bouton';
+import { useState } from 'react';
+import { Shield, Users, Edit, MoreVertical, ShieldCheck, BarChart3, Eye, FileSearch, Settings } from 'lucide-react';
 
 const CarteRole = ({ role, onModifier, onSupprimer, onVoir }) => {
-  const [menuOuvert, setMenuOuvert] = React.useState(false);
+  const [menuOuvert, setMenuOuvert] = useState(false);
 
   // Fonction pour obtenir l'icône selon le rôle (toutes les cartes en bleu)
   const getRoleConfig = (roleNom) => {

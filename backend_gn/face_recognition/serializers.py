@@ -4,7 +4,6 @@ Serializers Django REST Framework pour l'API de reconnaissance faciale.
 
 from rest_framework import serializers
 from .models import Person, FaceEmbedding, FaceRecognitionLog
-import uuid
 
 
 class PersonSerializer(serializers.ModelSerializer):

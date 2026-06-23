@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, Loader2, AlertCircle } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
@@ -37,11 +37,7 @@ const CreerEnquete = () => {
   })
   const [errors, setErrors] = useState({})
 
-  useEffect(() => {
-    loadTypesEnquete()
-  }, [])
-
-  const loadTypesEnquete = async () => {
+  const loadTypesEnquete = useCallback(async () => {
     try {
       setLoadingTypes(true)
       const data = await fetchTypesEnquete()
@@ -116,7 +112,11 @@ const CreerEnquete = () => {
     } finally {
       setLoadingTypes(false)
     }
-  }
+  }, [showError])
+
+  useEffect(() => {
+    loadTypesEnquete()
+  }, [loadTypesEnquete])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -185,10 +185,10 @@ const CreerEnquete = () => {
         description: form.description || '',
       }
 
-      const data = await createEnquete(payload)
+      await createEnquete(payload)
       showSuccess('Enquête créée avec succès.')
       setTimeout(() => {
-        navigate(`/enquetes/${data.id || data.uuid}`)
+        navigate('/enquete')
       }, 1000)
     } catch (error) {
       console.error('Erreur création enquête:', error)

@@ -19,7 +19,6 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 from django.db import transaction
-from django.utils import timezone
 from django.core.files.base import File
 from django.db.utils import OperationalError, ProgrammingError
 

@@ -7,9 +7,9 @@ basées sur l'analyse IA des comportements criminels.
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Q, Count
+from django.db.models import Count
 
 
 class AlertSystemService:
@@ -43,7 +43,7 @@ class AlertSystemService:
         Returns:
             Alerte ou None
         """
-        from criminel.models import CriminalFicheCriminelle, CriminalInfraction
+        from criminel.models import CriminalFicheCriminelle
         from ..ai_services.analyse_predictive import AnalysePredictiveService
         
         try:
@@ -152,7 +152,7 @@ class AlertSystemService:
         Returns:
             Liste d'alertes pour associations dangereuses
         """
-        from criminel.models import CriminalAssociation, CriminalFicheCriminelle
+        from criminel.models import CriminalAssociation
         
         alertes = []
         

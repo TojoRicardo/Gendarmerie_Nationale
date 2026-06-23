@@ -1,4 +1,4 @@
-﻿"""
+"""
 Commande Django pour synchroniser les rôles depuis ROLES_PREDEFINIS vers la base de données
 """
 from django.core.management.base import BaseCommand
@@ -109,7 +109,7 @@ class Command(BaseCommand):
         
         total = Role.objects.count()
         self.stdout.write(self.style.SUCCESS(
-            f'\n✅ Terminé! {created_count} rôles créés, {updated_count} mises à jour. '
+            f'\n[OK] Terminé! {created_count} rôles créés, {updated_count} mises à jour. '
             f'Total: {total} rôles dans la base de données.'
         ))
 

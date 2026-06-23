@@ -181,7 +181,7 @@ label, .label {
 .sgic-input:focus {
   outline: none;
   border-color: #2984D1;
-  box-shadow: 0 0 0 3px rgba(41, 132, 209, 0.1);
+  box-shadow: 0 0 0 3px rgb(41 132 209 / 10%);
 }
 
 .sgic-input:disabled {
@@ -201,12 +201,12 @@ label, .label {
   border-radius: 12px;
   background: white;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
   transition: all 0.2s ease;
 }
 
 .sgic-card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgb(0 0 0 / 10%);
 }
 
 .sgic-card-full {
@@ -215,7 +215,7 @@ label, .label {
   border-radius: 12px;
   background: white;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 
 /* ============================================
@@ -348,7 +348,7 @@ label, .label {
    ============================================ */
 
 /* Mobile: < 768px */
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .sgic-container {
     padding: 0 16px;
   }
@@ -394,7 +394,7 @@ label, .label {
 }
 
 /* Tablette: 768px - 1024px */
-@media (min-width: 768px) and (max-width: 1024px) {
+@media (width >= 768px) and (width <= 1024px) {
   .sgic-container {
     padding: 0 20px;
   }
@@ -407,7 +407,7 @@ label, .label {
 }
 
 /* Desktop: > 1024px */
-@media (min-width: 1025px) {
+@media (width >= 1025px) {
   .sgic-container {
     max-width: 1280px;
   }
@@ -431,7 +431,7 @@ label, .label {
   gap: 32px;
 }
 
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .sgic-grid-2cols {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -445,7 +445,7 @@ label, .label {
   gap: 24px;
 }
 
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .sgic-grid-cards {
     grid-template-columns: 1fr;
   }
@@ -500,7 +500,7 @@ button, a, [role="button"] {
 .input-standard:focus {
   outline: none;
   border-color: #2984D1;
-  box-shadow: 0 0 0 3px rgba(41, 132, 209, 0.1);
+  box-shadow: 0 0 0 3px rgb(41 132 209 / 10%);
 }
 
 .card-standard {
@@ -510,7 +510,7 @@ button, a, [role="button"] {
   border-radius: 12px;
   background: white;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
   transition: all 0.2s ease;
 }
 

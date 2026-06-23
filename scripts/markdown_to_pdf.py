@@ -4,7 +4,6 @@ Script de conversion Markdown vers PDF
 Convertit PLAN_DEPLOIEMENT.md en PDF
 """
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -14,14 +13,12 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm, inch
+    from reportlab.lib.units import cm
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, PageBreak,
-        Table, TableStyle, KeepTogether
+        Table, TableStyle,
     )
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 except ImportError:
     print("Erreur: reportlab n'est pas installé.")
     print("Installez-le avec: pip install reportlab")
@@ -234,7 +231,7 @@ class MarkdownToPDF:
         
         # Parser le tableau
         headers = [cell.strip() for cell in table_lines[0].split('|')[1:-1]]
-        separator = table_lines[1]  # Ligne de séparation
+        table_lines[1]  # Ligne de séparation
         rows = []
         
         for line in table_lines[2:]:
@@ -353,7 +350,7 @@ def main():
     converter = MarkdownToPDF(markdown_file, output_file)
     converter.convert()
     
-    print(f"\n✓ Conversion terminée!")
+    print("\n✓ Conversion terminée!")
     print(f"  Fichier PDF: {output_file}")
 
 

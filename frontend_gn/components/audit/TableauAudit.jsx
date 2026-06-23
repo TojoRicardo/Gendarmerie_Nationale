@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   ClipboardList, Calendar, Search, Download,
   Activity, TrendingUp, AlertTriangle,
-  X, CheckCircle, Brain, FileText, Trash2
+  X, Brain, FileText, Trash2
 } from 'lucide-react';
 import Pagination from '../commun/Pagination';
 import SpinnerChargement from '../commun/SpinnerChargement';
@@ -21,6 +21,8 @@ const TableauAudit = ({ filtres = {} }) => {
   const [pageActuelle, setPageActuelle] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [totalActions, setTotalActions] = useState(0);
+  const [visibleActionsCount, setVisibleActionsCount] = useState(0);
   const [recherche, setRecherche] = useState('');
   const [statistiques, setStatistiques] = useState(null);
   const [erreur, setErreur] = useState(null);
@@ -35,11 +37,6 @@ const TableauAudit = ({ filtres = {} }) => {
   useEffect(() => {
     chargerStatistiques();
   }, []);
-
-  // Charger les journaux quand la page ou les filtres changent
-  useEffect(() => {
-    chargerJournaux();
-  }, [pageActuelle, filtres, recherche]);
 
   const chargerStatistiques = async () => {
     try {
@@ -57,7 +54,7 @@ const TableauAudit = ({ filtres = {} }) => {
     }
   };
 
-  const chargerJournaux = async () => {
+  const chargerJournaux = useCallback(async () => {
     setChargement(true);
     setErreur(null);
     try {
@@ -93,8 +90,12 @@ const TableauAudit = ({ filtres = {} }) => {
         if (entry.session_id && entry.actions) {
           // Les actions peuvent être un tableau ou déjà sérialisées
           const actionsList = Array.isArray(entry.actions) ? entry.actions : (entry.actions || []);
+          const visibleActionsList = actionsList.filter(
+            (action) => (action.action || action.action_display || '') !== 'NAVIGATION'
+          );
           const actionsSummary = entry.actions_summary || {};
-          const actionsCount = entry.actions_count || (Array.isArray(actionsList) ? actionsList.length : 0);
+          const actionsCount = entry.actions_count ?? visibleActionsList.length;
+          const actionsCountTotal = entry.actions_count_total ?? actionsList.length;
           
           // Utiliser la première action pour les informations de base si disponible
           const firstAction = Array.isArray(actionsList) && actionsList.length > 0 ? actionsList[0] : {};
@@ -128,8 +129,9 @@ const TableauAudit = ({ filtres = {} }) => {
             reussi: true, // Par défaut, une session est réussie
             message_erreur: null,
             // Actions directement accessibles pour SessionBlogCard
-            actions: actionsList, // Toutes les actions de la session
+            actions: actionsList,
             actions_count: actionsCount,
+            actions_count_total: actionsCountTotal,
             actions_summary: actionsSummary,
             start_time: entry.start_time,
             end_time: entry.end_time,
@@ -177,12 +179,23 @@ const TableauAudit = ({ filtres = {} }) => {
         };
       });
       
+      journauxAdaptes.sort((a, b) => {
+        const dateA = new Date(a.date_action || a.start_time || 0).getTime();
+        const dateB = new Date(b.date_action || b.start_time || 0).getTime();
+        return dateB - dateA;
+      });
+
       setJournaux(journauxAdaptes);
       
+      const sessionsCount = data.sessions_count ?? data.count ?? journauxAdaptes.length;
+      const actionsTotal = data.visible_actions_count ?? data.total_actions ?? sessionsCount;
+      setTotalElements(sessionsCount);
+      setTotalActions(data.total_actions ?? actionsTotal);
+      setVisibleActionsCount(data.visible_actions_count ?? actionsTotal);
+
       // Gérer la pagination
       if (data.count !== undefined) {
-        setTotalElements(data.count);
-        setTotalPages(Math.ceil(data.count / elementsParPage));
+        setTotalPages(Math.ceil(sessionsCount / elementsParPage));
       } else if (data.next || data.previous) {
         // Pagination basée sur les URLs next/previous
         setTotalPages(Math.ceil((journauxAdaptes.length + (pageActuelle - 1) * elementsParPage) / elementsParPage));
@@ -200,46 +213,60 @@ const TableauAudit = ({ filtres = {} }) => {
     } finally {
       setChargement(false);
     }
-  };
+  }, [pageActuelle, filtres, recherche, elementsParPage]);
+
+  // Charger les journaux quand la page ou les filtres changent
+  useEffect(() => {
+    chargerJournaux();
+  }, [chargerJournaux]);
 
 
   // Statistiques depuis l'API ou calculées localement
   const statsGlobales = statistiques ? [
     { 
-      label: 'Total Entrées', 
-      valeur: statistiques.total_actions || totalElements, 
+      label: 'Total Actions', 
+      valeur: statistiques.total_actions_visibles ?? statistiques.total_actions ?? visibleActionsCount, 
       icon: ClipboardList, 
+      couleur: '#185CD6',
+      detail: statistiques.navigation_actions
+        ? `${statistiques.navigation_actions} navigation(s) exclue(s)`
+        : null,
+    },
+    { 
+      label: 'Sessions', 
+      valeur: totalElements, 
+      icon: Activity, 
       couleur: '#185CD6',
     },
     { 
       label: 'Aujourd\'hui', 
-      valeur: statistiques.actions_aujourdhui || 0, 
+      valeur: statistiques.actions_aujourdhui_visibles ?? statistiques.actions_aujourdhui ?? 0, 
       icon: Calendar, 
       couleur: '#185CD6',
     },
     { 
       label: '7 Derniers Jours', 
-      valeur: statistiques.actions_7_jours || 0, 
+      valeur: statistiques.actions_7_jours_visibles ?? statistiques.actions_7_jours ?? 0, 
       icon: TrendingUp, 
       couleur: '#185CD6',
     },
-    { 
-      label: 'Taux de Réussite', 
-      valeur: `${statistiques.taux_reussite || 0}%`, 
-      icon: CheckCircle, 
-      couleur: '#185CD6',
-    }
   ] : [
     { 
-      label: 'Total Entrées', 
-      valeur: totalElements, 
+      label: 'Total Actions', 
+      valeur: visibleActionsCount || totalActions || totalElements, 
       icon: ClipboardList, 
+      couleur: '#185CD6',
+    },
+    { 
+      label: 'Sessions', 
+      valeur: totalElements, 
+      icon: Activity, 
       couleur: '#185CD6',
     },
     { 
       label: 'Chargement...', 
       valeur: '...', 
-      icon: Activity, 
+      icon: Calendar, 
       couleur: '#185CD6',
     }
   ];
@@ -395,7 +422,11 @@ const TableauAudit = ({ filtres = {} }) => {
                 Journal d'Audit
               </h2>
               <p className="text-white/90 mt-1 ml-14 text-sm flex items-center space-x-2">
-                <span>Suivi complet de toutes les activités système</span>
+                <span>
+                  {visibleActionsCount || totalActions || 0} action{(visibleActionsCount || totalActions || 0) > 1 ? 's' : ''}
+                  {' · '}
+                  {totalElements} session{totalElements > 1 ? 's' : ''}
+                </span>
                 <span className="flex items-center space-x-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
                   <Brain size={12} />
                   <span>IA Locale</span>
@@ -467,6 +498,9 @@ const TableauAudit = ({ filtres = {} }) => {
                   <div>
                     <p className="text-xs font-medium text-gray-600">{stat.label}</p>
                     <p className="text-xl font-bold text-gray-900 mt-1">{stat.valeur}</p>
+                    {stat.detail && (
+                      <p className="text-xs text-gray-500 mt-1">{stat.detail}</p>
+                    )}
                   </div>
                   <div 
                     className="p-2.5 rounded-lg"

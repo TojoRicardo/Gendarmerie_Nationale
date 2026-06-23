@@ -43,7 +43,7 @@ def initialiser_journal_narratif(session: UserSession, request=None) -> Optional
             
             if user_agent:
                 try:
-                    ua_info = parse_user_agent(user_agent)
+                    ua_info = parse_user_agent(str(user_agent))
                     browser = ua_info.get('navigateur')
                     os_info = ua_info.get('systeme')
                 except Exception as e:

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Activity, ArrowLeft, Loader2 } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
@@ -56,16 +56,19 @@ const MiseAJourAvancement = () => {
         const data = await fetchAssignations({ status: 'in_progress' })
         const list = data?.results || data || []
         setAssignations(list)
-        if (!form.dossier && list.length > 0) {
-          setForm((prev) => ({ ...prev, dossier: list[0]?.dossier?.id || '' }))
-        }
+        setForm((prev) => {
+          if (!prev.dossier && list.length > 0) {
+            return { ...prev, dossier: list[0]?.dossier?.id || '' }
+          }
+          return prev
+        })
       } catch (error) {
         console.error(error)
         showError('Impossible de charger vos assignations.')
       }
     }
     loadAssignments()
-  }, [])
+  }, [showError])
 
   const loadAvancementDetail = async (avancementId) => {
     try {

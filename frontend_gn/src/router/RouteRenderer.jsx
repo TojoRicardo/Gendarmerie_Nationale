@@ -1,21 +1,9 @@
-import React, { Suspense } from 'react'
-import { Route, useLocation } from 'react-router-dom'
+import { Route } from 'react-router-dom'
 import RouteProtegee from '../components/authentification/RouteProtegee'
 import PermissionGuard from './PermissionGuard'
-import LoadingFallback from '../components/LoadingFallback'
-import Layout from '../Layout'
-
-/**
- * Wrapper pour les éléments avec Suspense
- * Utilise LoadingFallback qui s'adapte au contexte de la route
- */
-const SuspenseWrapper = ({ children }) => {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      {children}
-    </Suspense>
-  )
-}
+import ProtectedLayout from './ProtectedLayout'
+import SuspenseWrapper from './SuspenseWrapper'
+import PageMeta from './PageMeta'
 
 /**
  * Génère une route à partir de la configuration
@@ -91,14 +79,6 @@ export const generateRoutes = (routesConfig) => {
   return routesConfig.map((routeConfig, index) => {
     // Si c'est une route racine protégée avec enfants, on ajoute le Layout
     if (routeConfig.path === '/' && routeConfig.isProtected && routeConfig.children) {
-      function ProtectedLayout() {
-        return (
-          <RouteProtegee>
-            <Layout />
-          </RouteProtegee>
-        )
-      }
-      
       return (
         <Route
           key={index}
@@ -114,20 +94,6 @@ export const generateRoutes = (routesConfig) => {
 
     return generateRoute(routeConfig, index)
   })
-}
-
-/**
- * Composant pour gérer les métadonnées de page
- * Met à jour le titre du document
- */
-function PageMeta({ title, children }) {
-  React.useEffect(() => {
-    if (title) {
-      document.title = title
-    }
-  }, [title])  
-
-  return children
 }
 
 export default generateRoutes

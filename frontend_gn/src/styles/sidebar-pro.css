@@ -11,19 +11,19 @@
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgb(0 0 0 / 10%);
   border-radius: 3px;
   transition: background 0.2s ease;
 }
 
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgb(0 0 0 / 20%);
 }
 
 /* Firefox scrollbar */
 .sidebar-nav {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+  scrollbar-color: rgb(0 0 0 / 10%) transparent;
 }
 
 /* Animation d'entrée pour les items du menu */
@@ -32,6 +32,7 @@
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -47,6 +48,7 @@
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
@@ -62,7 +64,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.1),
+    rgb(255 255 255 / 10%),
     transparent
   );
   transform: translateX(-100%);
@@ -95,7 +97,7 @@ aside nav button[class*="from-blue-600"]::before {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.1),
+    rgb(255 255 255 / 10%),
     transparent
   );
   transition: left 0.5s ease;
@@ -113,17 +115,16 @@ aside button:focus-visible {
 }
 
 /* Responsive améliorations */
-@media (max-width: 1023px) {
+@media (width <= 1023px) {
   aside {
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1),
-                0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 10%),
+                0 10px 10px -5px rgb(0 0 0 / 4%);
   }
 }
 
 /* Amélioration de l'overlay mobile */
 .overlay-backdrop {
   backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
 /* Animation pour le badge de statut */
@@ -132,6 +133,7 @@ aside button:focus-visible {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.8;
     transform: scale(1.05);

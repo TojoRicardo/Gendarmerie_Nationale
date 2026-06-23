@@ -23,7 +23,6 @@ Usage :
 """
 
 import cv2
-import json
 import logging
 import threading
 import time
@@ -85,7 +84,7 @@ class MultiCameraService:
         devices = []
         import platform
         
-        logger.info("🔍 Scan des caméras (0 à %d)...", self.max_test_devices - 1)
+        logger.info("Scan des caméras (0 à %d)...", self.max_test_devices - 1)
         
         for i in range(self.max_test_devices):
             cap = None
@@ -164,7 +163,7 @@ class MultiCameraService:
                                 "backend": backend_name
                             })
                             devices.append(device_info)
-                            logger.info("✅ Caméra %d détectée: %s (%dx%d) via %s", 
+                            logger.info("[OK] Caméra %d détectée: %s (%dx%d) via %s", 
                                       i, device_info['name'], width, height, backend_name)
                             camera_found = True
                             break  # Succès, ne pas essayer d'autres backends
@@ -182,7 +181,7 @@ class MultiCameraService:
                     if cap:
                         try:
                             cap.release()
-                        except:
+                        except Exception:
                             pass
                     cap = None
                     device_info['error'] = str(e)
@@ -191,22 +190,22 @@ class MultiCameraService:
                     if cap:
                         try:
                             cap.release()
-                        except:
+                        except Exception:
                             pass
                     cap = None
                     device_info['error'] = str(e)
             
             if not camera_found:
-                logger.debug("  ❌ Caméra %d non détectée", i)
+                logger.debug("  Caméra %d non détectée", i)
             
             # Délai plus long entre les tests pour éviter les conflits (important pour USB)
             time.sleep(0.3)
         
-        logger.info("📊 Scan terminé: %d caméra(s) détectée(s) sur %d testées", len(devices), self.max_test_devices)
+        logger.info("Scan terminé: %d caméra(s) détectée(s) sur %d testées", len(devices), self.max_test_devices)
         if devices:
             logger.info("   Caméras trouvées: %s", [f"ID {d['id']} ({d['name']})" for d in devices])
         else:
-            logger.warning("⚠️  Aucune caméra détectée. Vérifiez que:")
+            logger.warning("[ATTENTION] Aucune caméra détectée. Vérifiez que:")
             logger.warning("   - Les caméras sont branchées et allumées")
             logger.warning("   - Aucune autre application n'utilise les caméras")
             logger.warning("   - Les drivers sont installés")
@@ -286,7 +285,7 @@ class MultiCameraService:
                 try:
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-                except:
+                except Exception:
                     pass  # Certaines caméras ne supportent pas le changement de résolution
                 
                 # Obtenir la résolution réelle
@@ -302,7 +301,7 @@ class MultiCameraService:
                 
                 self._cap = cap
                 self._cap_id = camera_id
-                logger.info("✅ Caméra %s ouverte et réservée via %s (%dx%d)", camera_id, backend_name, actual_width, actual_height)
+                logger.info("[OK] Caméra %s ouverte et réservée via %s (%dx%d)", camera_id, backend_name, actual_width, actual_height)
                 return True
                 
             except cv2.error as e:
@@ -310,7 +309,7 @@ class MultiCameraService:
                 if cap:
                     try:
                         cap.release()
-                    except:
+                    except Exception:
                         pass
                 continue
             except Exception as e:
@@ -318,12 +317,12 @@ class MultiCameraService:
                 if cap:
                     try:
                         cap.release()
-                    except:
+                    except Exception:
                         pass
                 continue
         
-        logger.error("❌ Impossible d'ouvrir la caméra id=%s avec aucun backend", camera_id)
-        logger.info("💡 Solutions:")
+        logger.error("[ERREUR] Impossible d'ouvrir la caméra id=%s avec aucun backend", camera_id)
+        logger.info("Solutions:")
         logger.info("   1. Vérifier que la webcam A03 est branchée et allumée")
         logger.info("   2. Fermer toutes les applications qui utilisent la caméra (Zoom, Teams, etc.)")
         logger.info("   3. Vérifier les drivers dans le Gestionnaire de périphériques")
@@ -347,20 +346,20 @@ class MultiCameraService:
             try:
                 # Vérifier que la caméra est toujours disponible
                 if self._cap is None:
-                    logger.error("❌ Caméra %s n'est plus disponible — arrêt de la boucle", self._cap_id)
+                    logger.error("[ERREUR] Caméra %s n'est plus disponible — arrêt de la boucle", self._cap_id)
                     break
                 
                 if not self._cap.isOpened():
-                    logger.error("❌ Caméra %s n'est plus ouverte — arrêt de la boucle", self._cap_id)
-                    logger.info("💡 La caméra peut avoir été déconnectée ou utilisée par une autre application")
+                    logger.error("[ERREUR] Caméra %s n'est plus ouverte — arrêt de la boucle", self._cap_id)
+                    logger.info("La caméra peut avoir été déconnectée ou utilisée par une autre application")
                     break
                 
                 ret, frame = self._cap.read()
                 if not ret or frame is None:
                     consecutive_errors += 1
                     if consecutive_errors >= max_consecutive_errors:
-                        logger.error("❌ Trop d'erreurs consécutives (%d) — arrêt de la boucle", consecutive_errors)
-                        logger.info("💡 La caméra peut avoir été déconnectée ou utilisée par une autre application")
+                        logger.error("[ERREUR] Trop d'erreurs consécutives (%d) — arrêt de la boucle", consecutive_errors)
+                        logger.info("La caméra peut avoir été déconnectée ou utilisée par une autre application")
                         break
                     logger.warning("Frame non lue correctement (erreur %d/%d) — tentative de récupération", 
                                   consecutive_errors, max_consecutive_errors)
@@ -417,7 +416,7 @@ class MultiCameraService:
                 logger.error("Erreur critique dans la boucle frame: %s", e, exc_info=True)
                 consecutive_errors += 1
                 if consecutive_errors >= max_consecutive_errors:
-                    logger.error("❌ Trop d'erreurs critiques — arrêt de la boucle")
+                    logger.error("[ERREUR] Trop d'erreurs critiques — arrêt de la boucle")
                     break
                 time.sleep(0.5)
 
@@ -429,20 +428,20 @@ class MultiCameraService:
         callback(frame, result) sera appelé pour chaque frame.
         """
         if self._cap is None:
-            logger.error("❌ Aucune caméra sélectionnée — appeler select_camera(camera_id) d'abord")
+            logger.error("[ERREUR] Aucune caméra sélectionnée — appeler select_camera(camera_id) d'abord")
             return False
 
         try:
             if not self._cap.isOpened():
-                logger.error("❌ Caméra %s n'est pas ouverte — réessayez select_camera()", self._cap_id)
-                logger.info("💡 La caméra peut avoir été déconnectée ou utilisée par une autre application")
+                logger.error("[ERREUR] Caméra %s n'est pas ouverte — réessayez select_camera()", self._cap_id)
+                logger.info("La caméra peut avoir été déconnectée ou utilisée par une autre application")
                 return False
         except Exception as e:
-            logger.error("❌ Erreur lors de la vérification de la caméra: %s", e)
+            logger.error("[ERREUR] Erreur lors de la vérification de la caméra: %s", e)
             return False
 
         if self._running:
-            logger.warning("⚠️ Le service est déjà en cours")
+            logger.warning("[ATTENTION] Le service est déjà en cours")
             return False
 
         try:
@@ -452,13 +451,13 @@ class MultiCameraService:
             # Attendre un peu pour vérifier que le thread démarre correctement
             time.sleep(0.1)
             if not self._thread.is_alive():
-                logger.error("❌ Le thread de reconnaissance n'a pas démarré correctement")
+                logger.error("[ERREUR] Le thread de reconnaissance n'a pas démarré correctement")
                 self._running = False
                 return False
-            logger.info("✅ Service de reconnaissance démarré (thread lancé)")
+            logger.info("[OK] Service de reconnaissance démarré (thread lancé)")
             return True
         except Exception as e:
-            logger.error("❌ Erreur lors du démarrage du service: %s", e, exc_info=True)
+            logger.error("[ERREUR] Erreur lors du démarrage du service: %s", e, exc_info=True)
             self._running = False
             return False
 
